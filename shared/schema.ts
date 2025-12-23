@@ -20,6 +20,7 @@ export const fenceLines = pgTable("fence_lines", {
   name: text("name").notNull(),
   material: text("material"), // e.g., Cedar, Vinyl, Chain Link
   height: doublePrecision("height"), // in feet
+  length: doublePrecision("length"), // in feet
   color: text("color"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

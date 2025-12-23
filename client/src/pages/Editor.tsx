@@ -62,13 +62,14 @@ export default function Editor() {
     );
   }
 
-  const handleSaveLine = async (points: any[], material: string, height: number) => {
+  const handleSaveLine = async (points: any[], material: string, height: number, length: number) => {
     try {
       await createLine.mutateAsync({
         projectId: projectId,
         name: `Line ${project.fenceLines ? project.fenceLines.length + 1 : 1}`,
         material,
         height,
+        length,
         color: "natural",
         coordinates: points.map((p, idx) => ({
           lat: p.lat,
@@ -115,7 +116,7 @@ export default function Editor() {
                   {project.fenceLines?.length || 0} Lines Defined
                 </span>
                 <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                  Total: {project.fenceLines?.length ? "active" : "0 ft"}
+                  Total: {project.fenceLines?.reduce((sum: number, line: any) => sum + (line.length || 0), 0).toFixed(0)} ft
                 </Badge>
               </div>
 
@@ -149,7 +150,10 @@ export default function Editor() {
                                 {line.material}
                               </Badge>
                               <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
-                                {line.height} ft
+                                {line.height} ft high
+                              </Badge>
+                              <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                                {line.length ? `${line.length.toFixed(0)} ft` : "No length"}
                               </Badge>
                             </div>
                           </div>

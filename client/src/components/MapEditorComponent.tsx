@@ -101,7 +101,7 @@ interface Point {
 interface MapEditorProps {
   initialCenter?: [number, number];
   initialAddress?: string;
-  onSave: (points: Point[], material: string, height: number) => void;
+  onSave: (points: Point[], material: string, height: number, length: number) => void;
   isSaving: boolean;
 }
 
@@ -149,7 +149,7 @@ export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initi
 
   const handleSave = () => {
     if (points.length < 2) return;
-    onSave(points, material, parseFloat(height));
+    onSave(points, material, parseFloat(height), totalDistance);
     setPoints([]); // Clear after save (or keep based on UX preference)
   };
 
