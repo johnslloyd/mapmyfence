@@ -1,15 +1,18 @@
 import { Layout } from "@/components/Layout";
-import { useProjects } from "@/hooks/use-projects";
+import { useProjects, useDeleteProject } from "@/hooks/use-projects";
 import { CreateProjectDialog } from "@/components/CreateProjectDialog";
+import { EditProjectDialog } from "@/components/EditProjectDialog";
 import { Link } from "wouter";
-import { MapPin, Search } from "lucide-react";
+import { MapPin, Search, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 
 export default function Projects() {
   const { data: projects, isLoading } = useProjects();
+  const deleteProject = useDeleteProject();
   const [search, setSearch] = useState("");
 
   const filteredProjects = projects?.filter((p: any) => 
@@ -49,18 +52,32 @@ export default function Projects() {
         ) : filteredProjects && filteredProjects.length > 0 ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredProjects.map((project: any) => (
-              <Link key={project.id} href={`/editor/${project.id}`}>
-                <div className="group bg-card hover:bg-card/50 rounded-2xl p-6 border shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer h-full flex flex-col relative overflow-hidden">
-                  {/* Status Indicator */}
-                  <div className={`absolute top-0 right-0 px-4 py-1.5 rounded-bl-2xl text-xs font-bold uppercase tracking-wider ${
-                    project.status === 'completed' ? 'bg-green-100 text-green-700' :
-                    project.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
-                    'bg-gray-100 text-gray-700'
-                  }`}>
-                    {project.status}
-                  </div>
+              <div key={project.id} className="group bg-card hover:bg-card/50 rounded-2xl p-6 border shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 h-full flex flex-col relative overflow-hidden">
+                {/* Status Indicator */}
+                <div className={`absolute top-0 right-0 px-4 py-1.5 rounded-bl-2xl text-xs font-bold uppercase tracking-wider ${
+                  project.status === 'completed' ? 'bg-green-100 text-green-700' :
+                  project.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                  'bg-gray-100 text-gray-700'
+                }`}>
+                  {project.status}
+                </div>
 
-                  <div className="mb-4">
+                {/* Edit/Delete Controls */}
+                <div className="absolute top-4 left-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <EditProjectDialog project={project} />
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => deleteProject.mutate(project.id)}
+                    disabled={deleteProject.isPending}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <Link href={`/editor/${project.id}`}>
+                  <div className="mb-4 cursor-pointer">
                     <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
                       <MapPin className="w-6 h-6 text-primary" />
                     </div>
@@ -80,11 +97,10 @@ export default function Projects() {
 
                   <div className="pt-4 mt-auto border-t flex items-center justify-between text-xs text-muted-foreground font-medium">
                     <span>Created {format(new Date(project.createdAt), 'MMM d, yyyy')}</span>
-                    {/* Placeholder for number of lines - would need relation count */}
                     <span>View Details &rarr;</span>
                   </div>
-                </div>
-              </Link>
+                </Link>
+              </div>
             ))}
           </div>
         ) : (
