@@ -149,7 +149,15 @@ export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initi
 
   const handleSave = () => {
     if (points.length < 2) return;
-    onSave(points, material, parseFloat(height), totalDistance);
+    // Recalculate distance at save time to ensure accuracy
+    let calculatedDist = 0;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p1 = new LatLng(points[i].lat, points[i].lng);
+      const p2 = new LatLng(points[i + 1].lat, points[i + 1].lng);
+      calculatedDist += p1.distanceTo(p2); // meters
+    }
+    const distanceInFeet = calculatedDist * 3.28084;
+    onSave(points, material, parseFloat(height), distanceInFeet);
     setPoints([]); // Clear after save (or keep based on UX preference)
   };
 
