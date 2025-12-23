@@ -63,13 +63,16 @@ export default function Projects() {
                 </div>
 
                 {/* Edit/Delete Controls */}
-                <div className="absolute top-4 left-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-4 left-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                   <EditProjectDialog project={project} />
                   <Button 
                     size="icon" 
                     variant="ghost" 
                     className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => deleteProject.mutate(project.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteProject.mutate(project.id);
+                    }}
                     disabled={deleteProject.isPending}
                   >
                     <Trash2 className="h-4 w-4" />

@@ -64,7 +64,12 @@ export function EditProjectDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {children || (
-          <Button size="icon" variant="ghost" className="h-8 w-8">
+          <Button 
+            size="icon" 
+            variant="ghost" 
+            className="h-8 w-8"
+            onClick={(e) => e.stopPropagation()}
+          >
             <Pencil className="h-4 w-4" />
           </Button>
         )}
