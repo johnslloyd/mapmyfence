@@ -16,7 +16,7 @@ export const projects = pgTable("projects", {
 
 export const fenceLines = pgTable("fence_lines", {
   id: serial("id").primaryKey(),
-  projectId: integer("project_id").references(() => projects.id).notNull(),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull(),
   name: text("name").notNull(),
   material: text("material"), // e.g., Cedar, Vinyl, Chain Link
   height: doublePrecision("height"), // in feet
@@ -26,7 +26,7 @@ export const fenceLines = pgTable("fence_lines", {
 
 export const coordinates = pgTable("coordinates", {
   id: serial("id").primaryKey(),
-  fenceLineId: integer("fence_line_id").references(() => fenceLines.id).notNull(),
+  fenceLineId: integer("fence_line_id").references(() => fenceLines.id, { onDelete: 'cascade' }).notNull(),
   order: integer("order").notNull(),
   lat: doublePrecision("lat").notNull(),
   lng: doublePrecision("lng").notNull(),
