@@ -67,6 +67,7 @@ export const api = {
         name: z.string(),
         material: z.string().optional(),
         height: z.number().optional(),
+        length: z.number().optional(),
         color: z.string().optional(),
         coordinates: z.array(z.object({
           lat: z.number(),
