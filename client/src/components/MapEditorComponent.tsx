@@ -94,13 +94,16 @@ export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], onSav
     <div className="relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden border shadow-inner">
       <MapContainer
         center={initialCenter}
-        zoom={19}
+        zoom={21}
+        maxZoom={22}
         scrollWheelZoom={true}
         className="w-full h-full z-0"
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png"
+          maxZoom={22}
+          maxNativeZoom={18}
         />
         <MapEvents onMapClick={handleMapClick} />
 
