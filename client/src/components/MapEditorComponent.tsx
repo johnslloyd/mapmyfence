@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, Polyline, useMapEvents, Tooltip } from "react-leaflet";
+import { useEffect, useState, useRef } from "react";
+import { MapContainer, TileLayer, Marker, Polyline, useMapEvents, Tooltip, useMap } from "react-leaflet";
 import { LatLng, Icon } from "leaflet";
 import { Button } from "@/components/ui/button";
-import { Undo2, Save, Trash2, Ruler } from "lucide-react";
+import { Undo2, Save, Trash2, Ruler, Search, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 // Custom marker icon hack for Leaflet in React
 // In a real production app, import these properly
@@ -32,6 +33,65 @@ function MapEvents({ onMapClick }: { onMapClick: (e: any) => void }) {
   return null;
 }
 
+// Address search component (outside map context)
+function AddressSearchInput({ onAddressFound, mapRef }: { onAddressFound: (lat: number, lng: number) => void; mapRef: React.RefObject<any> }) {
+  const [address, setAddress] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+
+  const handleSearch = async () => {
+    if (!address.trim()) return;
+    
+    setIsSearching(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`
+      );
+      const results = await response.json();
+      
+      if (results.length > 0) {
+        const { lat, lon } = results[0];
+        const newLat = parseFloat(lat);
+        const newLng = parseFloat(lon);
+        
+        onAddressFound(newLat, newLng);
+        if (mapRef.current) {
+          mapRef.current.setView([newLat, newLng], 20);
+        }
+        setAddress("");
+      }
+    } catch (error) {
+      console.error("Geocoding error:", error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  return (
+    <div className="flex gap-2">
+      <Input
+        placeholder="Enter property address..."
+        value={address}
+        onChange={(e) => setAddress(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+        disabled={isSearching}
+        className="text-sm"
+      />
+      <Button
+        size="icon"
+        onClick={handleSearch}
+        disabled={isSearching || !address.trim()}
+        variant="outline"
+      >
+        {isSearching ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Search className="h-4 w-4" />
+        )}
+      </Button>
+    </div>
+  );
+}
+
 interface Point {
   lat: number;
   lng: number;
@@ -40,15 +100,18 @@ interface Point {
 
 interface MapEditorProps {
   initialCenter?: [number, number];
+  initialAddress?: string;
   onSave: (points: Point[], material: string, height: number) => void;
   isSaving: boolean;
 }
 
-export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], onSave, isSaving }: MapEditorProps) {
+export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initialAddress, onSave, isSaving }: MapEditorProps) {
   const [points, setPoints] = useState<Point[]>([]);
   const [material, setMaterial] = useState("wood");
   const [height, setHeight] = useState("6");
   const [totalDistance, setTotalDistance] = useState(0);
+  const [center, setCenter] = useState<[number, number]>(initialCenter);
+  const mapRef = useRef<any>(null);
 
   // Calculate distance when points change
   useEffect(() => {
@@ -90,10 +153,15 @@ export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], onSav
     setPoints([]); // Clear after save (or keep based on UX preference)
   };
 
+  const handleAddressFound = (lat: number, lng: number) => {
+    setCenter([lat, lng]);
+  };
+
   return (
     <div className="relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden border shadow-inner">
       <MapContainer
-        center={initialCenter}
+        ref={mapRef}
+        center={center}
         zoom={21}
         maxZoom={22}
         scrollWheelZoom={true}
@@ -135,6 +203,10 @@ export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], onSav
         </h3>
         
         <div className="space-y-4">
+          <div className="space-y-2 pb-3 border-b">
+            <Label className="text-xs">Search Address</Label>
+            <AddressSearchInput onAddressFound={handleAddressFound} mapRef={mapRef} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label className="text-xs">Material</Label>

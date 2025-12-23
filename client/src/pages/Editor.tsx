@@ -186,7 +186,7 @@ export default function Editor() {
           <MapEditorComponent 
             onSave={handleSaveLine} 
             isSaving={createLine.isPending}
-            // Mock dynamic center based on project address ideally
+            initialAddress={project.address}
             initialCenter={[34.0522, -118.2437]} 
           />
         </div>
