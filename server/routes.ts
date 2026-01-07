@@ -1,31 +1,54 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { User } from "lucia";
+
+// Middleware to check if the user is authenticated
+const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
+  const user = res.locals.user as User;
+  if (!user) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  next();
+};
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   
-  app.get(api.projects.list.path, async (req, res) => {
-    const projects = await storage.getProjects();
-    res.json(projects);
-  });
-
-  app.get(api.projects.get.path, async (req, res) => {
-    const project = await storage.getProject(Number(req.params.id));
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-    res.json(project);
-  });
-
-  app.post(api.projects.create.path, async (req, res) => {
+  app.get(api.projects.list.path, isAuthenticated, async (req, res) => {
     try {
+      const user = res.locals.user as User;
+      const projects = await storage.getProjects(user.id);
+      res.json(projects);
+    } catch (err) {
+      console.error('Failed to list projects', err);
+      res.status(500).json({ message: 'Failed to list projects' });
+    }
+  });
+
+  app.get(api.projects.get.path, isAuthenticated, async (req, res) => {
+    try {
+      const user = res.locals.user as User;
+      const project = await storage.getProject(Number(req.params.id), user.id);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      res.json(project);
+    } catch (err) {
+      console.error('Failed to get project', err);
+      res.status(500).json({ message: 'Failed to get project' });
+    }
+  });
+
+  app.post(api.projects.create.path, isAuthenticated, async (req, res) => {
+    try {
+      const user = res.locals.user as User;
       const input = api.projects.create.input.parse(req.body);
-      const project = await storage.createProject(input);
+      const project = await storage.createProject(input, user.id);
       res.status(201).json(project);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -38,10 +61,11 @@ export async function registerRoutes(
     }
   });
 
-  app.put(api.projects.update.path, async (req, res) => {
+  app.put(api.projects.update.path, isAuthenticated, async (req, res) => {
     try {
+      const user = res.locals.user as User;
       const input = api.projects.update.input.parse(req.body);
-      const project = await storage.updateProject(Number(req.params.id), input);
+      const project = await storage.updateProject(Number(req.params.id), input, user.id);
       res.json(project);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -54,12 +78,13 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.projects.delete.path, async (req, res) => {
-    await storage.deleteProject(Number(req.params.id));
+  app.delete(api.projects.delete.path, isAuthenticated, async (req, res) => {
+    const user = res.locals.user as User;
+    await storage.deleteProject(Number(req.params.id), user.id);
     res.status(204).end();
   });
 
-  app.post(api.fenceLines.create.path, async (req, res) => {
+  app.post(api.fenceLines.create.path, isAuthenticated, async (req, res) => {
     try {
       const { coordinates, ...lineData } = api.fenceLines.create.input.parse(req.body);
       const line = await storage.createFenceLine(Number(req.params.projectId), lineData, coordinates);
@@ -75,32 +100,10 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.fenceLines.delete.path, async (req, res) => {
+  app.delete(api.fenceLines.delete.path, isAuthenticated, async (req, res) => {
     await storage.deleteFenceLine(Number(req.params.id));
     res.status(204).end();
   });
-
-  // Seed data
-  const existing = await storage.getProjects();
-  if (existing.length === 0) {
-    const p1 = await storage.createProject({
-      name: "Sample Backyard Fence",
-      address: "123 Map St, Fencetown",
-      description: "Proposed cedar fence for the backyard perimeter.",
-      status: "planning"
-    });
-    
-    await storage.createFenceLine(p1.id, {
-      name: "North Boundary",
-      material: "Cedar",
-      height: 6,
-      color: "Natural",
-      projectId: p1.id
-    }, [
-      { lat: 45.523062, lng: -122.676482, order: 0 },
-      { lat: 45.523162, lng: -122.676482, order: 1 }
-    ]);
-  }
 
   return httpServer;
 }

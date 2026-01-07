@@ -4,6 +4,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { lucia } from './auth';
+import { authRouter } from './authRoutes';
 
 const app = express();
 const httpServer = createServer(app);
@@ -35,6 +37,29 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+app.use(async (req, res, next) => {
+  const sessionId = lucia.readSessionCookie(req.headers.cookie ?? "");
+  if (!sessionId) {
+    res.locals.user = null;
+    res.locals.session = null;
+    return next();
+  }
+
+  const { session, user } = await lucia.validateSession(sessionId);
+
+  if (session && session.fresh) {
+    res.append("Set-Cookie", lucia.createSessionCookie(session.id).serialize());
+  }
+
+  if (!session) {
+    res.append("Set-Cookie", lucia.createBlankSessionCookie().serialize());
+  }
+
+  res.locals.session = session;
+  res.locals.user = user;
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -62,6 +87,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  app.use(authRouter);
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -90,8 +116,9 @@ app.use((req, res, next) => {
   httpServer.listen(
     {
       port,
-      host: "0.0.0.0",
-      reusePort: true,
+      host: "127.0.0.1", // use this for local server on mac
+      // host: "0.0.0.0", // use this for hosting on VPS server
+      // reusePort: true,  //use this for hosting on VP, bit comment out for local hosting on mac
     },
     () => {
       log(`serving on port ${port}`);

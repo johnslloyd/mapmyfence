@@ -6,61 +6,63 @@ import {
   type Coordinate, type InsertCoordinate,
   type ProjectWithLines
 } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 export interface IStorage {
-  getProjects(): Promise<ProjectWithLines[]>;
-  getProject(id: number): Promise<ProjectWithLines | undefined>;
-  createProject(project: InsertProject): Promise<ProjectWithLines>;
-  updateProject(id: number, updates: Partial<InsertProject>): Promise<ProjectWithLines>;
-  deleteProject(id: number): Promise<void>;
+  getProjects(userId: string): Promise<ProjectWithLines[]>;
+  getProject(id: number, userId: string): Promise<ProjectWithLines | undefined>;
+  createProject(project: InsertProject, userId: string): Promise<ProjectWithLines>;
+  updateProject(id: number, updates: Partial<InsertProject>, userId: string): Promise<ProjectWithLines>;
+  deleteProject(id: number, userId: string): Promise<void>;
   
   createFenceLine(projectId: number, fenceLine: InsertFenceLine, coords: Omit<InsertCoordinate, "fenceLineId">[]): Promise<FenceLine & { coordinates: Coordinate[] }>;
   deleteFenceLine(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
-  async getProjects(): Promise<ProjectWithLines[]> {
-    const allProjects = await db.query.projects.findMany({
-      with: {
-        fenceLines: {
-          with: {
-            coordinates: true
-          }
-        }
+  async getProjects(userId: string): Promise<ProjectWithLines[]> {
+    // Use the underlying drizzle client for selects; the compatibility shim
+    // provides `db._raw` which is the actual drizzle instance.
+    const allProjects = await db._raw.select().from(projects).where(eq(projects.userId, userId));
+
+    const results: ProjectWithLines[] = [];
+    for (const p of allProjects) {
+      const lines = await db._raw.select().from(fenceLines).where(eq(fenceLines.projectId, p.id));
+      const linesWithCoords = [] as any[];
+      for (const l of lines) {
+        const coords = await db._raw.select().from(coordinates).where(eq(coordinates.fenceLineId, l.id));
+        linesWithCoords.push({ ...l, coordinates: coords });
       }
-    });
-    return allProjects as ProjectWithLines[];
+      results.push({ ...p, fenceLines: linesWithCoords });
+    }
+    return results as ProjectWithLines[];
   }
 
-  async getProject(id: number): Promise<ProjectWithLines | undefined> {
-    const project = await db.query.projects.findFirst({
-      where: eq(projects.id, id),
-      with: {
-        fenceLines: {
-          with: {
-            coordinates: true
-          }
-        }
-      }
-    });
-    return project as ProjectWithLines | undefined;
+  async getProject(id: number, userId: string): Promise<ProjectWithLines | undefined> {
+    const project = await db._raw.select().from(projects).where(and(eq(projects.id, id), eq(projects.userId, userId))).limit(1);
+    if (!project || project.length === 0) return undefined;
+    const p = project[0];
+    const lines = await db._raw.select().from(fenceLines).where(eq(fenceLines.projectId, p.id));
+    const linesWithCoords = [] as any[];
+    for (const l of lines) {
+      const coords = await db._raw.select().from(coordinates).where(eq(coordinates.fenceLineId, l.id));
+      linesWithCoords.push({ ...l, coordinates: coords });
+    }
+    return { ...p, fenceLines: linesWithCoords } as ProjectWithLines;
   }
 
-  async createProject(insertProject: InsertProject): Promise<ProjectWithLines> {
-    const [project] = await db.insert(projects).values(insertProject).returning();
+  async createProject(insertProject: InsertProject, userId: string): Promise<ProjectWithLines> {
+    const [project] = await db.insert(projects).values({ ...insertProject, userId }).returning();
     return { ...project, fenceLines: [] };
   }
 
-  async updateProject(id: number, updates: Partial<InsertProject>): Promise<ProjectWithLines> {
-    const [updated] = await db.update(projects).set(updates).where(eq(projects.id, id)).returning();
-    return this.getProject(updated.id) as Promise<ProjectWithLines>;
+  async updateProject(id: number, updates: Partial<InsertProject>, userId: string): Promise<ProjectWithLines> {
+    const [updated] = await db.update(projects).set(updates).where(and(eq(projects.id, id), eq(projects.userId, userId))).returning();
+    return this.getProject(updated.id, userId) as Promise<ProjectWithLines>;
   }
 
-  async deleteProject(id: number): Promise<void> {
-    // cascades should be handled by DB or manually if needed
-    // For now simple delete
-    await db.delete(projects).where(eq(projects.id, id));
+  async deleteProject(id: number, userId: string): Promise<void> {
+    await db.delete(projects).where(and(eq(projects.id, id), eq(projects.userId, userId)));
   }
 
   async createFenceLine(projectId: number, fenceLine: InsertFenceLine, coords: Omit<InsertCoordinate, "fenceLineId">[]): Promise<FenceLine & { coordinates: Coordinate[] }> {
@@ -72,14 +74,10 @@ export class DatabaseStorage implements IStorage {
       );
     }
     
-    const lineWithCoords = await db.query.fenceLines.findFirst({
-      where: eq(fenceLines.id, newLine.id),
-      with: {
-        coordinates: true
-      }
-    });
-    
-    return lineWithCoords as FenceLine & { coordinates: Coordinate[] };
+    const lineWithCoords = await db._raw.select().from(fenceLines).where(eq(fenceLines.id, newLine.id)).limit(1);
+    const l = lineWithCoords[0];
+    const fetchedCoords = await db._raw.select().from(coordinates).where(eq(coordinates.fenceLineId, l.id));
+    return { ...l, coordinates: fetchedCoords } as FenceLine & { coordinates: Coordinate[] };
   }
 
   async deleteFenceLine(id: number): Promise<void> {

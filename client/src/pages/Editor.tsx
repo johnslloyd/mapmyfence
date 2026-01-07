@@ -11,16 +11,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import NotFound from "./not-found";
 
 export default function Editor() {
   const [match, params] = useRoute("/editor/:id");
   const projectId = match && params?.id ? parseInt(params.id) : undefined;
-  
-  const { data: project, isLoading } = useProject(projectId || 0);
-  const createLine = useCreateFenceLine();
-  const deleteLine = useDeleteFenceLine();
 
-  if (!projectId) {
+  if (projectId === undefined) {
     return (
       <Layout>
         <div className="p-8 flex items-center justify-center h-full">
@@ -35,6 +32,14 @@ export default function Editor() {
       </Layout>
     );
   }
+  
+  if (isNaN(projectId)) {
+    return <NotFound />;
+  }
+
+  const { data: project, isLoading } = useProject(projectId);
+  const createLine = useCreateFenceLine();
+  const deleteLine = useDeleteFenceLine();
 
   if (isLoading) {
     return (
@@ -191,7 +196,8 @@ export default function Editor() {
             onSave={handleSaveLine} 
             isSaving={createLine.isPending}
             initialAddress={project.address}
-            initialCenter={[34.0522, -118.2437]} 
+            initialCenter={[34.0522, -118.2437]}
+            existingLines={project.fenceLines}
           />
         </div>
       </div>

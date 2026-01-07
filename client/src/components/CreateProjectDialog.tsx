@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -37,13 +38,14 @@ export function CreateProjectDialog({
   const [internalOpen, setInternalOpen] = useState(false);
   const [, setLocation] = useLocation();
   const { mutateAsync, isPending } = useCreateProject();
+  const { toast } = useToast();
   
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = isControlled ? controlledOnOpenChange! : setInternalOpen;
 
-  const form = useForm<InsertProject>({
-    resolver: zodResolver(insertProjectSchema),
+  const form = useForm<Partial<InsertProject>>({
+    resolver: zodResolver(insertProjectSchema.omit({ userId: true })),
     defaultValues: {
       name: "",
       address: "",
@@ -53,14 +55,24 @@ export function CreateProjectDialog({
   });
 
   async function onSubmit(data: InsertProject) {
+    console.log('CreateProjectDialog submit', data);
+    toast({ title: 'Creating project', description: 'Starting project creation' });
     try {
       const project = await mutateAsync(data);
+      console.log('create project response', project);
+      // if we didn't get an id back, surface an error
+      if (!project || !project.id) {
+        console.error('Create project did not return an id', project);
+        toast({ title: 'Error', description: 'Server did not return a project id', variant: 'destructive' });
+        return;
+      }
+      // Navigate to the editor for the new project before closing modal
+      setLocation(`/editor/${project.id}`);
       setOpen(false);
       form.reset();
-      // Navigate to the editor for the new project
-      setLocation(`/editor/${project.id}`);
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error('create project error', error);
+      toast({ title: 'Error', description: error?.message || 'Failed to create project', variant: 'destructive' });
     }
   }
 
@@ -82,6 +94,13 @@ export function CreateProjectDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+            {Object.keys(form.formState.errors).length > 0 && (
+              <div className="p-2 bg-destructive/10 text-destructive rounded-md">
+                {Object.entries(form.formState.errors).map(([k, v]) => (
+                  <div key={k} className="text-sm">{k}: {(v as any).message}</div>
+                ))}
+              </div>
+            )}
             <FormField
               control={form.control}
               name="name"
@@ -127,10 +146,14 @@ export function CreateProjectDialog({
               )}
             />
             <div className="flex justify-end pt-4">
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={isPending}
                 className="rounded-xl w-full sm:w-auto"
+                onClick={() => {
+                  console.log('submit button clicked');
+                  form.handleSubmit(onSubmit)();
+                }}
               >
                 {isPending ? "Creating..." : "Start Planning"}
               </Button>

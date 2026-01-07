@@ -34,7 +34,8 @@ export const api = {
     create: {
       method: 'POST' as const,
       path: '/api/projects',
-      input: insertProjectSchema,
+      // omit userId from the client payload; server sets it from the session
+      input: insertProjectSchema.omit({ userId: true }),
       responses: {
         201: z.any(),
         400: errorSchemas.validation,

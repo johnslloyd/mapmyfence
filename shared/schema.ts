@@ -5,6 +5,23 @@ import { z } from "zod";
 
 // === TABLE DEFINITIONS ===
 
+export const users = pgTable("users", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  hashedPassword: text("hashed_password").notNull(),
+});
+
+export const sessions = pgTable("sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  expiresAt: timestamp("expires_at", {
+    withTimezone: true,
+    mode: "date",
+  }).notNull(),
+});
+
 export const projects = pgTable("projects", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -12,6 +29,7 @@ export const projects = pgTable("projects", {
   description: text("description"),
   status: text("status", { enum: ["planning", "quoting", "in-progress", "completed"] }).default("planning").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  userId: text("user_id").references(() => users.id).notNull(),
 });
 
 export const fenceLines = pgTable("fence_lines", {
@@ -35,8 +53,16 @@ export const coordinates = pgTable("coordinates", {
 
 // === RELATIONS ===
 
-export const projectsRelations = relations(projects, ({ many }) => ({
+export const usersRelations = relations(users, ({ many }) => ({
+  projects: many(projects),
+}));
+
+export const projectsRelations = relations(projects, ({ many, one }) => ({
   fenceLines: many(fenceLines),
+  user: one(users, {
+    fields: [projects.userId],
+    references: [users.id],
+  }),
 }));
 
 export const fenceLinesRelations = relations(fenceLines, ({ one, many }) => ({

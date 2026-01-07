@@ -98,16 +98,22 @@ interface Point {
   id: string;
 }
 
+interface ExistingLine {
+  id: number;
+  coordinates: { lat: number; lng: number }[];
+}
+
 interface MapEditorProps {
   initialCenter?: [number, number];
   initialAddress?: string;
   onSave: (points: Point[], material: string, height: number, length: number) => void;
   isSaving: boolean;
+  existingLines?: ExistingLine[];
 }
 
-export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initialAddress, onSave, isSaving }: MapEditorProps) {
+export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initialAddress, onSave, isSaving, existingLines = [] }: MapEditorProps) {
   const [points, setPoints] = useState<Point[]>([]);
-  const [material, setMaterial] = useState("wood");
+  const [material, setMaterial] = useState("wood_cedar");
   const [height, setHeight] = useState("6");
   const [totalDistance, setTotalDistance] = useState(0);
   const [center, setCenter] = useState<[number, number]>(initialCenter);
@@ -183,6 +189,15 @@ export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initi
         />
         <MapEvents onMapClick={handleMapClick} />
 
+        {/* Render existing lines */}
+        {existingLines.map(line => (
+          <Polyline
+            key={line.id}
+            positions={line.coordinates.map(c => [c.lat, c.lng])}
+            pathOptions={{ color: 'blue', weight: 3 }}
+          />
+        ))}
+
         {points.map((point, idx) => (
           <Marker 
             key={point.id} 
@@ -216,21 +231,20 @@ export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initi
             <AddressSearchInput onAddressFound={handleAddressFound} mapRef={mapRef} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label className="text-xs">Material</Label>
-              <Select value={material} onValueChange={setMaterial}>
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="wood">Wood (Cedar)</SelectItem>
-                  <SelectItem value="vinyl">Vinyl</SelectItem>
-                  <SelectItem value="chainlink">Chain Link</SelectItem>
-                  <SelectItem value="iron">Wrought Iron</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
+                          <div className="space-y-2">
+                            <Label className="text-xs">Material</Label>
+                            <Select value={material} onValueChange={setMaterial}>
+                              <SelectTrigger className="h-9">
+                                <SelectValue placeholder="Select material" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="wood_pine">Wood: Pine</SelectItem>
+                                <SelectItem value="wood_cedar">Wood: Cedar</SelectItem>
+                                <SelectItem value="vinyl">Vinyl</SelectItem>
+                                <SelectItem value="iron">Iron</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>            
             <div className="space-y-2">
               <Label className="text-xs">Height (ft)</Label>
               <Select value={height} onValueChange={setHeight}>

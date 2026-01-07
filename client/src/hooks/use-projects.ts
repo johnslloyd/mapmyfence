@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
+import { insertProjectSchema } from "@shared/schema";
 import { 
   type ProjectWithLines, 
   type InsertProject, 
@@ -44,7 +45,8 @@ export function useCreateProject() {
 
   return useMutation({
     mutationFn: async (data: InsertProject) => {
-      const validated = api.projects.create.input.parse(data);
+      // parse with a schema that omits userId (server injects it)
+      const validated = insertProjectSchema.omit({ userId: true }).parse(data);
       const res = await fetch(api.projects.create.path, {
         method: api.projects.create.method,
         headers: { 'Content-Type': 'application/json' },

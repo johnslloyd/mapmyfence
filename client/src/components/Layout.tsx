@@ -3,6 +3,8 @@ import { LayoutDashboard, Map, Settings, FolderKanban, Menu, X } from "lucide-re
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { CreateProjectDialog } from "./CreateProjectDialog";
+import { useAuth } from "@/hooks/use-auth";
+import { Button } from "./ui/button";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,6 +13,7 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isAuthenticated, user, logout } = useAuth();
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -75,7 +78,17 @@ export function Layout({ children }: LayoutProps) {
           ))}
         </nav>
 
-        <div className="p-4 border-t">
+        <div className="p-4 border-t space-y-2">
+          {isAuthenticated ? (
+            <div>
+              <p className="text-sm font-medium px-4">{user?.email}</p>
+              <Button variant="ghost" size="sm" onClick={logout} className="w-full justify-start">Logout</Button>
+            </div>
+          ) : (
+            <Button asChild className="w-full">
+              <Link href="/login">Login</Link>
+            </Button>
+          )}
           <CreateProjectDialog />
         </div>
       </aside>
