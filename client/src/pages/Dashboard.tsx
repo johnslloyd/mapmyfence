@@ -15,6 +15,10 @@ import { Link } from "wouter";
 import { CreateProjectDialog } from "@/components/CreateProjectDialog";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/hooks/use-auth";
+import { useState } from "react";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { LoginModal } from "@/components/LoginModal";
 
 function StatCard({ title, value, icon: Icon, description }: any) {
   return (
@@ -33,18 +37,35 @@ function StatCard({ title, value, icon: Icon, description }: any) {
   );
 }
 
+function UnauthenticatedDashboard() {
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+
+  return (
+    <Layout>
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] text-center p-8">
+        <h1 className="text-4xl font-display font-bold mb-4">Welcome to MapMyFence</h1>
+        <p className="text-lg text-muted-foreground mb-8 max-w-2xl">
+          The ultimate tool for planning and estimating your fencing projects with precision. Map out your fence lines, choose materials, and get instant cost estimates.
+        </p>
+        <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
+          <DialogTrigger asChild>
+            <Button size="lg">Log In to Get Started</Button>
+          </DialogTrigger>
+          <LoginModal onLoginSuccess={() => setIsLoginOpen(false)} />
+        </Dialog>
+        <p className="text-sm text-muted-foreground mt-4">
+          Don't have an account? <Link href="/register"><a className="underline hover:text-primary">Sign up</a></Link>
+        </p>
+      </div>
+    </Layout>
+  );
+}
+
 export default function Dashboard() {
-  const { data: projects, isLoading } = useProjects();
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { data: projects, isLoading: projectsLoading } = useProjects({ enabled: isAuthenticated });
 
-  // Mock stats aggregation
-  const totalProjects = projects?.length || 0;
-  const activeProjects = projects?.filter((p: any) => p.status === 'in-progress' || p.status === 'planning').length || 0;
-  
-  // In a real app, calculate total footage from all lines in all projects
-  // Mocking it here as we don't fetch full details in the list view typically
-  const totalFootage = 1250; 
-
-  if (isLoading) {
+  if (authLoading) {
     return (
       <Layout>
         <div className="p-8 max-w-7xl mx-auto space-y-8">
@@ -60,6 +81,20 @@ export default function Dashboard() {
       </Layout>
     );
   }
+
+  if (!isAuthenticated) {
+    return <UnauthenticatedDashboard />;
+  }
+
+  const isLoading = projectsLoading;
+
+  // Mock stats aggregation
+  const totalProjects = projects?.length || 0;
+  const activeProjects = projects?.filter((p: any) => p.status === 'in-progress' || p.status === 'planning').length || 0;
+  
+  // In a real app, calculate total footage from all lines in all projects
+  // Mocking it here as we don't fetch full details in the list view typically
+  const totalFootage = 1250; 
 
   return (
     <Layout>
@@ -114,7 +149,11 @@ export default function Dashboard() {
               </Link>
             </div>
 
-            {projects && projects.length > 0 ? (
+            {isLoading ? (
+              <div className="grid gap-4">
+                {[1,2,3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+              </div>
+            ) : projects && projects.length > 0 ? (
               <div className="grid gap-4">
                 {projects.slice(0, 3).map((project: any) => (
                   <Link key={project.id} href={`/editor/${project.id}`}>

@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       await fetch("/api/logout", { method: "POST", credentials: "include" });
       setUser(null);
-      setLocation('/login');
+      setLocation('/');
     } catch (error) {
       console.error("Failed to logout", error);
     }

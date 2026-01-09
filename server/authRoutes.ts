@@ -1,6 +1,6 @@
 
 import { Router } from "express";
-import { lucia } from "./auth";
+import { passport } from "./auth";
 import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -9,13 +9,12 @@ import { Scrypt, generateId } from "lucia";
 
 export const authRouter = Router();
 
-authRouter.get("/api/user", async (req, res, next) => {
-  try {
-    const user = res.locals.user;
-    res.json({ user });
-  } catch (error) {
-    next(error);
+authRouter.get("/api/user", (req, res) => {
+  if (req.isAuthenticated()) {
+    return res.json({ user: req.user });
   }
+
+  return res.json({ user: null });
 });
 
 const registerSchema = z.object({
@@ -37,18 +36,19 @@ authRouter.post("/api/register", async (req, res, next) => {
     const hashedPassword = await scrypt.hash(password);
     const userId = generateId(15);
 
-    await db.insert(users).values({
+    const [user] = await db.insert(users).values({
       id: userId,
       email,
       hashedPassword,
+    }).returning();
+
+    req.login(user, (err) => {
+      if (err) return next(err);
+      req.session.save((err) => {
+        if (err) return next(err);
+        res.status(201).json({ message: "User created", user });
+      });
     });
-
-    const session = await lucia.createSession(userId, {});
-    const sessionCookie = lucia.createSessionCookie(session.id);
-
-    res.append("Set-Cookie", sessionCookie.serialize());
-    const user = { id: userId, email: email };
-    res.status(201).json({ message: "User created", user });
   } catch (error) {
     next(error);
   }
@@ -59,39 +59,33 @@ const loginSchema = z.object({
   password: z.string(),
 });
 
-authRouter.post("/api/login", async (req, res, next) => {
-  try {
-    const { email, password } = loginSchema.parse(req.body);
-
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-
-    if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
-
-    const scrypt = new Scrypt();
-    const validPassword = await scrypt.verify(user.hashedPassword, password);
-
-    if (!validPassword) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
-
-    const session = await lucia.createSession(user.id, {});
-    const sessionCookie = lucia.createSessionCookie(session.id);
-
-    res.append("Set-Cookie", sessionCookie.serialize());
-    res.json({ message: "Logged in", user });
-  } catch (error) {
-    next(error);
+authRouter.post("/api/login", (req, res, next) => {
+  const result = loginSchema.safeParse(req.body);
+  if (!result.success) {
+    return res.status(400).json({ message: "Invalid input" });
   }
+  
+  passport.authenticate("local", (err: any, user: any, info: any) => {
+    if (err) return next(err);
+    if (!user) {
+      return res.status(400).json({ message: info?.message || "Invalid credentials" });
+    }
+    req.login(user, (err) => {
+      if (err) return next(err);
+      req.session.save((err) => {
+        if (err) return next(err);
+        res.json({ message: "Logged in", user });
+      });
+    });
+  })(req, res, next);
 });
 
-authRouter.post("/api/logout", async (req, res, next) => {
-  try {
-    const sessionCookie = lucia.createBlankSessionCookie();
-    res.append("Set-Cookie", sessionCookie.serialize());
-    res.json({ message: "Logged out" });
-  } catch (error) {
-    next(error);
-  }
+authRouter.post("/api/logout", (req, res, next) => {
+  req.logout((err) => {
+    if (err) return next(err);
+    req.session.destroy((err) => {
+      if (err) return next(err);
+      res.json({ message: "Logged out" });
+    });
+  });
 });

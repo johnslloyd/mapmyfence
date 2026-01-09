@@ -15,12 +15,12 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 function Router() {
   return (
     <Switch>
-      <Route path="/login" component={Login} />
-      <Route path="/register" component={Register} />
-      <ProtectedRoute path="/" component={Dashboard} />
-      <ProtectedRoute path="/projects" component={Projects} />
-      <ProtectedRoute path="/editor" component={Projects} /> {/* Redirect-like behavior for bare /editor */}
-      <ProtectedRoute path="/editor/:id" component={Editor} />
+
+
+      <Route path="/" component={Dashboard} />
+      <Route path="/projects" component={Projects} />
+      <Route path="/editor" component={Projects} /> {/* Redirect-like behavior for bare /editor */}
+      <Route path="/editor/:id" component={Editor} />
       <Route component={NotFound} />
     </Switch>
   );

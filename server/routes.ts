@@ -1,14 +1,12 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
-import { storage } from "./storage";
+import { IStorage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { User } from "lucia";
 
 // Middleware to check if the user is authenticated
 const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
-  const user = res.locals.user as User;
-  if (!user) {
+  if (!req.isAuthenticated()) {
     return res.status(401).json({ message: "Unauthorized" });
   }
   next();
@@ -16,12 +14,13 @@ const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
 
 export async function registerRoutes(
   httpServer: Server,
-  app: Express
+  app: Express,
+  storage: IStorage
 ): Promise<Server> {
   
   app.get(api.projects.list.path, isAuthenticated, async (req, res) => {
     try {
-      const user = res.locals.user as User;
+      const user = req.user as any;
       const projects = await storage.getProjects(user.id);
       res.json(projects);
     } catch (err) {
@@ -32,7 +31,7 @@ export async function registerRoutes(
 
   app.get(api.projects.get.path, isAuthenticated, async (req, res) => {
     try {
-      const user = res.locals.user as User;
+      const user = req.user as any;
       const project = await storage.getProject(Number(req.params.id), user.id);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
@@ -46,9 +45,9 @@ export async function registerRoutes(
 
   app.post(api.projects.create.path, isAuthenticated, async (req, res) => {
     try {
-      const user = res.locals.user as User;
+      const user = req.user as any;
       const input = api.projects.create.input.parse(req.body);
-      const project = await storage.createProject(input, user.id);
+      const project = await storage.createProject({ ...input, userId: user.id }, user.id);
       res.status(201).json(project);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -63,7 +62,7 @@ export async function registerRoutes(
 
   app.put(api.projects.update.path, isAuthenticated, async (req, res) => {
     try {
-      const user = res.locals.user as User;
+      const user = req.user as any;
       const input = api.projects.update.input.parse(req.body);
       const project = await storage.updateProject(Number(req.params.id), input, user.id);
       res.json(project);
@@ -79,15 +78,15 @@ export async function registerRoutes(
   });
 
   app.delete(api.projects.delete.path, isAuthenticated, async (req, res) => {
-    const user = res.locals.user as User;
+    const user = req.user as any;
     await storage.deleteProject(Number(req.params.id), user.id);
     res.status(204).end();
   });
 
   app.post(api.fenceLines.create.path, isAuthenticated, async (req, res) => {
     try {
-      const { coordinates, ...lineData } = api.fenceLines.create.input.parse(req.body);
-      const line = await storage.createFenceLine(Number(req.params.projectId), lineData, coordinates);
+      const { coordinates, ...rest } = api.fenceLines.create.input.parse(req.body);
+      const line = await storage.createFenceLine(Number(req.params.projectId), { ...rest, projectId: Number(req.params.projectId) }, coordinates);
       res.status(201).json(line);
     } catch (err) {
       if (err instanceof z.ZodError) {

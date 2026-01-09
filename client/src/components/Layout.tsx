@@ -1,10 +1,21 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Map, Settings, FolderKanban, Menu, X } from "lucide-react";
+import { LayoutDashboard, Map, FolderKanban, Menu, X, LogOut, User as UserIcon } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { CreateProjectDialog } from "./CreateProjectDialog";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "./ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { LoginModal } from "./LoginModal";
+import { Avatar, AvatarFallback } from "./ui/avatar";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -13,101 +24,131 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
   const { isAuthenticated, user, logout } = useAuth();
+
+  const closeLoginModal = () => setLoginModalOpen(false);
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'My Projects', href: '/projects', icon: FolderKanban },
-    { name: 'Map Editor', href: '/editor', icon: Map, matchStart: true },
   ];
 
-  const isActive = (href: string, matchStart = false) => {
-    if (href === '/' && location !== '/') return false;
-    if (matchStart) return location.startsWith(href);
+  const isActive = (href: string) => {
     return location === href;
   };
 
+  const getInitials = (email?: string | null) => {
+    if (!email) return 'U';
+    return email.substring(0, 2).toUpperCase();
+  }
+
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row">
-      {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
-        <div className="flex items-center gap-2">
-          <div className="bg-primary/10 p-2 rounded-lg">
-            <Map className="w-6 h-6 text-primary" />
-          </div>
-          <span className="font-display font-bold text-xl tracking-tight">MapMyFence</span>
-        </div>
-        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-          {mobileMenuOpen ? <X /> : <Menu />}
-        </button>
-      </div>
+    <div className="min-h-screen bg-secondary/30 flex flex-col">
+      {/* Header */}
+      <header className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+        <div className="w-full flex h-16 items-center px-4 md:px-6 lg:px-8">
+          {/* Logo */}
+          <Link href="/" className="mr-6 flex items-center gap-2">
+            <div className="bg-primary text-primary-foreground p-2 rounded-lg">
+              <Map className="w-6 h-6" />
+            </div>
+            <span className="font-display font-bold text-xl hidden sm:inline-block">MapMyFence</span>
+          </Link>
 
-      {/* Sidebar Navigation */}
-      <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 flex flex-col",
-        mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
-        <div className="p-6 hidden md:flex items-center gap-3">
-          <div className="bg-primary text-primary-foreground p-2.5 rounded-xl shadow-lg shadow-primary/20">
-            <Map className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="font-display font-bold text-xl tracking-tight leading-none">MapMyFence</h1>
-            <p className="text-xs text-muted-foreground mt-1 font-medium">Professional Planning</p>
-          </div>
-        </div>
-
-        <nav className="flex-1 px-4 py-4 space-y-1">
-          {navigation.map((item) => (
-            <Link key={item.name} href={item.href}>
-              <div
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex md:items-center gap-6 text-sm font-medium">
+            {navigation.map((item) => (
+              <Link
+                key={item.name}
+                href={item.href}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm group",
-                  isActive(item.href, item.matchStart)
-                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  "transition-colors hover:text-foreground",
+                  isActive(item.href) ? "text-foreground" : "text-muted-foreground"
                 )}
               >
-                <item.icon className={cn(
-                  "w-5 h-5",
-                  isActive(item.href, item.matchStart) ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground"
-                )} />
                 {item.name}
-              </div>
-            </Link>
-          ))}
-        </nav>
+              </Link>
+            ))}
+          </nav>
+          
+          <div className="flex flex-1 items-center justify-end gap-4">
+            {/* Create Project Button */}
+            {isAuthenticated && <CreateProjectDialog />}
+            
+            {/* User Menu / Login */}
+            {isAuthenticated ? (
+               <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback>{getInitials(user?.email)}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">My Account</p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        {user?.email}
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Log out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Dialog open={loginModalOpen} onOpenChange={setLoginModalOpen}>
+                <DialogTrigger asChild>
+                  <Button>Login</Button>
+                </DialogTrigger>
+                <LoginModal onLoginSuccess={closeLoginModal} />
+              </Dialog>
+            )}
 
-        <div className="p-4 border-t space-y-2">
-          {isAuthenticated ? (
-            <div>
-              <p className="text-sm font-medium px-4">{user?.email}</p>
-              <Button variant="ghost" size="sm" onClick={logout} className="w-full justify-start">Logout</Button>
-            </div>
-          ) : (
-            <Button asChild className="w-full">
-              <Link href="/login">Login</Link>
-            </Button>
-          )}
-          <CreateProjectDialog />
+            {/* Mobile Menu Button */}
+            <button
+              className="md:hidden"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              <span className="sr-only">Open menu</span>
+              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
+          </div>
         </div>
-      </aside>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t">
+            <nav className="grid gap-2 p-4 text-lg font-medium">
+              {navigation.map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    "flex items-center gap-4 rounded-lg px-3 py-2 transition-all hover:text-foreground",
+                    isActive(item.href) ? "bg-muted text-foreground" : "text-muted-foreground"
+                  )}
+                >
+                  <item.icon className="h-5 w-5" />
+                  {item.name}
+                </Link>
+              ))}
+            </nav>
+          </div>
+        )}
+      </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto bg-background/50 relative">
-        {/* Decorative background blur */}
-        <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none -z-10" />
-        
+      <main className="flex-1">
         {children}
       </main>
-
-      {/* Overlay for mobile */}
-      {mobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
     </div>
   );
 }

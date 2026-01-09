@@ -1,29 +1,55 @@
-import { DrizzlePostgreSQLAdapter } from "@lucia-auth/adapter-drizzle";
-import { Lucia } from "lucia";
+import passport from "passport";
+import { Strategy as LocalStrategy } from "passport-local";
 import { db } from "./db";
-import { sessions, users } from "@shared/schema";
+import { users } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { Scrypt } from "lucia";
 
-// Pass the drizzle-compatible `db` wrapper to the Lucia Drizzle adapter.
-const adapter = new DrizzlePostgreSQLAdapter(db, sessions, users);
+passport.use(
+  new LocalStrategy(
+    { usernameField: "email" },
+    async (email, password, done) => {
+      try {
+        const [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, email))
+          .limit(1);
 
-export const lucia = new Lucia(adapter, {
-  sessionCookie: {
-    attributes: {
-      secure: process.env.NODE_ENV === "production",
-    },
-  },
-  getUserAttributes: (attributes) => {
-    return {
-      email: attributes.email,
-    };
-  },
+        if (!user) {
+          return done(null, false, { message: "Incorrect email." });
+        }
+
+        const scrypt = new Scrypt();
+        const isValid = await scrypt.verify(user.hashedPassword, password);
+
+        if (!isValid) {
+          return done(null, false, { message: "Incorrect password." });
+        }
+
+        return done(null, user);
+      } catch (err) {
+        return done(err);
+      }
+    }
+  )
+);
+
+passport.serializeUser((user: any, done) => {
+  done(null, user.id);
 });
 
-declare module "lucia" {
-  interface Register {
-    Lucia: typeof lucia;
-    DatabaseUserAttributes: {
-      email: string;
-    };
+passport.deserializeUser(async (id: string, done) => {
+  try {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+    done(null, user);
+  } catch (err) {
+    done(err);
   }
-}
+});
+
+export { passport };

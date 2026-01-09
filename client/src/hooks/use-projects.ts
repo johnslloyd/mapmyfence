@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 // PROJECTS
 // ============================================
 
-export function useProjects() {
+export function useProjects(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: [api.projects.list.path],
     queryFn: async () => {
@@ -21,6 +21,7 @@ export function useProjects() {
       if (!res.ok) throw new Error("Failed to fetch projects");
       return api.projects.list.responses[200].parse(await res.json());
     },
+    ...options,
   });
 }
 
