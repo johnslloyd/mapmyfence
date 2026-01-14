@@ -86,10 +86,15 @@ app.use(passport.session());
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    let message = err.message || "Internal Server Error";
+    
+    // Handle Zod validation errors
+    if (err.name === 'ZodError' && err.errors && err.errors.length > 0) {
+      message = err.errors[0].message || "Validation error";
+    }
 
+    console.error("Error:", err);
     res.status(status).json({ message });
-    throw err;
   });
 
   // importantly only setup vite in development and after
@@ -157,7 +162,7 @@ app.use(passport.session());
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
+  const port = parseInt(process.env.PORT || "5050", 10);
   httpServer.listen(
     {
       port,

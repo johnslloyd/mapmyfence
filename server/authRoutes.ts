@@ -2,7 +2,7 @@
 import { Router } from "express";
 import { passport } from "./auth";
 import { db } from "./db";
-import { users } from "@shared/schema";
+import { users, projects } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { Scrypt, generateId } from "lucia";
@@ -20,11 +20,19 @@ authRouter.get("/api/user", (req, res) => {
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
+  projectId: z.string().optional(),
 });
 
 authRouter.post("/api/register", async (req, res, next) => {
   try {
-    const { email, password } = registerSchema.parse(req.body);
+    // Validate input with better error handling
+    const result = registerSchema.safeParse(req.body);
+    if (!result.success) {
+      const errorMessage = result.error.errors[0]?.message || "Invalid input";
+      return res.status(400).json({ message: errorMessage });
+    }
+
+    const { email, password, projectId } = result.data;
 
     // ensure email not already registered
     const [existing] = await db.select().from(users).where(eq(users.email, email));
@@ -42,14 +50,28 @@ authRouter.post("/api/register", async (req, res, next) => {
       hashedPassword,
     }).returning();
 
+    if (projectId) {
+      await db.update(projects).set({ userId }).where(eq(projects.id, parseInt(projectId)));
+    }
+
     req.login(user, (err) => {
-      if (err) return next(err);
+      if (err) {
+        console.error("Login error after registration:", err);
+        return res.status(500).json({ message: "Account created but failed to log in. Please try logging in." });
+      }
       req.session.save((err) => {
-        if (err) return next(err);
+        if (err) {
+          console.error("Session save error after registration:", err);
+          return res.status(500).json({ message: "Account created but session failed. Please try logging in." });
+        }
         res.status(201).json({ message: "User created", user });
       });
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Registration error:", error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: error.errors[0]?.message || "Invalid input" });
+    }
     next(error);
   }
 });

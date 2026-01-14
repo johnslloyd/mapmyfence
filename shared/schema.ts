@@ -29,7 +29,7 @@ export const projects = pgTable("projects", {
   description: text("description"),
   status: text("status", { enum: ["planning", "quoting", "in-progress", "completed"] }).default("planning").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  userId: text("user_id").references(() => users.id).notNull(),
+  userId: text("user_id").references(() => users.id),
 });
 
 export const fenceLines = pgTable("fence_lines", {

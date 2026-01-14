@@ -18,9 +18,12 @@ function Router() {
 
 
       <Route path="/" component={Dashboard} />
-      <Route path="/projects" component={Projects} />
-      <Route path="/editor" component={Projects} /> {/* Redirect-like behavior for bare /editor */}
-      <Route path="/editor/:id" component={Editor} />
+      <Route path="/login" component={Login} />
+      <Route path="/register" component={Register} />
+      <ProtectedRoute path="/projects" component={Projects} />
+      {/* Redirect-like behavior for bare /editor */}
+      <ProtectedRoute path="/editor" component={Editor} /> 
+      <ProtectedRoute path="/editor/:id" component={Editor} />
       <Route component={NotFound} />
     </Switch>
   );

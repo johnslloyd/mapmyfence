@@ -25,18 +25,21 @@ export function useProjects(options: { enabled?: boolean } = {}) {
   });
 }
 
-export function useProject(id: number) {
+export function useProject(id: number | undefined, options?: { enabled?: boolean; isGuest?: boolean }) {
   return useQuery({
-    queryKey: [api.projects.get.path, id],
+    queryKey: [api.projects.get.path, id, options?.isGuest],
     queryFn: async () => {
-      if (isNaN(id)) return null;
-      const url = buildUrl(api.projects.get.path, { id });
+      if (!id || isNaN(id)) return null;
+      let url = buildUrl(api.projects.get.path, { id });
+      if (options?.isGuest) {
+        url += '?guest=true';
+      }
       const res = await fetch(url, { credentials: "include" });
       if (res.status === 404) return null;
       if (!res.ok) throw new Error("Failed to fetch project");
       return api.projects.get.responses[200].parse(await res.json());
     },
-    enabled: !!id && !isNaN(id),
+    enabled: !!id && !isNaN(id) && (options?.enabled === undefined || options.enabled),
   });
 }
 

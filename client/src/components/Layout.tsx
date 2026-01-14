@@ -74,7 +74,7 @@ export function Layout({ children }: LayoutProps) {
           
           <div className="flex flex-1 items-center justify-end gap-4">
             {/* Create Project Button */}
-            {isAuthenticated && <CreateProjectDialog />}
+            <CreateProjectDialog />
             
             {/* User Menu / Login */}
             {isAuthenticated ? (

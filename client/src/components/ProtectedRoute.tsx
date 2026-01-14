@@ -9,9 +9,7 @@ export const ProtectedRoute = (props: any) => {
     return <div>Loading...</div>;
   }
 
-  if (!isAuthenticated) {
-    return <Redirect to="/login" />;
-  }
+
 
   return <Route {...props} />;
 };

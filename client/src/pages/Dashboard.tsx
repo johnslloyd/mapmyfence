@@ -1,5 +1,5 @@
 import { Layout } from "@/components/Layout";
-import { useProjects } from "@/hooks/use-projects";
+import { useProjects, useCreateProject } from "@/hooks/use-projects";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
@@ -9,9 +9,10 @@ import {
   DollarSign, 
   CalendarDays,
   Hammer,
-  Layout as FolderKanban
+  Layout as FolderKanban,
+  Loader2,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { CreateProjectDialog } from "@/components/CreateProjectDialog";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -47,12 +48,21 @@ function UnauthenticatedDashboard() {
         <p className="text-lg text-muted-foreground mb-8 max-w-2xl">
           The ultimate tool for planning and estimating your fencing projects with precision. Map out your fence lines, choose materials, and get instant cost estimates.
         </p>
-        <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
-          <DialogTrigger asChild>
-            <Button size="lg">Log In to Get Started</Button>
-          </DialogTrigger>
-          <LoginModal onLoginSuccess={() => setIsLoginOpen(false)} />
-        </Dialog>
+        <div className="flex gap-4">
+          <CreateProjectDialog>
+            <Button 
+              size="lg" 
+            >
+              Start a Free Project
+            </Button>
+          </CreateProjectDialog>
+          <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
+            <DialogTrigger asChild>
+              <Button size="lg" variant="outline">Log In</Button>
+            </DialogTrigger>
+            <LoginModal onLoginSuccess={() => setIsLoginOpen(false)} />
+          </Dialog>
+        </div>
         <p className="text-sm text-muted-foreground mt-4">
           Don't have an account? <Link href="/register"><a className="underline hover:text-primary">Sign up</a></Link>
         </p>

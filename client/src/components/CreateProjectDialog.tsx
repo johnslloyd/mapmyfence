@@ -1,5 +1,6 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { insertProjectSchema, type InsertProject } from "@shared/schema";
 import { useCreateProject } from "@/hooks/use-projects";
 import {
@@ -44,8 +45,14 @@ export function CreateProjectDialog({
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = isControlled ? controlledOnOpenChange! : setInternalOpen;
 
-  const form = useForm<Partial<InsertProject>>({
-    resolver: zodResolver(insertProjectSchema.omit({ userId: true })),
+  const form = useForm<InsertProject>({
+    resolver: zodResolver(
+      insertProjectSchema
+        .omit({ userId: true })
+        .extend({
+          name: z.string().min(1, "Project name is required"),
+        })
+    ),
     defaultValues: {
       name: "",
       address: "",
@@ -55,24 +62,33 @@ export function CreateProjectDialog({
   });
 
   async function onSubmit(data: InsertProject) {
-    console.log('CreateProjectDialog submit', data);
     toast({ title: 'Creating project', description: 'Starting project creation' });
     try {
-      const project = await mutateAsync(data);
-      console.log('create project response', project);
+      // Convert empty strings to null/undefined for optional fields
+      const cleanedData = {
+        ...data,
+        name: data.name.trim(),
+        address: data.address?.trim() || null,
+        description: data.description?.trim() || null,
+      };
+      
+      const project = await mutateAsync(cleanedData);
       // if we didn't get an id back, surface an error
       if (!project || !project.id) {
         console.error('Create project did not return an id', project);
         toast({ title: 'Error', description: 'Server did not return a project id', variant: 'destructive' });
         return;
       }
-      // Navigate to the editor for the new project before closing modal
-      setLocation(`/editor/${project.id}`);
+      // Save the anonymous project to local storage
+      localStorage.setItem('anonymousProjectId', project.id.toString());
+      // Navigate to the editor in guest mode
+      setLocation(`/editor/${project.id}?guest=true`);
       setOpen(false);
       form.reset();
     } catch (error: any) {
       console.error('create project error', error);
-      toast({ title: 'Error', description: error?.message || 'Failed to create project', variant: 'destructive' });
+      // Don't show toast here since useCreateProject already shows one
+      // toast({ title: 'Error', description: error?.message || 'Failed to create project', variant: 'destructive' });
     }
   }
 
@@ -151,7 +167,6 @@ export function CreateProjectDialog({
                 disabled={isPending}
                 className="rounded-xl w-full sm:w-auto"
                 onClick={() => {
-                  console.log('submit button clicked');
                   form.handleSubmit(onSubmit)();
                 }}
               >

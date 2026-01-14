@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 
 // Custom marker icon hack for Leaflet in React
 // In a real production app, import these properly
@@ -34,17 +35,24 @@ function MapEvents({ onMapClick }: { onMapClick: (e: any) => void }) {
 }
 
 // Address search component (outside map context)
-function AddressSearchInput({ onAddressFound, mapRef }: { onAddressFound: (lat: number, lng: number) => void; mapRef: React.RefObject<any> }) {
-  const [address, setAddress] = useState("");
+function AddressSearchInput({ initialValue, onAddressFound, mapRef }: { initialValue?: string; onAddressFound: (lat: number, lng: number) => void; mapRef: React.RefObject<any> }) {
+  const [address, setAddress] = useState(initialValue || "");
   const [isSearching, setIsSearching] = useState(false);
+  const { toast } = useToast();
 
-  const handleSearch = async () => {
-    if (!address.trim()) return;
+  useEffect(() => {
+    if (initialValue) {
+      setAddress(initialValue);
+    }
+  }, [initialValue]);
+
+  const handleSearch = async (searchAddress: string) => {
+    if (!searchAddress.trim()) return;
     
     setIsSearching(true);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchAddress)}&limit=1`
       );
       const results = await response.json();
       
@@ -57,13 +65,40 @@ function AddressSearchInput({ onAddressFound, mapRef }: { onAddressFound: (lat: 
         if (mapRef.current) {
           mapRef.current.setView([newLat, newLng], 20);
         }
-        setAddress("");
+        // Do not clear address on successful auto-search
+        // setAddress(""); 
+      } else {
+        toast({
+          title: "Address not found",
+          description: "The provided address could not be located. Please try again.",
+          variant: "destructive"
+        });
+        if (mapRef.current) {
+          mapRef.current.setView([20, 0], 2); // Zoom out
+        }
       }
     } catch (error) {
       console.error("Geocoding error:", error);
+      toast({
+        title: "Search Error",
+        description: "An error occurred while searching for the address.",
+        variant: "destructive"
+      });
     } finally {
       setIsSearching(false);
     }
+  };
+
+  // Effect to run search when initialValue is set
+  useEffect(() => {
+    if (initialValue) {
+      handleSearch(initialValue);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialValue]);
+
+  const onManualSearch = () => {
+    handleSearch(address);
   };
 
   return (
@@ -72,13 +107,13 @@ function AddressSearchInput({ onAddressFound, mapRef }: { onAddressFound: (lat: 
         placeholder="Enter property address..."
         value={address}
         onChange={(e) => setAddress(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+        onKeyDown={(e) => e.key === "Enter" && onManualSearch()}
         disabled={isSearching}
         className="text-sm"
       />
       <Button
         size="icon"
-        onClick={handleSearch}
+        onClick={onManualSearch}
         disabled={isSearching || !address.trim()}
         variant="outline"
       >
@@ -228,7 +263,7 @@ export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initi
         <div className="space-y-4">
           <div className="space-y-2 pb-3 border-b">
             <Label className="text-xs">Search Address</Label>
-            <AddressSearchInput onAddressFound={handleAddressFound} mapRef={mapRef} />
+            <AddressSearchInput initialValue={initialAddress} onAddressFound={handleAddressFound} mapRef={mapRef} />
           </div>
           <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-2">

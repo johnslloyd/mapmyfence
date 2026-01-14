@@ -1,20 +1,20 @@
 import { 
   projects, fenceLines, coordinates,
-  type Project, type InsertProject, 
+  type InsertProject, 
   type FenceLine, type InsertFenceLine, 
-  type Coordinate, type InsertCoordinate,
+  type InsertCoordinate,
   type ProjectWithLines
 } from "@shared/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "@shared/schema";
 
 export interface IStorage {
   getProjects(userId: string): Promise<ProjectWithLines[]>;
-  getProject(id: number, userId: string): Promise<ProjectWithLines | undefined>;
-  createProject(project: InsertProject, userId: string): Promise<ProjectWithLines>;
-  updateProject(id: number, updates: Partial<InsertProject>, userId: string): Promise<ProjectWithLines>;
-  deleteProject(id: number, userId: string): Promise<void>;
+  getProject(id: number, userId?: string): Promise<ProjectWithLines | undefined>;
+  createProject(project: InsertProject): Promise<ProjectWithLines>;
+  updateProject(id: number, updates: Partial<InsertProject>): Promise<ProjectWithLines>;
+  deleteProject(id: number): Promise<void>;
   
   createFenceLine(projectId: number, fenceLine: InsertFenceLine, coords: Omit<InsertCoordinate, "fenceLineId">[]): Promise<FenceLine & { coordinates: Coordinate[] }>;
   deleteFenceLine(id: number): Promise<void>;
@@ -44,8 +44,12 @@ export class DatabaseStorage implements IStorage {
     return results as ProjectWithLines[];
   }
 
-  async getProject(id: number, userId: string): Promise<ProjectWithLines | undefined> {
-    const project = await this.db.select().from(projects).where(and(eq(projects.id, id), eq(projects.userId, userId))).limit(1);
+  async getProject(id: number, userId?: string): Promise<ProjectWithLines | undefined> {
+    const query = userId
+      ? and(eq(projects.id, id), eq(projects.userId, userId))
+      : and(eq(projects.id, id), isNull(projects.userId));
+
+    const project = await this.db.select().from(projects).where(query).limit(1);
     if (!project || project.length === 0) return undefined;
     const p = project[0];
     const lines = await this.db.select().from(fenceLines).where(eq(fenceLines.projectId, p.id));
@@ -57,18 +61,18 @@ export class DatabaseStorage implements IStorage {
     return { ...p, fenceLines: linesWithCoords } as ProjectWithLines;
   }
 
-  async createProject(insertProject: InsertProject, userId: string): Promise<ProjectWithLines> {
-    const [project] = await this.db.insert(projects).values({ ...insertProject, userId }).returning();
+  async createProject(insertProject: InsertProject): Promise<ProjectWithLines> {
+    const [project] = await this.db.insert(projects).values(insertProject).returning();
     return { ...project, fenceLines: [] };
   }
 
-  async updateProject(id: number, updates: Partial<InsertProject>, userId: string): Promise<ProjectWithLines> {
-    const [updated] = await this.db.update(projects).set(updates).where(and(eq(projects.id, id), eq(projects.userId, userId))).returning();
-    return this.getProject(updated.id, userId) as Promise<ProjectWithLines>;
+  async updateProject(id: number, updates: Partial<InsertProject>): Promise<ProjectWithLines> {
+    const [updated] = await this.db.update(projects).set(updates).where(eq(projects.id, id)).returning();
+    return this.getProject(updated.id, updated.userId as string) as Promise<ProjectWithLines>;
   }
 
-  async deleteProject(id: number, userId: string): Promise<void> {
-    await this.db.delete(projects).where(and(eq(projects.id, id), eq(projects.userId, userId)));
+  async deleteProject(id: number): Promise<void> {
+    await this.db.delete(projects).where(eq(projects.id, id));
   }
 
   async createFenceLine(projectId: number, fenceLine: InsertFenceLine, coords: Omit<InsertCoordinate, "fenceLineId">[]): Promise<FenceLine & { coordinates: Coordinate[] }> {
