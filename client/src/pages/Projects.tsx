@@ -28,7 +28,6 @@ export default function Projects() {
             <h1 className="text-3xl font-display font-bold">My Projects</h1>
             <p className="text-muted-foreground">Manage and track all your fence installations.</p>
           </div>
-          <CreateProjectDialog />
         </div>
 
         {/* Filters */}
@@ -63,12 +62,11 @@ export default function Projects() {
                 </div>
 
                 {/* Edit/Delete Controls */}
-                <div className="absolute top-4 left-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                  <EditProjectDialog project={project} />
+                <div className="absolute top-16 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                   <Button 
                     size="icon" 
                     variant="ghost" 
-                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    className="h-8 w-8 bg-card border border-transparent text-destructive hover:bg-destructive/10 hover:border-destructive/20"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteProject.mutate(project.id);
@@ -117,6 +115,9 @@ export default function Projects() {
             </p>
           </div>
         )}
+        <div className="flex justify-start mt-8">
+            <CreateProjectDialog />
+        </div>
       </div>
     </Layout>
   );

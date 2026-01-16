@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Polyline, useMapEvents, Tooltip, useMap } from "react-leaflet";
+import { useEffect, useState, useRef, type MutableRefObject } from "react";
+import { MapContainer, TileLayer, Marker, Polyline, useMapEvents, Tooltip } from "react-leaflet";
 import { LatLng, Icon } from "leaflet";
 import { Button } from "@/components/ui/button";
 import { Undo2, Save, Trash2, Ruler, Search, Loader2 } from "lucide-react";
@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { cn } from "@/lib/utils";
 
 // Custom marker icon hack for Leaflet in React
 // In a real production app, import these properly
@@ -35,7 +37,7 @@ function MapEvents({ onMapClick }: { onMapClick: (e: any) => void }) {
 }
 
 // Address search component (outside map context)
-function AddressSearchInput({ initialValue, onAddressFound, mapRef }: { initialValue?: string; onAddressFound: (lat: number, lng: number) => void; mapRef: React.RefObject<any> }) {
+function AddressSearchInput({ initialValue, onAddressFound }: { initialValue?: string; onAddressFound: (lat: number, lng: number) => void; }) {
   const [address, setAddress] = useState(initialValue || "");
   const [isSearching, setIsSearching] = useState(false);
   const { toast } = useToast();
@@ -62,9 +64,6 @@ function AddressSearchInput({ initialValue, onAddressFound, mapRef }: { initialV
         const newLng = parseFloat(lon);
         
         onAddressFound(newLat, newLng);
-        if (mapRef.current) {
-          mapRef.current.setView([newLat, newLng], 20);
-        }
         // Do not clear address on successful auto-search
         // setAddress(""); 
       } else {
@@ -73,9 +72,6 @@ function AddressSearchInput({ initialValue, onAddressFound, mapRef }: { initialV
           description: "The provided address could not be located. Please try again.",
           variant: "destructive"
         });
-        if (mapRef.current) {
-          mapRef.current.setView([20, 0], 2); // Zoom out
-        }
       }
     } catch (error) {
       console.error("Geocoding error:", error);
@@ -88,14 +84,6 @@ function AddressSearchInput({ initialValue, onAddressFound, mapRef }: { initialV
       setIsSearching(false);
     }
   };
-
-  // Effect to run search when initialValue is set
-  useEffect(() => {
-    if (initialValue) {
-      handleSearch(initialValue);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialValue]);
 
   const onManualSearch = () => {
     handleSearch(address);
@@ -144,14 +132,14 @@ interface MapEditorProps {
   onSave: (points: Point[], material: string, height: number, length: number) => void;
   isSaving: boolean;
   existingLines?: ExistingLine[];
+  isMobile?: boolean;
 }
 
-export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initialAddress, onSave, isSaving, existingLines = [] }: MapEditorProps) {
+export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initialAddress, onSave, isSaving, existingLines = [], isMobile }: MapEditorProps) {
   const [points, setPoints] = useState<Point[]>([]);
   const [material, setMaterial] = useState("wood_cedar");
   const [height, setHeight] = useState("6");
   const [totalDistance, setTotalDistance] = useState(0);
-  const [center, setCenter] = useState<[number, number]>(initialCenter);
   const mapRef = useRef<any>(null);
 
   // Calculate distance when points change
@@ -203,14 +191,182 @@ export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initi
   };
 
   const handleAddressFound = (lat: number, lng: number) => {
-    setCenter([lat, lng]);
+    if (mapRef.current) {
+      mapRef.current.setView([lat, lng], 20);
+    }
   };
+
+  const DesktopContent = () => (
+    <div className="space-y-4">
+      <div className="space-y-2 pb-3 border-b">
+        <Label className="text-xs">Search Address</Label>
+        <AddressSearchInput initialValue={initialAddress} onAddressFound={handleAddressFound} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <Label className="text-xs">Material</Label>
+          <Select value={material} onValueChange={setMaterial}>
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Select material" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="wood_pine">Wood: Pine</SelectItem>
+              <SelectItem value="wood_cedar">Wood: Cedar</SelectItem>
+              <SelectItem value="vinyl">Vinyl</SelectItem>
+              <SelectItem value="iron">Iron</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>            
+        <div className="space-y-2">
+          <Label className="text-xs">Height (ft)</Label>
+          <Select value={height} onValueChange={setHeight}>
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="4">4 ft</SelectItem>
+              <SelectItem value="6">6 ft</SelectItem>
+              <SelectItem value="8">8 ft</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="bg-secondary/50 rounded-lg p-3 text-center border border-border/50">
+        <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Total Length</span>
+        <div className="text-2xl font-mono font-bold text-foreground">
+          {totalDistance.toFixed(1)} <span className="text-base text-muted-foreground">ft</span>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Button 
+          variant="outline" 
+          size="icon" 
+          onClick={handleUndo} 
+          disabled={points.length === 0}
+          title="Undo last point"
+        >
+          <Undo2 className="h-4 w-4" />
+        </Button>
+        <Button 
+          variant="outline" 
+          size="icon" 
+          onClick={handleClear} 
+          disabled={points.length === 0}
+          className="text-destructive hover:text-destructive"
+          title="Clear all"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+        <Button 
+          className="flex-1 gap-2 bg-primary hover:bg-primary/90" 
+          onClick={handleSave}
+          disabled={points.length < 2 || isSaving}
+        >
+          <Save className="h-4 w-4" />
+          {isSaving ? "Saving..." : "Save Line"}
+        </Button>
+      </div>
+    </div>
+  );
+  
+  const MobileContent = () => (
+    <div className="space-y-2">
+      <div className="space-y-2">
+        <Label className="text-xs px-4">Search Address</Label>
+        <div className="px-4">
+          <AddressSearchInput initialValue={initialAddress} onAddressFound={handleAddressFound} />
+        </div>
+      </div>
+      <Accordion type="multiple" className="w-full">
+        <AccordionItem value="item-1">
+          <AccordionTrigger className="px-4 text-sm">Fence Details</AccordionTrigger>
+          <AccordionContent className="px-4">
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <div className="space-y-2">
+                <Label className="text-xs">Material</Label>
+                <Select value={material} onValueChange={setMaterial}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Select material" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="wood_pine">Wood: Pine</SelectItem>
+                    <SelectItem value="wood_cedar">Wood: Cedar</SelectItem>
+                    <SelectItem value="vinyl">Vinyl</SelectItem>
+                    <SelectItem value="iron">Iron</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>            
+              <div className="space-y-2">
+                <Label className="text-xs">Height (ft)</Label>
+                <Select value={height} onValueChange={setHeight}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="4">4 ft</SelectItem>
+                    <SelectItem value="6">6 ft</SelectItem>
+                    <SelectItem value="8">8 ft</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="item-2" className="border-b-0">
+          <AccordionTrigger className="px-4 text-sm">
+            <div className="flex-1 flex justify-between items-center">
+              <span>Total Length</span>
+              <span className="text-lg font-mono font-bold text-foreground mr-2">
+                {totalDistance.toFixed(1)}
+                <span className="text-sm text-muted-foreground ml-1">ft</span>
+              </span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-4">
+            <p className="text-xs text-muted-foreground pt-2">
+              This is the calculated length of the fence line based on the points placed on the map.
+            </p>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+      <div className="flex gap-2 px-4 pb-2">
+        <Button 
+          variant="outline" 
+          size="icon" 
+          onClick={handleUndo} 
+          disabled={points.length === 0}
+          title="Undo last point"
+        >
+          <Undo2 className="h-4 w-4" />
+        </Button>
+        <Button 
+          variant="outline" 
+          size="icon" 
+          onClick={handleClear} 
+          disabled={points.length === 0}
+          className="text-destructive hover:text-destructive"
+          title="Clear all"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+        <Button 
+          className="flex-1 gap-2 bg-primary hover:bg-primary/90" 
+          onClick={handleSave}
+          disabled={points.length < 2 || isSaving}
+        >
+          <Save className="h-4 w-4" />
+          {isSaving ? "Saving..." : "Save Line"}
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden border shadow-inner">
       <MapContainer
         ref={mapRef}
-        center={center}
+        center={initialCenter}
         zoom={21}
         maxZoom={22}
         scrollWheelZoom={true}
@@ -254,87 +410,22 @@ export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initi
       </MapContainer>
 
       {/* Floating Controls */}
-      <Card className="absolute top-4 right-4 p-4 w-72 z-[400] bg-background/95 backdrop-blur shadow-xl border-border/50">
-        <h3 className="font-display font-bold text-lg mb-4 flex items-center gap-2">
+      <Card className={cn(
+        "absolute top-4 z-40 bg-background/95 backdrop-blur shadow-xl border-border/50",
+        isMobile ? "left-4 right-4 w-auto" : "right-4 w-72 p-4"
+      )}>
+        <h3 className={cn(
+          "font-display font-bold text-lg flex items-center gap-2",
+          isMobile ? "mb-0 p-4" : "mb-4"
+        )}>
           <Ruler className="w-5 h-5 text-primary" />
           New Fence Line
         </h3>
         
-        <div className="space-y-4">
-          <div className="space-y-2 pb-3 border-b">
-            <Label className="text-xs">Search Address</Label>
-            <AddressSearchInput initialValue={initialAddress} onAddressFound={handleAddressFound} mapRef={mapRef} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-2">
-                            <Label className="text-xs">Material</Label>
-                            <Select value={material} onValueChange={setMaterial}>
-                              <SelectTrigger className="h-9">
-                                <SelectValue placeholder="Select material" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="wood_pine">Wood: Pine</SelectItem>
-                                <SelectItem value="wood_cedar">Wood: Cedar</SelectItem>
-                                <SelectItem value="vinyl">Vinyl</SelectItem>
-                                <SelectItem value="iron">Iron</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>            
-            <div className="space-y-2">
-              <Label className="text-xs">Height (ft)</Label>
-              <Select value={height} onValueChange={setHeight}>
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="4">4 ft</SelectItem>
-                  <SelectItem value="6">6 ft</SelectItem>
-                  <SelectItem value="8">8 ft</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="bg-secondary/50 rounded-lg p-3 text-center border border-border/50">
-            <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Total Length</span>
-            <div className="text-2xl font-mono font-bold text-foreground">
-              {totalDistance.toFixed(1)} <span className="text-base text-muted-foreground">ft</span>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={handleUndo} 
-              disabled={points.length === 0}
-              title="Undo last point"
-            >
-              <Undo2 className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={handleClear} 
-              disabled={points.length === 0}
-              className="text-destructive hover:text-destructive"
-              title="Clear all"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-            <Button 
-              className="flex-1 gap-2 bg-primary hover:bg-primary/90" 
-              onClick={handleSave}
-              disabled={points.length < 2 || isSaving}
-            >
-              <Save className="h-4 w-4" />
-              {isSaving ? "Saving..." : "Save Line"}
-            </Button>
-          </div>
-        </div>
+        {isMobile ? <MobileContent /> : <DesktopContent />}
       </Card>
       
-      <div className="absolute bottom-4 left-4 z-[400] bg-background/80 backdrop-blur px-3 py-1.5 rounded-full text-xs font-medium border shadow-sm">
+      <div className="absolute bottom-4 left-4 z-40 bg-background/80 backdrop-blur px-3 py-1.5 rounded-full text-xs font-medium border shadow-sm">
         Click on map to place fence posts
       </div>
     </div>

@@ -116,11 +116,10 @@ export default function Dashboard() {
             <h1 className="text-3xl font-display font-bold text-foreground">Dashboard</h1>
             <p className="text-muted-foreground">Welcome back to your project overview.</p>
           </div>
-          <CreateProjectDialog />
         </div>
 
         {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2">
           <StatCard 
             title="Total Projects" 
             value={totalProjects} 
@@ -133,23 +132,10 @@ export default function Dashboard() {
             icon={Hammer}
             description="Currently in progress"
           />
-          <StatCard 
-            title="Total Footage" 
-            value={`${totalFootage} ft`} 
-            icon={Ruler}
-            description="Mapped fence lines"
-          />
-          <StatCard 
-            title="Est. Revenue" 
-            value="$45,200" 
-            icon={DollarSign}
-            description="Based on material costs"
-          />
         </div>
 
         {/* Recent Projects */}
-        <div className="grid gap-8 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-display font-bold">Recent Projects</h2>
               <Link href="/projects">
@@ -202,60 +188,12 @@ export default function Dashboard() {
                   <p className="text-muted-foreground max-w-sm mb-6">
                     Create your first project to start planning fence lines and estimating costs.
                   </p>
-                  <CreateProjectDialog />
                 </CardContent>
               </Card>
             )}
-          </div>
-
-          {/* Side Panel Info */}
-          <div className="space-y-6">
-             <Card className="bg-gradient-to-br from-primary to-emerald-700 text-primary-foreground border-none shadow-xl">
-               <CardHeader>
-                 <CardTitle className="font-display">Quick Actions</CardTitle>
-                 <CardDescription className="text-primary-foreground/80">
-                   Common tasks to get you started
-                 </CardDescription>
-               </CardHeader>
-               <CardContent className="space-y-3">
-                 <CreateProjectDialog>
-                   <Button variant="secondary" className="w-full justify-start gap-2 bg-white/10 hover:bg-white/20 border-white/20 text-white">
-                     <Hammer className="w-4 h-4" /> Start New Quote
-                   </Button>
-                 </CreateProjectDialog>
-                 <Link href="/projects">
-                   <Button variant="secondary" className="w-full justify-start gap-2 bg-white/10 hover:bg-white/20 border-white/20 text-white">
-                     <FolderKanban className="w-4 h-4" /> Browse Archives
-                   </Button>
-                 </Link>
-               </CardContent>
-             </Card>
-
-             <Card>
-               <CardHeader>
-                 <CardTitle className="text-lg">Material Prices</CardTitle>
-                 <CardDescription>Current market estimates (per ft)</CardDescription>
-               </CardHeader>
-               <CardContent className="space-y-4">
-                 <div className="flex justify-between items-center text-sm">
-                   <span className="font-medium">Cedar Wood</span>
-                   <span className="font-mono text-muted-foreground">$24.50</span>
-                 </div>
-                 <div className="flex justify-between items-center text-sm">
-                   <span className="font-medium">Vinyl (White)</span>
-                   <span className="font-mono text-muted-foreground">$32.00</span>
-                 </div>
-                 <div className="flex justify-between items-center text-sm">
-                   <span className="font-medium">Chain Link</span>
-                   <span className="font-mono text-muted-foreground">$14.75</span>
-                 </div>
-                 <div className="flex justify-between items-center text-sm">
-                   <span className="font-medium">Wrought Iron</span>
-                   <span className="font-mono text-muted-foreground">$45.00</span>
-                 </div>
-               </CardContent>
-             </Card>
-          </div>
+        </div>
+        <div className="flex justify-start mt-8">
+            <CreateProjectDialog />
         </div>
       </div>
     </Layout>
