@@ -116,5 +116,21 @@ export async function registerRoutes(
     res.status(204).end();
   });
 
+  app.put(api.fenceLines.update.path, isAuthenticated, async (req, res) => {
+    try {
+      const input = api.fenceLines.update.input.parse(req.body);
+      const line = await storage.updateFenceLine(Number(req.params.id), input);
+      res.json(line);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+        });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   return httpServer;
 }

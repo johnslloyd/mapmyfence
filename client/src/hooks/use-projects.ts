@@ -186,3 +186,36 @@ export function useDeleteFenceLine() {
     },
   });
 }
+
+export function useUpdateFenceLine() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, projectId, ...data }: { id: number, projectId: number } & Partial<InsertFenceLine>) => {
+      const validated = api.fenceLines.update.input.parse(data);
+      const url = buildUrl(api.fenceLines.update.path, { id });
+      
+      const res = await fetch(url, {
+        method: api.fenceLines.update.method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validated),
+        credentials: "include",
+      });
+      
+      if (!res.ok) throw new Error('Failed to update fence line');
+      return api.fenceLines.update.responses[200].parse(await res.json());
+    },
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: [api.projects.get.path, projectId] });
+      toast({ title: "Saved", description: "Fence line updated" });
+    },
+    onError: (error) => {
+      toast({ 
+        title: "Error", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    }
+  });
+}

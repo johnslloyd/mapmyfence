@@ -18,6 +18,7 @@ export interface IStorage {
   
   createFenceLine(projectId: number, fenceLine: InsertFenceLine, coords: Omit<InsertCoordinate, "fenceLineId">[]): Promise<FenceLine & { coordinates: Coordinate[] }>;
   deleteFenceLine(id: number): Promise<void>;
+  updateFenceLine(id: number, updates: Partial<InsertFenceLine & { coordinates: Omit<InsertCoordinate, "fenceLineId">[] }>): Promise<FenceLine & { coordinates: Coordinate[] }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -92,5 +93,27 @@ export class DatabaseStorage implements IStorage {
 
   async deleteFenceLine(id: number): Promise<void> {
     await this.db.delete(fenceLines).where(eq(fenceLines.id, id));
+  }
+
+  async updateFenceLine(id: number, updates: Partial<InsertFenceLine & { coordinates: Omit<InsertCoordinate, "fenceLineId">[] }>): Promise<FenceLine & { coordinates: Coordinate[] }> {
+    const { coordinates: coords, ...fenceLineUpdates } = updates;
+
+    if (Object.keys(fenceLineUpdates).length > 0) {
+      await this.db.update(fenceLines).set(fenceLineUpdates).where(eq(fenceLines.id, id));
+    }
+
+    if (coords) {
+      await this.db.delete(coordinates).where(eq(coordinates.fenceLineId, id));
+      if (coords.length > 0) {
+        await this.db.insert(coordinates).values(
+          coords.map(c => ({ ...c, fenceLineId: id }))
+        );
+      }
+    }
+
+    const lineWithCoords = await this.db.select().from(fenceLines).where(eq(fenceLines.id, id)).limit(1);
+    const l = lineWithCoords[0];
+    const fetchedCoords = await this.db.select().from(coordinates).where(eq(coordinates.fenceLineId, l.id));
+    return { ...l, coordinates: fetchedCoords } as FenceLine & { coordinates: Coordinate[] };
   }
 }

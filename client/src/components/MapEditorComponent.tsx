@@ -28,6 +28,19 @@ const defaultIcon = new Icon({
   shadowSize: [41, 41]
 });
 
+const editIcon = new Icon({
+  iconUrl: "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png",
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-2x.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.3/dist/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  tooltipAnchor: [16, -28],
+  shadowSize: [41, 41],
+  className: 'leaflet-edit-marker'
+});
+
+
 // Component to handle map clicks
 function MapEvents({ onMapClick }: { onMapClick: (e: any) => void }) {
   useMapEvents({
@@ -133,9 +146,24 @@ interface MapEditorProps {
   isSaving: boolean;
   existingLines?: ExistingLine[];
   isMobile?: boolean;
+  selectedLineId?: number | null;
+  onLineSelect?: (id: number | null) => void;
+  editingLine?: any | null;
+  onLineUpdate?: (line: any) => void;
 }
 
-export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initialAddress, onSave, isSaving, existingLines = [], isMobile }: MapEditorProps) {
+export function MapEditorComponent({ 
+  initialCenter = [34.0522, -118.2437], 
+  initialAddress, 
+  onSave, 
+  isSaving, 
+  existingLines = [], 
+  isMobile,
+  selectedLineId = null,
+  onLineSelect = () => {},
+  editingLine = null,
+  onLineUpdate = () => {}
+}: MapEditorProps) {
   const [points, setPoints] = useState<Point[]>([]);
   const [material, setMaterial] = useState("wood_cedar");
   const [height, setHeight] = useState("6");
@@ -373,11 +401,16 @@ export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initi
         className="w-full h-full z-0"
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png"
-          maxZoom={22}
-          maxNativeZoom={18}
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={23}
+          maxNativeZoom={19}
         />
+        <style>{`
+          .leaflet-edit-marker {
+            filter: hue-rotate(120deg);
+          }
+        `}</style>
         <MapEvents onMapClick={handleMapClick} />
 
         {/* Render existing lines */}
@@ -385,9 +418,44 @@ export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initi
           <Polyline
             key={line.id}
             positions={line.coordinates.map(c => [c.lat, c.lng])}
-            pathOptions={{ color: 'blue', weight: 3 }}
+            pathOptions={{ 
+              color: selectedLineId === line.id && !editingLine ? 'red' : 'blue', 
+              weight: selectedLineId === line.id && !editingLine ? 5 : 3 
+            }}
+            eventHandlers={{
+              click: () => {
+                if (!editingLine) {
+                  onLineSelect?.(selectedLineId === line.id ? null : line.id);
+                }
+              },
+            }}
           />
         ))}
+
+        {editingLine && (
+          <>
+            <Polyline
+              positions={editingLine.coordinates.map((c: any) => [c.lat, c.lng])}
+              pathOptions={{ color: 'orange', weight: 5 }}
+            />
+            {editingLine.coordinates.map((coord: any, index: number) => (
+              <Marker
+                key={coord.id || index}
+                position={[coord.lat, coord.lng]}
+                draggable={true}
+                icon={editIcon}
+                eventHandlers={{
+                  dragend: (e) => {
+                    const newCoords = [...editingLine.coordinates];
+                    const target = e.target.getLatLng();
+                    newCoords[index] = { ...newCoords[index], lat: target.lat, lng: target.lng };
+                    onLineUpdate({ ...editingLine, coordinates: newCoords });
+                  },
+                }}
+              />
+            ))}
+          </>
+        )}
 
         {points.map((point, idx) => (
           <Marker 
@@ -410,23 +478,25 @@ export function MapEditorComponent({ initialCenter = [34.0522, -118.2437], initi
       </MapContainer>
 
       {/* Floating Controls */}
-      <Card className={cn(
-        "absolute top-4 z-40 bg-background/95 backdrop-blur shadow-xl border-border/50",
-        isMobile ? "left-4 right-4 w-auto" : "right-4 w-72 p-4"
-      )}>
-        <h3 className={cn(
-          "font-display font-bold text-lg flex items-center gap-2",
-          isMobile ? "mb-0 p-4" : "mb-4"
+      {!editingLine && (
+        <Card className={cn(
+          "absolute top-4 z-40 bg-background/95 backdrop-blur shadow-xl border-border/50",
+          isMobile ? "left-4 right-4 w-auto" : "right-4 w-72 p-4"
         )}>
-          <Ruler className="w-5 h-5 text-primary" />
-          New Fence Line
-        </h3>
-        
-        {isMobile ? <MobileContent /> : <DesktopContent />}
-      </Card>
+          <h3 className={cn(
+            "font-display font-bold text-lg flex items-center gap-2",
+            isMobile ? "mb-0 p-4" : "mb-4"
+          )}>
+            <Ruler className="w-5 h-5 text-primary" />
+            New Fence Line
+          </h3>
+          
+          {isMobile ? <MobileContent /> : <DesktopContent />}
+        </Card>
+      )}
       
       <div className="absolute bottom-4 left-4 z-40 bg-background/80 backdrop-blur px-3 py-1.5 rounded-full text-xs font-medium border shadow-sm">
-        Click on map to place fence posts
+        {editingLine ? "Drag points to edit the line" : "Click on map to place fence posts"}
       </div>
     </div>
   );

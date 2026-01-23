@@ -89,6 +89,28 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/fence-lines/:id',
+      input: z.object({
+        name: z.string().optional(),
+        material: z.string().optional(),
+        height: z.number().optional(),
+        length: z.number().optional(),
+        color: z.string().optional(),
+        coordinates: z.array(z.object({
+          id: z.number().optional(),
+          lat: z.number(),
+          lng: z.number(),
+          order: z.number()
+        })).optional()
+      }),
+      responses: {
+        200: z.any(),
+        400: errorSchemas.validation,
+        404: errorSchemas.notFound,
+      },
+    },
   }
 };
 

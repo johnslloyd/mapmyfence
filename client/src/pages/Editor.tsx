@@ -1,6 +1,6 @@
 import { Layout } from "@/components/Layout";
 import { useRoute, useLocation } from "wouter";
-import { useProject, useCreateFenceLine, useDeleteFenceLine } from "@/hooks/use-projects";
+import { useProject, useCreateFenceLine, useDeleteFenceLine, useUpdateFenceLine } from "@/hooks/use-projects";
 import { MapEditorComponent } from "@/components/MapEditorComponent";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ import {
   SheetHeader,
   SheetTrigger,
 } from "@/components/ui/sheet"
+import { cn } from "@/lib/utils";
 
 export default function Editor() {
   const [match, params] = useRoute("/editor/:id");
@@ -45,8 +46,49 @@ export default function Editor() {
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [pendingFenceLine, setPendingFenceLine] = useState<any>(null);
   const [hasTriedSavingPendingLine, setHasTriedSavingPendingLine] = useState(false);
+  const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
+  const [editingLine, setEditingLine] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (selectedLineId && project?.fenceLines) {
+      const line = project.fenceLines.find((l: any) => l.id === selectedLineId);
+      setEditingLine(line ? { ...line, coordinates: [...line.coordinates] } : null);
+    } else {
+      setEditingLine(null);
+    }
+  }, [selectedLineId, project?.fenceLines]);
   const createLineMutation = useCreateFenceLine();
   const deleteLineMutation = useDeleteFenceLine();
+  const updateLineMutation = useUpdateFenceLine();
+
+  const handleUpdateLine = async (line: any) => {
+    if (!line) return;
+
+    // Recalculate length
+    let dist = 0;
+    for (let i = 0; i < line.coordinates.length - 1; i++) {
+      const p1 = { lat: line.coordinates[i].lat, lng: line.coordinates[i].lng };
+      const p2 = { lat: line.coordinates[i+1].lat, lng: line.coordinates[i+1].lng };
+      dist += Math.sqrt(Math.pow(p2.lat - p1.lat, 2) + Math.pow(p2.lng - p1.lng, 2));
+    }
+    const newLength = dist * 3.28084 * 111320; // Approximation
+
+    try {
+      await updateLineMutation.mutateAsync({
+        id: line.id,
+        projectId: project.id,
+        coordinates: line.coordinates.map((c: any, order: number) => ({ ...c, order })),
+        length: newLength,
+      });
+      toast({ title: "Success", description: "Fence line updated." });
+      setSelectedLineId(null);
+      setEditingLine(null);
+    } catch (error: any) {
+      console.error("Failed to update line", error);
+      toast({ title: 'Error', description: error?.message || 'Failed to update fence line', variant: 'destructive' });
+    }
+  };
+
 
   // Refetch project when authentication status changes (e.g., after registration)
   useEffect(() => {
@@ -190,47 +232,79 @@ export default function Editor() {
             </Badge>
           </div>
           <ScrollArea className="max-h-[500px]">
-            <div className="p-4 space-y-3">
-              {project.fenceLines?.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground">
-                  <Layers className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                  <p className="text-sm">No fence lines yet.</p>
-                  <p className="text-xs opacity-70">Draw on the map to add one.</p>
+            {editingLine ? (
+              <div className="p-4">
+                <h3 className="font-bold text-lg mb-2">Editing Line</h3>
+                <p className="text-sm text-muted-foreground mb-4">Drag the points on the map to adjust the line.</p>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => handleUpdateLine(editingLine)}
+                    disabled={updateLineMutation.isPending}
+                    className="flex-1"
+                  >
+                    {updateLineMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedLineId(null);
+                      setEditingLine(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
                 </div>
-              ) : (
-                project.fenceLines?.map((line: any) => (
-                  <Card key={line.id} className="group overflow-hidden border-border/60 hover:border-primary/50 transition-colors">
-                    <div className="p-3 flex items-start gap-3">
-                      <div className="w-2 h-full min-h-[3rem] rounded-full bg-primary/20 shrink-0 self-stretch" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-medium text-sm truncate">{line.name}</h4>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => handleDeleteLine(line.id)}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                          <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
-                            {line.material}
-                          </Badge>
-                          <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
-                            {line.height} ft high
-                          </Badge>
-                          <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
-                            {line.length ? `${line.length.toFixed(0)} ft` : "No length"}
-                          </Badge>
+              </div>
+            ) : (
+              <div className="p-4 space-y-3">
+                {project.fenceLines?.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <Layers className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                    <p className="text-sm">No fence lines yet.</p>
+                    <p className="text-xs opacity-70">Draw on the map to add one.</p>
+                  </div>
+                ) : (
+                  project.fenceLines?.map((line: any) => (
+                    <Card 
+                      key={line.id} 
+                      className={cn(
+                        "group overflow-hidden border-border/60 hover:border-primary/50 transition-colors cursor-pointer",
+                        selectedLineId === line.id && "border-primary/80"
+                      )}
+                      onClick={() => editingLine ? null : setSelectedLineId(selectedLineId === line.id ? null : line.id)}
+                    >
+                      <div className="p-3 flex items-start gap-3">
+                        <div className="w-2 h-full min-h-[3rem] rounded-full bg-primary/20 shrink-0 self-stretch" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <h4 className="font-medium text-sm truncate">{line.name}</h4>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => handleDeleteLine(line.id)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                              {line.material}
+                            </Badge>
+                            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                              {line.height} ft high
+                            </Badge>
+                            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                              {line.length ? `${line.length.toFixed(0)} ft` : "No length"}
+                            </Badge>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Card>
-                ))
-              )}
-            </div>
+                    </Card>
+                  ))
+                )}
+              </div>
+            )}
           </ScrollArea>
            <div className="p-4 space-y-4 border-t">
               <h4 className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
@@ -302,6 +376,10 @@ export default function Editor() {
             initialCenter={[34.0522, -118.2437]}
             existingLines={project.fenceLines}
             isMobile={isMobile}
+            selectedLineId={selectedLineId}
+            onLineSelect={setSelectedLineId}
+            editingLine={editingLine}
+            onLineUpdate={setEditingLine}
           />
         </div>
       </div>
