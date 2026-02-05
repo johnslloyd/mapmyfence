@@ -2,6 +2,7 @@ import {
   projects, fenceLines, coordinates,
   type InsertProject, 
   type FenceLine, type InsertFenceLine, 
+  type Coordinate,
   type InsertCoordinate,
   type ProjectWithLines
 } from "@shared/schema";

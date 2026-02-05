@@ -5,6 +5,7 @@ import {
   type ProjectWithLines, 
   type InsertProject, 
   type InsertFenceLine,
+  type InsertCoordinate,
   type AddFenceLineRequest 
 } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -192,7 +193,7 @@ export function useUpdateFenceLine() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, projectId, ...data }: { id: number, projectId: number } & Partial<InsertFenceLine>) => {
+    mutationFn: async ({ id, projectId, ...data }: { id: number, projectId: number } & Partial<InsertFenceLine & { coordinates: Omit<InsertCoordinate, "fenceLineId">[] }>) => {
       const validated = api.fenceLines.update.input.parse(data);
       const url = buildUrl(api.fenceLines.update.path, { id });
       

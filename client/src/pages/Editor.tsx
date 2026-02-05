@@ -5,25 +5,26 @@ import { MapEditorComponent } from "@/components/MapEditorComponent";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, ArrowLeft, Layers, Save, Menu, Camera, ClipboardList } from "lucide-react";
+import { Trash2, ArrowLeft, Save, Menu, Camera, ClipboardList, Plus } from "lucide-react";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import NotFound from "./not-found";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { SignUpToSaveModal } from "@/components/SignUpToSaveModal"; 
+import { SignUpToSaveModal } from "@/components/SignUpToSaveModal";
 import { useIsMobile } from "@/hooks/use-mobile";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTrigger,
-} from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { NewProjectInstructions } from "@/components/NewProjectInstructions";
+import { EditFenceLineCard } from "@/components/EditFenceLineCard";
+import { NewFenceLineCard } from "@/components/NewFenceLineCard";
+
+type UiState = "HIDDEN" | "INSTRUCTIONS" | "DRAWING" | "SIDEBAR" | "EDITING";
 
 export default function Editor() {
   const [match, params] = useRoute("/editor/:id");
@@ -37,60 +38,82 @@ export default function Editor() {
   const searchParams = new URLSearchParams(window.location.search);
   const isGuest = searchParams.get('guest') === 'true';
 
-  // After authentication, fetch project without guest flag
   const { data: project, isLoading: isProjectLoading, refetch: refetchProject } = useProject(
-    projectId, 
+    projectId,
     { isGuest: isGuest && !isAuthenticated }
   );
 
+  const [uiState, setUiState] = useState<UiState>("HIDDEN");
+  const [isDrawing, setIsDrawing] = useState(false);
+
   const [showSignUpModal, setShowSignUpModal] = useState(false);
-  const [pendingFenceLine, setPendingFenceLine] = useState<any>(null);
   const [hasTriedSavingPendingLine, setHasTriedSavingPendingLine] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
   const [editingLine, setEditingLine] = useState<any | null>(null);
 
   useEffect(() => {
+    if (project && !isProjectLoading) {
+      if (project.fenceLines && project.fenceLines.length === 0) {
+        setUiState("INSTRUCTIONS");
+      } else if (uiState !== 'EDITING' && uiState !== 'DRAWING') {
+        setUiState("SIDEBAR");
+      }
+    } else {
+      setUiState("HIDDEN");
+    }
+  }, [project, isProjectLoading]);
+
+  useEffect(() => {
     if (selectedLineId && project?.fenceLines) {
       const line = project.fenceLines.find((l: any) => l.id === selectedLineId);
       setEditingLine(line ? { ...line, coordinates: [...line.coordinates] } : null);
+      setUiState("EDITING");
     } else {
       setEditingLine(null);
+      if (uiState === 'EDITING') {
+        setUiState('SIDEBAR');
+      }
     }
   }, [selectedLineId, project?.fenceLines]);
+
+  const handleStartDrawing = () => {
+    setSelectedLineId(null);
+    setIsDrawing(true);
+    setUiState("DRAWING");
+  };
+
   const createLineMutation = useCreateFenceLine();
   const deleteLineMutation = useDeleteFenceLine();
   const updateLineMutation = useUpdateFenceLine();
 
   const handleUpdateLine = async (line: any) => {
     if (!line) return;
-
-    // Recalculate length
     let dist = 0;
     for (let i = 0; i < line.coordinates.length - 1; i++) {
       const p1 = { lat: line.coordinates[i].lat, lng: line.coordinates[i].lng };
-      const p2 = { lat: line.coordinates[i+1].lat, lng: line.coordinates[i+1].lng };
+      const p2 = { lat: line.coordinates[i + 1].lat, lng: line.coordinates[i + 1].lng };
       dist += Math.sqrt(Math.pow(p2.lat - p1.lat, 2) + Math.pow(p2.lng - p1.lng, 2));
     }
-    const newLength = dist * 3.28084 * 111320; // Approximation
+    const newLength = dist * 3.28084 * 111320;
 
     try {
       await updateLineMutation.mutateAsync({
         id: line.id,
         projectId: project.id,
-        coordinates: line.coordinates.map((c: any, order: number) => ({ ...c, order })),
+        coordinates: line.coordinates.map(({ id, fenceLineId, ...rest }: any, order: number) => ({ ...rest, order })),
         length: newLength,
+        material: line.material,
+        height: line.height,
       });
       toast({ title: "Success", description: "Fence line updated." });
       setSelectedLineId(null);
-      setEditingLine(null);
+      setUiState("SIDEBAR");
     } catch (error: any) {
       console.error("Failed to update line", error);
       toast({ title: 'Error', description: error?.message || 'Failed to update fence line', variant: 'destructive' });
     }
   };
 
-
-  // Refetch project when authentication status changes (e.g., after registration)
   useEffect(() => {
     if (isAuthenticated && projectId && !authLoading) {
       refetchProject();
@@ -99,11 +122,10 @@ export default function Editor() {
 
   useEffect(() => {
     const savePendingLine = async () => {
-      // Only try to save if user is authenticated, project is loaded, and we haven't tried yet
       if (isAuthenticated && projectId && project && !hasTriedSavingPendingLine) {
         const pendingLineJSON = localStorage.getItem(`pendingFenceLine_${projectId}`);
         if (pendingLineJSON) {
-          setHasTriedSavingPendingLine(true); // Mark as attempted to prevent duplicate saves
+          setHasTriedSavingPendingLine(true);
           const pendingLine = JSON.parse(pendingLineJSON);
           try {
             await createLineMutation.mutateAsync({
@@ -122,17 +144,16 @@ export default function Editor() {
             toast({ title: "Success", description: "Your fence line has been saved." });
             localStorage.removeItem(`pendingFenceLine_${projectId}`);
             refetchProject();
+            setUiState("SIDEBAR");
           } catch (error: any) {
             console.error("Failed to save pending line", error);
             toast({ title: 'Error', description: error?.message || 'Failed to save your pending fence line.', variant: 'destructive' });
-            // Reset the flag so we can try again
             setHasTriedSavingPendingLine(false);
           }
         }
       }
     };
 
-    // Only attempt to save when everything is loaded and user is authenticated
     if (!authLoading && !isProjectLoading && isAuthenticated) {
       savePendingLine();
     }
@@ -141,9 +162,8 @@ export default function Editor() {
   if (isProjectLoading || authLoading) {
     return (
       <Layout>
-        <div className="h-[calc(100vh-4rem)] p-4 flex gap-4">
-          <Skeleton className="w-1/4 h-full rounded-2xl" />
-          <Skeleton className="w-3/4 h-full rounded-2xl" />
+        <div className="h-[calc(1vh-4rem)] p-4 flex gap-4">
+          <Skeleton className="w-full h-full rounded-2xl" />
         </div>
       </Layout>
     );
@@ -153,11 +173,10 @@ export default function Editor() {
     return <NotFound />;
   }
 
-  const handleSaveLine = async (points: any[], material: string, height: number, length: number) => {
+  const handleSaveLine = async (points: any[], length: number) => {
     if (!isAuthenticated) {
-      const pendingLine = { projectId: project.id, points, material, height, length };
+      const pendingLine = { projectId: project.id, points, length, material: 'wood_cedar', height: 6 };
       localStorage.setItem(`pendingFenceLine_${project.id}`, JSON.stringify(pendingLine));
-      setPendingFenceLine(pendingLine);
       setShowSignUpModal(true);
       return;
     }
@@ -165,17 +184,18 @@ export default function Editor() {
       await createLineMutation.mutateAsync({
         projectId: project.id,
         name: `Line ${project.fenceLines ? project.fenceLines.length + 1 : 1}`,
-        material,
-        height,
+        material: 'wood_cedar',
+        height: 6,
         length,
         color: "natural",
-        coordinates: points.map((p, idx) => ({
-          lat: p.lat,
-          lng: p.lng,
+        coordinates: points.map(({ id, ...rest }, idx) => ({
+          ...rest,
           order: idx
         }))
       });
       toast({ title: "Success", description: "Fence line saved." });
+      setIsDrawing(false);
+      setUiState("SIDEBAR");
     } catch (error: any) {
       console.error("Failed to save line", error);
       toast({ title: 'Error', description: error?.message || 'Failed to add fence line', variant: 'destructive' });
@@ -195,12 +215,21 @@ export default function Editor() {
     }
   };
 
+  const cancelDrawing = () => {
+    setIsDrawing(false);
+    if (project.fenceLines && project.fenceLines.length === 0) {
+      setUiState("INSTRUCTIONS");
+    } else {
+      setUiState("SIDEBAR");
+    }
+  };
+
   const EditorSidebar = () => (
     <div className="flex flex-col bg-card z-10 w-full h-full">
       <div className="p-4 border-b">
         {!isAuthenticated ? (
-          <Button 
-            variant="default" 
+          <Button
+            variant="default"
             className="w-full mb-4 gap-2"
             onClick={() => setShowSignUpModal(true)}
           >
@@ -211,7 +240,7 @@ export default function Editor() {
             <ArrowLeft className="w-4 h-4" /> Back to Projects
           </Link>
         )}
-        
+
         <h1 className="text-xl font-display font-bold truncate">{project.name}</h1>
         <p className="text-sm text-muted-foreground truncate">{project.address}</p>
       </div>
@@ -232,157 +261,159 @@ export default function Editor() {
             </Badge>
           </div>
           <ScrollArea className="max-h-[500px]">
-            {editingLine ? (
-              <div className="p-4">
-                <h3 className="font-bold text-lg mb-2">Editing Line</h3>
-                <p className="text-sm text-muted-foreground mb-4">Drag the points on the map to adjust the line.</p>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => handleUpdateLine(editingLine)}
-                    disabled={updateLineMutation.isPending}
-                    className="flex-1"
-                  >
-                    {updateLineMutation.isPending ? "Saving..." : "Save Changes"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedLineId(null);
-                      setEditingLine(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="p-4 space-y-3">
-                {project.fenceLines?.length === 0 ? (
-                  <div className="text-center py-10 text-muted-foreground">
-                    <Layers className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                    <p className="text-sm">No fence lines yet.</p>
-                    <p className="text-xs opacity-70">Draw on the map to add one.</p>
-                  </div>
-                ) : (
-                  project.fenceLines?.map((line: any) => (
-                    <Card 
-                      key={line.id} 
-                      className={cn(
-                        "group overflow-hidden border-border/60 hover:border-primary/50 transition-colors cursor-pointer",
-                        selectedLineId === line.id && "border-primary/80"
-                      )}
-                      onClick={() => editingLine ? null : setSelectedLineId(selectedLineId === line.id ? null : line.id)}
-                    >
-                      <div className="p-3 flex items-start gap-3">
-                        <div className="w-2 h-full min-h-[3rem] rounded-full bg-primary/20 shrink-0 self-stretch" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <h4 className="font-medium text-sm truncate">{line.name}</h4>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={() => handleDeleteLine(line.id)}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
-                              {line.material}
-                            </Badge>
-                            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
-                              {line.height} ft high
-                            </Badge>
-                            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
-                              {line.length ? `${line.length.toFixed(0)} ft` : "No length"}
-                            </Badge>
-                          </div>
-                        </div>
+            <div className="p-4 space-y-3">
+              {project.fenceLines?.map((line: any) => (
+                <Card
+                  key={line.id}
+                  className={cn(
+                    "group overflow-hidden border-border/60 hover:border-primary/50 transition-colors cursor-pointer",
+                    selectedLineId === line.id && "border-primary/80"
+                  )}
+                  onClick={() => setSelectedLineId(selectedLineId === line.id ? null : line.id)}
+                >
+                  <div className="p-3 flex items-start gap-3">
+                    <div className="w-2 h-full min-h-[3rem] rounded-full bg-primary/20 shrink-0 self-stretch" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="font-medium text-sm truncate">{line.name}</h4>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleDeleteLine(line.id)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
                       </div>
-                    </Card>
-                  ))
-                )}
-              </div>
-            )}
-          </ScrollArea>
-           <div className="p-4 space-y-4 border-t">
-              <h4 className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
-                <Camera className="w-4 h-4" />
-                Photos
-              </h4>
-              <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
-                <p className="text-sm">Photo uploads coming soon!</p>
-              </div>
-
-              <h4 className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
-                <ClipboardList className="w-4 h-4" />
-                Material Estimates
-              </h4>
-              <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
-                <p className="text-sm">Automated estimates coming soon!</p>
-              </div>
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                          {line.material}
+                        </Badge>
+                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                          {line.height} ft high
+                        </Badge>
+                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                          {line.length ? `${line.length.toFixed(0)} ft` : "No length"}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+              <Button className="w-full gap-2" onClick={handleStartDrawing}>
+                <Plus className="w-4 h-4" /> New Fence Line
+              </Button>
             </div>
+          </ScrollArea>
+          <div className="p-4 space-y-4 border-t">
+            <h4 className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+              <Camera className="w-4 h-4" />
+              Photos
+            </h4>
+            <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
+              <p className="text-sm">Photo uploads coming soon!</p>
+            </div>
+
+            <h4 className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+              <ClipboardList className="w-4 h-4" />
+              Material Estimates
+            </h4>
+            <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
+              <p className="text-sm">Estimates coming soon!</p>
+            </div>
+          </div>
         </TabsContent>
         <TabsContent value="details" className="flex-1 p-4">
-          <div className="space-y-4 text-sm">
+          <div className="space-y-4">
             <div>
-              <label className="text-xs text-muted-foreground font-medium uppercase">Description</label>
-              <p className="mt-1 p-3 bg-secondary/30 rounded-lg">{project.description || "No description provided."}</p>
+              <Label>Project Name</Label>
+              <div className="text-sm font-medium">{project.name}</div>
             </div>
-            <Separator />
             <div>
-              <label className="text-xs text-muted-foreground font-medium uppercase">Status</label>
-              <div className="mt-1">
-                <Badge variant="outline" className="capitalize">
-                  {project.status}
-                </Badge>
-              </div>
+              <Label>Address</Label>
+              <div className="text-sm text-muted-foreground">{project.address || "No address provided"}</div>
+            </div>
+            <div>
+              <Label>Description</Label>
+              <div className="text-sm text-muted-foreground">{project.description || "No notes"}</div>
             </div>
           </div>
         </TabsContent>
       </Tabs>
     </div>
   );
+  
+  const RightPanel = () => {
+      switch (uiState) {
+          case "INSTRUCTIONS":
+              return <NewProjectInstructions onStartDrawing={handleStartDrawing} />;
+          case "DRAWING":
+              return <NewFenceLineCard onCancel={cancelDrawing} />;
+          case "SIDEBAR":
+              return <div className="bg-card h-full overflow-hidden shadow-lg rounded-lg"><EditorSidebar /></div>;
+          case "EDITING":
+              return editingLine ? (
+                  <EditFenceLineCard
+                      editingLine={editingLine}
+                      setEditingLine={setEditingLine}
+                      handleUpdateLine={handleUpdateLine}
+                      updateLineMutation={updateLineMutation}
+                      setSelectedLineId={setSelectedLineId}
+                      refetchProject={refetchProject}
+                  />
+              ) : null;
+          default:
+              return null;
+      }
+  }
 
   return (
     <Layout>
-      <SignUpToSaveModal open={showSignUpModal} onOpenChange={setShowSignUpModal} projectId={project.id} />
-      <div className="h-[calc(100vh-0rem)] md:h-screen flex flex-col md:flex-row overflow-hidden bg-background">
-        
-        {isMobile ? (
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="icon" className="absolute top-4 left-4 z-20 bg-card">
-                <Menu className="h-4 w-4" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-full max-w-sm p-0">
-              <EditorSidebar />
-            </SheetContent>
-          </Sheet>
-        ) : (
-          <div className="w-80 lg:w-96 flex-shrink-0 border-r shadow-lg">
-            <EditorSidebar />
-          </div>
-        )}
-
-        {/* Right Side - Map Area */}
-        <div className="flex-1 relative bg-secondary/20">
-          <MapEditorComponent 
-            onSave={handleSaveLine} 
-            isSaving={createLineMutation.isPending}
+      <div className="flex h-full relative overflow-hidden">
+        {/* Map Area */}
+        <div className="flex-1 relative h-full bg-secondary/20">
+          <MapEditorComponent
+            initialCenter={undefined}
             initialAddress={project.address}
-            initialCenter={[34.0522, -118.2437]}
-            existingLines={project.fenceLines}
+            onSave={handleSaveLine}
+            isSaving={createLineMutation.isPending}
+            existingLines={project.fenceLines || []}
             isMobile={isMobile}
             selectedLineId={selectedLineId}
             onLineSelect={setSelectedLineId}
             editingLine={editingLine}
-            onLineUpdate={setEditingLine}
+            onLineUpdate={handleUpdateLine}
+            isDrawing={isDrawing}
+            onCancelDrawing={cancelDrawing}
+            controlsPosition="right"
           />
+
+          {/* Mobile Menu Trigger */}
+          <div className="md:hidden absolute top-4 left-4 z-30">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button size="icon" variant="secondary" className="shadow-md h-10 w-10 rounded-full">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="p-0 w-[85vw] sm:w-[400px]">
+                <EditorSidebar />
+              </SheetContent>
+            </Sheet>
+          </div>
+          
+          {/* Desktop Right Panel */}
+          <div className="hidden md:block absolute top-4 right-4 z-10 w-80 lg:w-96 h-[calc(100%-2rem)]">
+              <RightPanel />
+          </div>
         </div>
       </div>
+
+      <SignUpToSaveModal
+        open={showSignUpModal}
+        onOpenChange={setShowSignUpModal}
+        projectId={project.id}
+      />
     </Layout>
   );
 }

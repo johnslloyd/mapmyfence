@@ -1,7 +1,8 @@
 
 import { createContext, useContext, useState, useEffect } from "react";
-import { User } from "lucia";
 import { useLocation } from "wouter";
+
+type User = any;
 
 interface AuthContextType {
   user: User | null;
@@ -10,6 +11,7 @@ interface AuthContextType {
   login: (user: User) => void;
   logout: () => void;
 }
+
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
