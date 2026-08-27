@@ -5,6 +5,7 @@ import { IStorage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { logEvent } from "./events";
+import { lookupParcel } from "./parcels";
 
 // Middleware to check if the user is authenticated
 const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
@@ -42,6 +43,25 @@ export async function registerRoutes(
     } catch (err: any) {
       console.error('Failed to get estimates', err);
       res.status(500).json({ message: err.message || 'Failed to get estimates' });
+    }
+  });
+
+  app.get(api.parcels.lookup.path, async (req, res) => {
+    const latLngSchema = z.object({
+      lat: z.coerce.number().min(-90).max(90),
+      lng: z.coerce.number().min(-180).max(180),
+    });
+    const parsed = latLngSchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "lat and lng query params are required" });
+    }
+
+    try {
+      const result = await lookupParcel(parsed.data.lat, parsed.data.lng);
+      res.json(result);
+    } catch (err: any) {
+      console.error('Failed to look up parcel', err);
+      res.status(500).json({ message: err.message || 'Failed to look up parcel' });
     }
   });
 

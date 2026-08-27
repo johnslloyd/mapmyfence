@@ -149,6 +149,30 @@ export function useEstimates(projectId: number | undefined) {
 }
 
 // ============================================
+// PARCELS (property line lookup — Mississippi only for now)
+// ============================================
+
+export function useParcelLookup() {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ lat, lng }: { lat: number; lng: number }) => {
+      const url = `${api.parcels.lookup.path}?lat=${lat}&lng=${lng}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to look up property line");
+      return api.parcels.lookup.responses[200].parse(await res.json());
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+// ============================================
 // FENCE LINES
 // ============================================
 

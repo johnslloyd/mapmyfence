@@ -82,6 +82,26 @@ export const api = {
       },
     },
   },
+  parcels: {
+    lookup: {
+      method: 'GET' as const,
+      path: '/api/parcels/lookup',
+      responses: {
+        200: z.discriminatedUnion('found', [
+          z.object({
+            found: z.literal(true),
+            source: z.literal('mississippi'),
+            parcelId: z.string(),
+            ownerName: z.string().nullable(),
+            siteAddress: z.string().nullable(),
+            geometry: z.any(), // GeoJSON Polygon | MultiPolygon
+          }),
+          z.object({ found: z.literal(false) }),
+        ]),
+        400: errorSchemas.validation,
+      },
+    },
+  },
   fenceLines: {
     create: {
       method: 'POST' as const,

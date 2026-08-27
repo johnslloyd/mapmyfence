@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef, Fragment } from "react";
-import { MapContainer, TileLayer, Marker, Polyline, useMapEvents, Tooltip, CircleMarker } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, GeoJSON, useMapEvents, Tooltip, CircleMarker } from "react-leaflet";
 import { LatLng, Icon } from "leaflet";
 import { Button } from "@/components/ui/button";
-import { Undo2, Save, Trash2, Ruler, Search, Loader2 } from "lucide-react";
+import { Undo2, Save, Trash2, Ruler, Search, Loader2, MapPinned } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useParcelLookup } from "@/hooks/use-projects";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
@@ -175,6 +176,13 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   const [isSearching, setIsSearching] = useState(false);
   const [isExtending, setIsExtending] = useState(false);
   const [extendingFrom, setExtendingFrom] = useState<'start' | 'end' | null>(null);
+  const [parcel, setParcel] = useState<{
+    parcelId: string;
+    ownerName: string | null;
+    siteAddress: string | null;
+    geometry?: GeoJSON.Polygon | GeoJSON.MultiPolygon | any;
+  } | null>(null);
+  const parcelLookup = useParcelLookup();
 
   useEffect(() => {
     if (initialAddress) {
@@ -239,6 +247,27 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   
   const handleUndo = () => setPoints(points.slice(0, -1));
   const handleClear = () => { setPoints([]); onCancelDrawing(); };
+
+  const handleShowPropertyLine = () => {
+    if (!mapRef.current) return;
+    const center = mapRef.current.getCenter();
+    parcelLookup.mutate(
+      { lat: center.lat, lng: center.lng },
+      {
+        onSuccess: (result) => {
+          if (result.found) {
+            setParcel(result);
+          } else {
+            setParcel(null);
+            toast({
+              title: "No property line found here",
+              description: "Property line lookup currently only covers Mississippi. Pan the map to center on the property first.",
+            });
+          }
+        },
+      },
+    );
+  };
   
   const handleSave = () => {
     if (points.length < 2) return;
@@ -323,6 +352,21 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
         />
         <style>{`.leaflet-edit-marker { filter: hue-rotate(120deg); }`}</style>
         {(isDrawing || isExtending) && <MapEvents onMapClick={handleMapClick} />}
+
+        {parcel && parcel.geometry && (
+          // key forces a remount on a new lookup — react-leaflet's GeoJSON
+          // doesn't re-render its layer when the `data` prop changes.
+          <GeoJSON
+            key={parcel.parcelId}
+            data={parcel.geometry as any}
+            pathOptions={{ color: "#facc15", weight: 3, fillOpacity: 0.05, dashArray: "6 4" }}
+          >
+            <Tooltip sticky>
+              {parcel.siteAddress || "Property line"}
+              {parcel.ownerName ? ` — ${parcel.ownerName}` : ""}
+            </Tooltip>
+          </GeoJSON>
+        )}
         
         {existingLines.map(line => (
           <FenceLine 
@@ -370,6 +414,30 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
 
       <div className="absolute bottom-4 left-4 z-40 bg-background/80 backdrop-blur px-3 py-1.5 rounded-full text-xs font-medium border shadow-sm">
         {isExtending ? "Click on the map to extend the line" : editingLine ? "Drag points to edit the line or click an endpoint to extend" : isDrawing ? "Click on map to place fence posts" : "Select a line to edit or create a new one"}
+      </div>
+
+      <div className="absolute bottom-4 right-4 z-40 flex gap-2">
+        {parcel && (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="shadow-sm bg-background/90 backdrop-blur"
+            onClick={() => setParcel(null)}
+          >
+            Hide property line
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="secondary"
+          className="gap-2 shadow-sm bg-background/90 backdrop-blur"
+          onClick={handleShowPropertyLine}
+          disabled={parcelLookup.isPending}
+          title="Looks up the property line at the center of the map (Mississippi only for now)"
+        >
+          {parcelLookup.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPinned className="h-4 w-4" />}
+          Show property line
+        </Button>
       </div>
     </div>
   );

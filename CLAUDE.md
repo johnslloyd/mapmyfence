@@ -106,6 +106,62 @@ migrate unsupervised. Material values in the DB are inconsistent free text
 (`wood_cedar` vs `Cedar` vs `wood`, no enum constraint) — a data-quality
 issue, not fixed.
 
+## Map layers
+
+`MapEditorComponent.tsx` stacks three free, no-key tile layers on the
+Leaflet map, in this order: Esri satellite imagery (`TILE_NATIVE_ZOOM = 19`
+is its real resolution ceiling — confirmed by fetching actual tiles; past
+that Esri silently serves a placeholder image, not a 404), a transparent
+Esri `Reference/World_Transportation` overlay for street name labels (not
+`Reference/World_Boundaries_and_Places`, which looks like the obvious
+choice by name but is only country/state/county boundaries — verified by
+fetching real tiles before picking one), and `MAP_MAX_ZOOM = 22` as the
+UI's actual zoom ceiling, deliberately set past the imagery's real
+resolution so people can still zoom in for precise point placement — the
+resulting blur past z19 is a conscious tradeoff, not a bug.
+
+Before adding or swapping any tile source: fetch real tiles at real
+coordinates and look at them before trusting a service's name or
+LOD-list metadata — this file's git history has two cases (a tile
+provider, a labels layer) where the obvious-sounding choice was wrong
+and only fetching actual tiles caught it.
+
+## Parcel boundaries — Mississippi only
+
+`server/parcels.ts` (`lookupParcel(lat, lng)`) queries Mississippi's free,
+public, live ArcGIS MapServer (`gis.mississippi.edu`, MARIS/MDEQ Cadastral
+Framework — no key, no account) for the parcel polygon at a point, tried
+against both its West and East layers since coverage isn't known ahead of
+time. Wired to `GET /api/parcels/lookup?lat=&lng=`
+(`api.parcels.lookup` in `shared/routes.ts`) and a "Show property line"
+button in `MapEditorComponent.tsx` that looks up the current map center
+and renders the boundary as a `<GeoJSON>` overlay.
+
+**Only Mississippi is wired up.** Tennessee and Arkansas were evaluated
+and explicitly not built yet:
+- **Tennessee**: the free statewide comptroller dataset (vector tile
+  service, not a queryable MapServer) excludes 9 self-maintained
+  counties — including Nashville/Davidson, Memphis/Shelby, Knoxville/Knox,
+  and Chattanooga/Hamilton, i.e. most of the state's population centers.
+  Would also need a vector-tile-capable Leaflet plugin (e.g.
+  `esri-leaflet-vector`), not a plain `TileLayer`.
+- **Shelby County (Memphis) specifically**: checked directly, not just
+  assumed — `gis.shelbycountytn.gov` is behind Cloudflare bot protection
+  (confirmed: a real request gets Cloudflare's challenge page, not data),
+  and `maps.memphistn.gov`'s parcel layers require an auth token. Neither
+  is free/programmatic today. Real path forward is emailing Shelby
+  County's ReGIS admin about API access, not something to route around.
+- **Arkansas**: only a bulk-download FTP shapefile source found
+  (`ftp://ftp.geostor.arkansas.gov/`) — no live query API. Using it would
+  mean importing the whole state into this app's own PostGIS-enabled DB
+  and maintaining that import, not a quick add.
+
+If extending this later, Mississippi's `server/parcels.ts` shape (query a
+live ArcGIS MapServer by point, normalize to GeoJSON) is the template for
+any other state that turns out to have the same kind of live, free,
+queryable service — check for that shape specifically before assuming a
+state's "open GIS data" is usable the same way.
+
 ## Deployment
 
 **Canonical target: the Hostinger VPS** (`srv1070754.hstgr.cloud`), run as a
