@@ -81,7 +81,7 @@ function UnauthenticatedDashboard() {
             <div className="font-mono text-xs text-primary mb-5 tracking-wide">
               &gt; FREE_TO_START · NO_ACCOUNT_REQUIRED
             </div>
-            <h1 className="font-display font-semibold text-4xl md:text-5xl leading-tight tracking-tight mb-6">
+            <h1 className="font-display font-semibold text-4xl md:text-5xl leading-tight tracking-tight mb-6 text-primary">
               Measure your yard like a pro, before you touch a shovel.
             </h1>
             <p className="text-lg text-muted-foreground max-w-xl mx-auto lg:mx-0 mb-9 leading-relaxed">

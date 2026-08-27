@@ -4,20 +4,25 @@ DIY fence-planning tool: users map fence lines on a satellite view of their
 property and get material estimates. Longer-term direction is a full yard
 management feature set — fencing is the first vertical, not the whole product.
 
-## Brand: "Precision" — dark, technical
+## Brand: "Package" — warm light, deep green
 
-The site's visual identity is intentional, not incidental: dark near-black
-background, a single lime-green accent, Space Grotesk (display) + IBM Plex
-Sans (body) + IBM Plex Mono (technical/measurement accents). Chosen from
-three explored directions (see the design canvas artifact from that
-session if it still exists) — "Precision" was picked over a warmer
-evolution of the old green/Outfit brand and a warm cream/serif editorial
-direction. All three tokens (`--background`, `--primary`, etc. in
-`client/src/index.css`) and the two font variables are the real, live
-theme — not a demo. Don't casually revert individual pieces (e.g. "just
-make the button green again") without knowing this was a deliberate,
-reviewed choice; if it's time for another rebrand, that's a real
-decision to have explicitly, the same way this one was.
+The site's visual identity is intentional, not incidental: warm cream
+background, a deep muted green primary/accent, Space Grotesk (display) +
+IBM Plex Sans (body) + IBM Plex Mono (technical/measurement accents). This
+supersedes an earlier dark "Precision" theme (near-black background, lime
+accent) — that direction was picked first, then set aside after further
+exploration pulled a muted palette from a reference product package
+design. Several variations were explored on top of the package palette
+(a dark combined version, organic-hills hero illustrations of varying
+shapes) — all set aside; "Package-inspired (light)" — the plain version,
+no organic shapes — is what actually shipped. See the design canvas
+artifact from that session if it still exists for the full exploration.
+All tokens (`--background`, `--primary`, etc. in `client/src/index.css`)
+and the font variables are the real, live theme — not a demo. Don't
+casually revert individual pieces (e.g. "just make the button green
+again") without knowing this was a deliberate, reviewed choice; if it's
+time for another rebrand, that's a real decision to have explicitly, the
+same way this one was.
 
 `client/src/index.css`'s old `.dark` class block was deleted — it was
 dead code (`next-themes` is a dependency but was never wired to a

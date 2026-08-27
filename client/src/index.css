@@ -10,37 +10,40 @@
   --font-display: 'Space Grotesk', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
 
-  /* Precision theme — dark, technical. Converted from the OKLCH palette in
-     the "Precision" homepage direction (see the design canvas artifact) via
-     an OKLCH->sRGB->HSL conversion, not eyeballed, so these are the exact
-     same colors, just in the HSL format this token system uses. */
-  --background: 217 29% 6%;
-  --foreground: 217 26% 95%;
+  /* "Package" theme — warm cream, deep muted green, inspired by a reference
+     product package (see the design canvas artifact, "Package-inspired
+     (light)"). Converted from that artboard's exact OKLCH values via an
+     OKLCH->sRGB->HSL script, not eyeballed. Supersedes the earlier dark
+     "Precision" theme — the organic-hills exploration that followed this
+     artboard was tried and set aside; this is the plain version that was
+     actually picked. */
+  --background: 40 38% 89%;
+  --foreground: 44 38% 7%;
 
-  --card: 217 22% 8%;
-  --card-foreground: 217 26% 95%;
+  --card: 40 50% 94%;
+  --card-foreground: 44 38% 7%;
 
-  --popover: 217 22% 8%;
-  --popover-foreground: 217 26% 95%;
+  --popover: 40 50% 94%;
+  --popover-foreground: 44 38% 7%;
 
-  --primary: 138 74% 61%;      /* Lime */
-  --primary-foreground: 217 29% 6%;
+  --primary: 144 43% 21%;      /* Deep muted green */
+  --primary-foreground: 40 50% 94%;
 
-  --secondary: 217 22% 9%;
-  --secondary-foreground: 217 26% 95%;
+  --secondary: 40 28% 85%;
+  --secondary-foreground: 44 38% 7%;
 
-  --muted: 217 22% 9%;
-  --muted-foreground: 217 10% 61%;
+  --muted: 40 28% 85%;
+  --muted-foreground: 34 19% 42%;
 
-  --accent: 134 34% 15%;       /* Dim lime tint */
-  --accent-foreground: 138 74% 61%;
+  --accent: 40 34% 82%;        /* Soft cream tint */
+  --accent-foreground: 144 43% 21%;
 
   --destructive: 0 62% 30%;
   --destructive-foreground: 210 20% 98%;
 
-  --border: 217 13% 19%;
-  --input: 217 13% 19%;
-  --ring: 138 74% 61%;
+  --border: 40 19% 79%;
+  --input: 40 19% 79%;
+  --ring: 144 43% 21%;
 
   --radius: 0.5rem;
 }
