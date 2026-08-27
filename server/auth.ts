@@ -53,7 +53,14 @@ passport.deserializeUser(async (id: string, done) => {
       .from(users)
       .where(eq(users.id, id))
       .limit(1);
-    done(null, user);
+    // done(null, undefined) is NOT the same as done(null, false) to
+    // Passport's core — it treats a missing user as an error condition
+    // ("Failed to deserialize user out of session") rather than a
+    // graceful logout. This bites anyone whose session cookie outlives
+    // their account row (e.g. the account was deleted elsewhere) —
+    // every request with that cookie 500s instead of just treating them
+    // as logged out.
+    done(null, user ?? false);
   } catch (err) {
     done(err);
   }
