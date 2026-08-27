@@ -446,11 +446,22 @@ export default function Editor() {
       }
   }
 
+  // Editing a line is the one state with real, dense content (material,
+  // height, per-line detail) — instead of letting it float over the map
+  // as an unbounded card, dock it as a real column so it can be wider and
+  // the map actually shrinks to make room. Every other state (browsing,
+  // instructions, drawing) keeps the compact floating overlay so the map
+  // stays maximized when there's little to show. MapEditorComponent
+  // notices the resulting resize on its own (ResizeObserver on the map
+  // container) and calls Leaflet's invalidateSize() — no coordination
+  // needed here.
+  const isEditingDocked = uiState === "EDITING";
+
   return (
     <Layout>
       <div className="flex h-full relative overflow-hidden">
         {/* Map Area */}
-        <div className="flex-1 relative h-full bg-secondary/20">
+        <div className="flex-1 relative h-full min-w-0 bg-secondary/20">
           <MapEditorComponent
             initialCenter={undefined}
             initialAddress={project.address}
@@ -480,12 +491,21 @@ export default function Editor() {
               </SheetContent>
             </Sheet>
           </div>
-          
-          {/* Desktop Right Panel */}
-          <div className="hidden md:block absolute top-4 right-4 z-10 w-80 lg:w-96 h-[calc(100%-2rem)]">
-              <RightPanel />
-          </div>
+
+          {/* Desktop Right Panel — floating overlay (every state but editing) */}
+          {!isEditingDocked && (
+            <div className="hidden md:block absolute top-4 right-4 z-10 w-80 lg:w-96 h-[calc(100%-2rem)]">
+                <RightPanel />
+            </div>
+          )}
         </div>
+
+        {/* Desktop Right Panel — docked column (editing: wider, map makes room) */}
+        {isEditingDocked && (
+          <div className="hidden md:block relative z-10 w-[420px] lg:w-[480px] h-full shrink-0 border-l border-border overflow-y-auto p-4">
+            <RightPanel />
+          </div>
+        )}
       </div>
 
       <SignUpToSaveModal

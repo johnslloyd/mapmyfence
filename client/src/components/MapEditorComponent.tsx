@@ -184,6 +184,23 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   } | null>(null);
   const parcelLookup = useParcelLookup();
 
+  // Leaflet sizes its tile grid off the container's dimensions at mount
+  // time (or the last invalidateSize() call) — it doesn't notice a
+  // CSS-driven resize on its own. The editor's right-hand panel switches
+  // between a floating overlay and a docked column that shrinks this
+  // map's flex container, so watch the container directly rather than
+  // threading a "did the layout change" prop down from Editor.tsx —
+  // this also covers the mobile sidebar sheet and plain window resizes
+  // for free.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const container = map.getContainer();
+    const observer = new ResizeObserver(() => map.invalidateSize());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     if (initialAddress) {
       setAddress(initialAddress);
