@@ -63,12 +63,15 @@ This codebase has a history of security controls being widened to make a
 symptom disappear, rather than fixing the underlying config issue. Don't
 repeat that pattern:
 
-- The CSP header in `server/index.ts` is currently a wildcard
-  (`default-src * 'unsafe-inline' 'unsafe-eval' ...`), including a
-  production-only block that strips any CSP `<meta>` tag from `index.html`
-  and re-forces the wildcard policy. This is flagged as broken, not correct
-  — if you're touching CSP, tighten it to the actual origins in use (tile
-  servers, fonts, etc.), don't widen it further.
+- **CSP: resolved.** `server/index.ts` defines a `CONTENT_SECURITY_POLICY`
+  constant scoped to the actual external origins the app uses (Esri tiles,
+  unpkg, Nominatim, Google Fonts, the dashboard hero image) — used by both
+  the header and the prod-only meta-tag-stripping override, and mirrored in
+  `client/index.html`'s meta tag so dev and prod match. `unsafe-inline` /
+  `unsafe-eval` remain in script-src (Vite dev needs eval; no nonce infra
+  exists) — tightening further needs a real nonce-based rework, not a
+  drop-in edit. If you add a new external origin (a new font, a new API),
+  add it to the constant rather than widening to `*`.
 - The session cookie is hardcoded `secure: false`. If you're setting up TLS
   termination on the VPS (see Deployment), flip this to `true` rather than
   leaving auth cookies on plaintext HTTP.
@@ -87,9 +90,21 @@ New endpoints should follow the existing pattern, not the shortcut taken by
    (`fetch(...) → api.x.responses[200].parse(await res.json())`), not an
    inline `fetch` in a component.
 
-The estimates endpoint currently violates all three — its response shape
-doesn't match its own declared Zod schema, and the client bypasses parsing
-entirely. That's being fixed; don't copy its pattern for new routes.
+**Estimates: fixed.** `server/estimates.ts` now queries the `products` table
+(cheapest per material type) instead of a hardcoded price list, and
+`client/src/hooks/use-projects.ts` has a `useEstimates()` hook following the
+normal parse-against-contract convention. `products` needs seeding — see
+Commands.
+
+The fence line `material` field (Wood/Vinyl/Iron) is **not** wired to the
+estimate calculation — it only ever prices a standard wood post-and-picket
+fence. Vinyl/Iron are disabled in the material picker
+(`EditFenceLineCard.tsx`) with a "pricing coming soon" label rather than
+silently producing a wrong estimate. 3 real fence lines already have
+`material: "vinyl"` from before this was caught — left alone, not mine to
+migrate unsupervised. Material values in the DB are inconsistent free text
+(`wood_cedar` vs `Cedar` vs `wood`, no enum constraint) — a data-quality
+issue, not fixed.
 
 ## Deployment
 
@@ -116,6 +131,29 @@ project doesn't use (`stripe`, `openai`, `multer`, `nanoid`, `cors`, etc.) —
 leftover from whatever template generated the script. Harmless but should be
 trimmed to what's actually a dependency here.
 
+## Database migrations — expect an interactive prompt
+
+`npm run db:push` needs a real terminal: `connect-pg-simple`'s `session`
+table exists in the database but is intentionally **not** declared in
+`shared/schema.ts` (Drizzle doesn't manage it). Every time you add or remove
+a table, `drizzle-kit push` sees the undeclared `session` table and asks
+whether your new/removed table is actually a rename of it. It never is —
+always pick **"+ `<table>` create table"** (or the equivalent plain
+create/drop), never a `session › ...` rename option. This can't be
+automated away without either declaring `session` in the schema (then
+Drizzle would try to manage a table it doesn't own) or switching session
+stores — not worth it for a prompt you answer once per migration.
+
+## Usage event logging
+
+`server/events.ts` has a `logEvent(type, {projectId, userId})` — local-only
+(own `events` table, no external analytics service or API key). Fire-and-
+forget: failures are caught and logged to stderr, never break the request,
+so it's safe to call even before the table exists. Wired at four funnel
+points: `account_created`, `project_created`, `fence_line_created`,
+`estimate_viewed`. Add new event types to the `type` enum in
+`shared/schema.ts` rather than passing arbitrary strings.
+
 ## Environment
 
 - `DATABASE_URL` — Supabase Postgres connection string. **This has been
@@ -132,13 +170,18 @@ trimmed to what's actually a dependency here.
 ```bash
 npm run dev      # tsx server/index.ts, NODE_ENV=development — serves API + Vite dev middleware on one port
 npm run check     # tsc typecheck, no emit
-npm run db:push   # drizzle-kit push using .env's DATABASE_URL
+npm run db:push   # drizzle-kit push using .env's DATABASE_URL — needs a real terminal, see Migrations above
+npm run db:seed   # tsx script/seed.ts — seeds the products table with real Lowe's listings
 npm run build     # production build (see Deployment)
 npm run start     # run production build
 ```
 
 No test suite or CI currently exists. There's no `npm test` — don't assume
 one and don't invent test infra unasked; flag it if it becomes a blocker.
+
+**Pending as of the last session**: the `events` table (see Usage event
+logging) exists in `shared/schema.ts` but hasn't been pushed to the database
+yet — needs one `npm run db:push` run interactively.
 
 ## Known dead files
 

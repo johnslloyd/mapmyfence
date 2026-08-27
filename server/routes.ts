@@ -4,6 +4,7 @@ import type { Server } from "http";
 import { IStorage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { logEvent } from "./events";
 
 // Middleware to check if the user is authenticated
 const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
@@ -35,7 +36,8 @@ export async function registerRoutes(
       }
   
       const estimate = await calculateEstimate(totalLength);
-  
+
+      logEvent("estimate_viewed", { projectId, userId: (req.user as any)?.id });
       res.json(estimate);
     } catch (err: any) {
       console.error('Failed to get estimates', err);
@@ -86,6 +88,7 @@ export async function registerRoutes(
       const input = api.projects.create.input.parse(req.body);
       const userId = req.isAuthenticated() && user ? user.id : null;
       const project = await storage.createProject({ ...input, userId });
+      logEvent("project_created", { projectId: project.id, userId: userId || undefined });
       res.status(201).json(project);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -124,6 +127,7 @@ export async function registerRoutes(
     try {
       const { coordinates, ...rest } = api.fenceLines.create.input.parse(req.body);
       const line = await storage.createFenceLine(Number(req.params.projectId), { ...rest, projectId: Number(req.params.projectId) }, coordinates);
+      logEvent("fence_line_created", { projectId: Number(req.params.projectId), userId: (req.user as any)?.id });
       res.status(201).json(line);
     } catch (err) {
       if (err instanceof z.ZodError) {

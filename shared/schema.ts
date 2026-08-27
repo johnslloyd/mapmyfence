@@ -40,6 +40,19 @@ export const coordinates = pgTable("coordinates", {
   lng: doublePrecision("lng").notNull(),
 });
 
+// Minimal local usage funnel logging — no external analytics service.
+// Deliberately NOT foreign-keyed to projects/users: this is an append-only
+// log, and a hard FK would block deleting a project/user that has history.
+export const events = pgTable("events", {
+  id: serial("id").primaryKey(),
+  type: text("type", {
+    enum: ["project_created", "fence_line_created", "estimate_viewed", "account_created"],
+  }).notNull(),
+  projectId: integer("project_id"),
+  userId: text("user_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(), // e.g., "6 ft. Cedar Fence Panel"

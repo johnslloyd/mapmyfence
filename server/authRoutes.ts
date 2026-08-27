@@ -6,6 +6,7 @@ import { users, projects } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { Scrypt, generateId } from "lucia";
+import { logEvent } from "./events";
 
 export const authRouter = Router();
 
@@ -53,6 +54,8 @@ authRouter.post("/api/register", async (req, res, next) => {
     if (projectId) {
       await db.update(projects).set({ userId }).where(eq(projects.id, parseInt(projectId)));
     }
+
+    logEvent("account_created", { userId, projectId: projectId ? parseInt(projectId) : undefined });
 
     req.login(user, (err) => {
       if (err) {
