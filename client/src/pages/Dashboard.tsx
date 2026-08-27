@@ -44,7 +44,7 @@ function UnauthenticatedDashboard() {
   return (
     <Layout>
       <div
-        className="flex flex-col items-center justify-center h-full text-center p-8 bg-cover bg-center"
+        className="relative flex flex-col items-center justify-center h-full text-center p-8 bg-cover bg-center"
         style={{
           backgroundImage: "url('https://cdn.midjourney.com/49947644-0840-4c12-bcd4-43a0f01de533/0_1.jpeg')",
         }}
@@ -71,7 +71,7 @@ function UnauthenticatedDashboard() {
             </Dialog>
           </div>
           <p className="text-sm text-white/60 mt-6">
-            Don't have an account? <Link href="/register"><a className="underline hover:text-primary">Sign up</a></Link>
+            Don't have an account? <Link href="/register" className="underline hover:text-primary">Sign up</Link>
           </p>
         </div>
       </div>

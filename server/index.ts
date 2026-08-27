@@ -19,6 +19,19 @@ app.set("trust proxy", 1);
 app.set("etag", false);
 const httpServer = createServer(app);
 
+// Real external origins this app talks to, in one place so the header (dev
+// and prod) and the index.html meta tag can't silently drift apart.
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "img-src 'self' data: blob: https://server.arcgisonline.com https://unpkg.com https://cdn.midjourney.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "connect-src 'self' https://nominatim.openstreetmap.org ws: wss:",
+  "frame-src 'self'",
+  "worker-src 'self' blob:",
+].join("; ");
+
 // Log startup time to verify new build is running
 console.log(`[Startup] Server starting at ${new Date().toISOString()}`);
 
@@ -52,12 +65,11 @@ app.use(express.urlencoded({ extended: false }));
 app.use((req, res, next) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
 
-  // Set a permissive CSP to allow Vite, Maps, and other scripts to run.
-  // If you are using Helmet in your routes, ensure it is configured to allow this or disabled.
-  res.setHeader(
-    "Content-Security-Policy",
-    "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src * 'unsafe-inline' 'unsafe-eval' data: blob:; img-src * data: blob: 'unsafe-inline'; frame-src *; style-src * 'unsafe-inline';"
-  );
+  // Scoped to the actual external origins this app uses (map tiles, geocoding,
+  // fonts, the dashboard hero image) instead of a wildcard. 'unsafe-inline' and
+  // 'unsafe-eval' stay in script-src for Vite's dev-mode module system; tightening
+  // those further needs a nonce-based rework, not a drop-in change.
+  res.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
   next();
 });
 
@@ -150,7 +162,7 @@ app.use(passport.session());
           const headers = {
             "Content-Type": "text/html",
             "Cache-Control": "no-cache, no-store",
-            "Content-Security-Policy": "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src * 'unsafe-inline' 'unsafe-eval' data: blob:; img-src * data: blob: 'unsafe-inline'; frame-src *; style-src * 'unsafe-inline'; font-src * data: blob: 'unsafe-inline'; worker-src * data: blob: 'unsafe-inline' 'unsafe-eval';",
+            "Content-Security-Policy": CONTENT_SECURITY_POLICY,
             "Content-Length": String(Buffer.byteLength(html)),
           };
           res.writeHead(200, headers);
