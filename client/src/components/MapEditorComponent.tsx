@@ -19,6 +19,18 @@ const defaultIcon = new Icon({
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], tooltipAnchor: [16, -28], shadowSize: [41, 41]
 });
 
+// Esri's World_Imagery tile cache runs out of real detail at zoom 19 for
+// most areas (confirmed by fetching actual tiles: z19 returns real imagery,
+// z20+ returns a literal "Map data not yet available" placeholder image,
+// not a 404 — so it fails silently rather than erroring). The map used to
+// let users zoom to 22 anyway, which just upscaled/blurred the z19 tile 8x.
+// Tried swapping to USGS's free NAIP-based layer for better quality — at
+// two test locations (dense urban + suburban) it was no sharper at matched
+// zoom levels and its own real ceiling was z16, three levels shallower than
+// Esri here. Kept Esri; just fixed the zoom cap so it stops claiming
+// resolution past what it actually has.
+const TILE_MAX_ZOOM = 19;
+
 const editIcon = new Icon({
   iconUrl, iconRetinaUrl, shadowUrl,
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], tooltipAnchor: [16, -28], shadowSize: [41, 41],
@@ -284,8 +296,13 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
 
   return (
     <div className="relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden border shadow-inner">
-      <MapContainer ref={mapRef} center={initialCenter} zoom={12} maxZoom={22} scrollWheelZoom={true} className="w-full h-full z-0">
-        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' maxZoom={23} maxNativeZoom={19} />
+      <MapContainer ref={mapRef} center={initialCenter} zoom={12} maxZoom={TILE_MAX_ZOOM} scrollWheelZoom={true} className="w-full h-full z-0">
+        <TileLayer
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          attribution='&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+          maxZoom={TILE_MAX_ZOOM}
+          maxNativeZoom={TILE_MAX_ZOOM}
+        />
         <style>{`.leaflet-edit-marker { filter: hue-rotate(120deg); }`}</style>
         {(isDrawing || isExtending) && <MapEvents onMapClick={handleMapClick} />}
         
