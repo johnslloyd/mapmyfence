@@ -59,6 +59,28 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    getEstimates: {
+      method: 'GET' as const,
+      path: '/api/projects/:id/estimates',
+      responses: {
+        200: z.object({
+          materials: z.array(z.object({
+            id: z.number(),
+            name: z.string(),
+            type: z.string(),
+            store: z.string(),
+            price: z.number(),
+            unit: z.string().nullable(),
+            url: z.string().nullable(),
+            sku: z.string().nullable(),
+            quantity: z.number(),
+            totalCost: z.number(),
+          })),
+          totalCost: z.number(),
+        }),
+        404: errorSchemas.notFound,
+      },
+    },
   },
   fenceLines: {
     create: {

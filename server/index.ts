@@ -12,6 +12,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -61,7 +62,14 @@ app.use((req, res, next) => {
 });
 
 // Setup Session and Passport
+const PgSession = connectPgSimple(session);
+
 app.use(session({
+  store: new PgSession({
+    pool,
+    tableName: "session",
+    createTableIfMissing: true,
+  }),
   secret: process.env.SESSION_SECRET || "secret_key",
   resave: false,
   saveUninitialized: false,

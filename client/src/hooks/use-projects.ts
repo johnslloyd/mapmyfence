@@ -131,6 +131,24 @@ export function useDeleteProject() {
 }
 
 // ============================================
+// ESTIMATES
+// ============================================
+
+export function useEstimates(projectId: number | undefined) {
+  return useQuery({
+    queryKey: [api.projects.getEstimates.path, projectId],
+    queryFn: async () => {
+      if (!projectId || isNaN(projectId)) return null;
+      const url = buildUrl(api.projects.getEstimates.path, { id: projectId });
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch estimates");
+      return api.projects.getEstimates.responses[200].parse(await res.json());
+    },
+    enabled: !!projectId && !isNaN(projectId),
+  });
+}
+
+// ============================================
 // FENCE LINES
 // ============================================
 

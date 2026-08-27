@@ -1,6 +1,6 @@
 
 import { Router } from "express";
-import { passport } from "./auth";
+import { passport, toSafeUser } from "./auth";
 import { db } from "./db";
 import { users, projects } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -11,7 +11,7 @@ export const authRouter = Router();
 
 authRouter.get("/api/user", (req, res) => {
   if (req.isAuthenticated()) {
-    return res.json({ user: req.user });
+    return res.json({ user: toSafeUser(req.user as typeof users.$inferSelect) });
   }
 
   return res.json({ user: null });
@@ -64,7 +64,7 @@ authRouter.post("/api/register", async (req, res, next) => {
           console.error("Session save error after registration:", err);
           return res.status(500).json({ message: "Account created but session failed. Please try logging in." });
         }
-        res.status(201).json({ message: "User created", user });
+        res.status(201).json({ message: "User created", user: toSafeUser(user) });
       });
     });
   } catch (error: any) {
@@ -96,7 +96,7 @@ authRouter.post("/api/login", (req, res, next) => {
       if (err) return next(err);
       req.session.save((err) => {
         if (err) return next(err);
-        res.json({ message: "Logged in", user });
+        res.json({ message: "Logged in", user: toSafeUser(user) });
       });
     });
   })(req, res, next);

@@ -5,6 +5,13 @@ import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { Scrypt } from "lucia";
 
+// Strip fields that should never leave the server (password hash, etc.)
+// before a user record goes into a JSON response or req.session.
+export function toSafeUser(user: typeof users.$inferSelect) {
+  const { hashedPassword, ...safeUser } = user;
+  return safeUser;
+}
+
 passport.use(
   new LocalStrategy(
     { usernameField: "email" },

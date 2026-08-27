@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Fragment } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, useMapEvents, Tooltip, CircleMarker } from "react-leaflet";
 import { LatLng, Icon } from "leaflet";
 import { Button } from "@/components/ui/button";
@@ -66,7 +66,7 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
     const midPoint = new LatLng((p1.lat + p2.lat) / 2, (p1.lng + p2.lng) / 2);
 
     segments.push(
-      <g key={`segment-${i}`}>
+      <Fragment key={`segment-${i}`}>
         <Polyline positions={[p1, p2]} pathOptions={{ color, weight }} eventHandlers={{ click: onLineClick }} />
         {intermediate.map((post, postIdx) => (
           <CircleMarker key={`post-${i}-${postIdx}`} center={post} radius={3} color="white" weight={1} fillColor="black" />
@@ -74,7 +74,7 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
         <Tooltip position={midPoint} permanent direction="center" className="bg-transparent border-none shadow-none">
           <span className="text-white font-bold text-sm" style={{ textShadow: "0 0 3px black" }}>{segmentLength.toFixed(1)} ft</span>
         </Tooltip>
-      </g>
+      </Fragment>
     );
   }
 

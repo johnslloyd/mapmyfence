@@ -1,6 +1,6 @@
 import { Layout } from "@/components/Layout";
 import { useRoute, useLocation } from "wouter";
-import { useProject, useCreateFenceLine, useDeleteFenceLine, useUpdateFenceLine } from "@/hooks/use-projects";
+import { useProject, useCreateFenceLine, useDeleteFenceLine, useUpdateFenceLine, useEstimates } from "@/hooks/use-projects";
 import { MapEditorComponent } from "@/components/MapEditorComponent";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,76 @@ import { EditFenceLineCard } from "@/components/EditFenceLineCard";
 import { NewFenceLineCard } from "@/components/NewFenceLineCard";
 
 type UiState = "HIDDEN" | "INSTRUCTIONS" | "DRAWING" | "SIDEBAR" | "EDITING";
+
+const STORE_LABELS: Record<string, string> = {
+  lowes: "Lowe's",
+  home_depot: "Home Depot",
+};
+
+function MaterialEstimates({ projectId }: { projectId: number }) {
+  const { data: estimates, isLoading, error } = useEstimates(projectId);
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
+        <p className="text-sm">Calculating estimates...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-10 text-destructive border-2 border-dashed border-destructive rounded-lg">
+        <p className="text-sm">Error calculating estimates.</p>
+      </div>
+    );
+  }
+
+  if (!estimates || estimates.materials.length === 0) {
+    return (
+      <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
+        <p className="text-sm">No materials needed.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center font-bold">
+        <span>Total Estimated Cost:</span>
+        <span>${(estimates.totalCost || 0).toFixed(2)}</span>
+      </div>
+      <div className="space-y-2">
+        {estimates.materials.map((item) => (
+          <div key={item.id} className="flex justify-between items-center text-sm gap-2">
+            <span className="min-w-0">
+              {item.quantity}x{" "}
+              {item.url ? (
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-dotted underline-offset-2 hover:text-primary"
+                >
+                  {item.name}
+                </a>
+              ) : (
+                item.name
+              )}
+              <span className="text-muted-foreground">
+                {" "}at {STORE_LABELS[item.store] || item.store}
+              </span>
+            </span>
+            <span className="shrink-0">${item.totalCost.toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="text-xs text-muted-foreground pt-2">
+        Estimates are based on standard material prices and do not include taxes or other fees.
+      </div>
+    </div>
+  );
+}
 
 export default function Editor() {
   const [match, params] = useRoute("/editor/:id");
@@ -244,23 +314,23 @@ export default function Editor() {
         <h1 className="text-xl font-display font-bold truncate">{project.name}</h1>
         <p className="text-sm text-muted-foreground truncate">{project.address}</p>
       </div>
-      <Tabs defaultValue="lines" className="flex-1 flex flex-col min-h-0">
-        <div className="px-4 pt-4">
-          <TabsList className="w-full grid grid-cols-2">
-            <TabsTrigger value="lines">Fence Lines</TabsTrigger>
-            <TabsTrigger value="details">Project Details</TabsTrigger>
-          </TabsList>
-        </div>
-        <TabsContent value="lines" className="flex-1 min-h-0 flex flex-col mt-2">
-          <div className="px-4 py-2 bg-muted/30 border-y flex items-center justify-between">
-            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {project.fenceLines?.length || 0} Lines Defined
-            </span>
-            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-              Total: {project.fenceLines?.reduce((sum: number, line: any) => sum + (line.length || 0), 0).toFixed(0)} ft
-            </Badge>
+      <ScrollArea className="flex-1">
+        <Tabs defaultValue="lines">
+          <div className="px-4 pt-4 sticky top-0 bg-card z-10 border-b">
+            <TabsList className="w-full grid grid-cols-2">
+              <TabsTrigger value="lines">Fence Lines</TabsTrigger>
+              <TabsTrigger value="details">Project Details</TabsTrigger>
+            </TabsList>
           </div>
-          <ScrollArea className="max-h-[500px]">
+          <TabsContent value="lines" className="mt-2">
+            <div className="px-4 py-2 bg-muted/30 border-y flex items-center justify-between">
+              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {project.fenceLines?.length || 0} Lines Defined
+              </span>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                Total: {project.fenceLines?.reduce((sum: number, line: any) => sum + (line.length || 0), 0).toFixed(0)} ft
+              </Badge>
+            </div>
             <div className="p-4 space-y-3">
               {project.fenceLines?.map((line: any) => (
                 <Card
@@ -304,42 +374,32 @@ export default function Editor() {
                 <Plus className="w-4 h-4" /> New Fence Line
               </Button>
             </div>
-          </ScrollArea>
-          <div className="p-4 space-y-4 border-t">
-            <h4 className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
-              <Camera className="w-4 h-4" />
-              Photos
-            </h4>
-            <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
-              <p className="text-sm">Photo uploads coming soon!</p>
+            <div className="p-4 space-y-4 border-t">
+              <h4 className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                <ClipboardList className="w-4 h-4" />
+                Material Estimates
+              </h4>
+              <MaterialEstimates projectId={project.id} />
             </div>
-
-            <h4 className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
-              <ClipboardList className="w-4 h-4" />
-              Material Estimates
-            </h4>
-            <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
-              <p className="text-sm">Estimates coming soon!</p>
+          </TabsContent>
+          <TabsContent value="details" className="p-4">
+            <div className="space-y-4">
+              <div>
+                <Label>Project Name</Label>
+                <div className="text-sm font-medium">{project.name}</div>
+              </div>
+              <div>
+                <Label>Address</Label>
+                <div className="text-sm text-muted-foreground">{project.address || "No address provided"}</div>
+              </div>
+              <div>
+                <Label>Description</Label>
+                <div className="text-sm text-muted-foreground">{project.description || "No notes"}</div>
+              </div>
             </div>
-          </div>
-        </TabsContent>
-        <TabsContent value="details" className="flex-1 p-4">
-          <div className="space-y-4">
-            <div>
-              <Label>Project Name</Label>
-              <div className="text-sm font-medium">{project.name}</div>
-            </div>
-            <div>
-              <Label>Address</Label>
-              <div className="text-sm text-muted-foreground">{project.address || "No address provided"}</div>
-            </div>
-            <div>
-              <Label>Description</Label>
-              <div className="text-sm text-muted-foreground">{project.description || "No notes"}</div>
-            </div>
-          </div>
-        </TabsContent>
-      </Tabs>
+          </TabsContent>
+        </Tabs>
+      </ScrollArea>
     </div>
   );
   

@@ -43,29 +43,37 @@ function UnauthenticatedDashboard() {
 
   return (
     <Layout>
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] text-center p-8">
-        <h1 className="text-4xl font-display font-bold mb-4">Welcome to MapMyFence</h1>
-        <p className="text-lg text-muted-foreground mb-8 max-w-2xl">
-          The ultimate tool for planning and estimating your fencing projects with precision. Map out your fence lines, choose materials, and get instant cost estimates.
-        </p>
-        <div className="flex gap-4">
-          <CreateProjectDialog>
-            <Button 
-              size="lg" 
-            >
-              Start a Free Project
-            </Button>
-          </CreateProjectDialog>
-          <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
-            <DialogTrigger asChild>
-              <Button size="lg" variant="outline">Log In</Button>
-            </DialogTrigger>
-            <LoginModal onLoginSuccess={() => setIsLoginOpen(false)} />
-          </Dialog>
+      <div
+        className="flex flex-col items-center justify-center h-full text-center p-8 bg-cover bg-center"
+        style={{
+          backgroundImage: "url('https://cdn.midjourney.com/49947644-0840-4c12-bcd4-43a0f01de533/0_1.jpeg')",
+        }}
+      >
+        <div className="absolute inset-0 bg-black/70" />
+        <div className="relative p-8 rounded-lg text-white max-w-3xl">
+          <h1 className="text-5xl font-display font-bold mb-4">Welcome to MapMyFence</h1>
+          <p className="text-xl text-white/80 mb-8">
+            The ultimate tool for planning and estimating your fencing projects with precision. Map out your fence lines, choose materials, and get instant cost estimates.
+          </p>
+          <div className="flex justify-center gap-4">
+            <CreateProjectDialog>
+              <Button className="h-14 px-6 text-lg bg-[#F0eDE5] text-[#03624C] hover:bg-[#F0eDE5]/90">
+                Start a Free Project
+              </Button>
+            </CreateProjectDialog>
+            <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
+              <DialogTrigger asChild>
+                <Button className="h-14 px-6 text-lg bg-[#F0eDE5] text-[#03624C] hover:bg-[#F0eDE5]/90">
+                  Log In
+                </Button>
+              </DialogTrigger>
+              <LoginModal onLoginSuccess={() => setIsLoginOpen(false)} />
+            </Dialog>
+          </div>
+          <p className="text-sm text-white/60 mt-6">
+            Don't have an account? <Link href="/register"><a className="underline hover:text-primary">Sign up</a></Link>
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground mt-4">
-          Don't have an account? <Link href="/register"><a className="underline hover:text-primary">Sign up</a></Link>
-        </p>
       </div>
     </Layout>
   );

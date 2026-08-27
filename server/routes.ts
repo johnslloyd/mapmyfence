@@ -1,3 +1,4 @@
+import { calculateEstimate } from "./estimates";
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { IStorage } from "./storage";
@@ -18,6 +19,30 @@ export async function registerRoutes(
   storage: IStorage
 ): Promise<Server> {
   
+  app.get(api.projects.getEstimates.path, async (req, res) => {
+    try {
+      const projectId = Number(req.params.id);
+      const project = await storage.getProject(projectId, (req.user as any)?.id);
+  
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+  
+      const totalLength = project.fenceLines.reduce((acc, line) => acc + (line.length || 0), 0);
+  
+      if (totalLength === 0) {
+          return res.json({ materials: [], totalCost: 0 });
+      }
+  
+      const estimate = await calculateEstimate(totalLength);
+  
+      res.json(estimate);
+    } catch (err: any) {
+      console.error('Failed to get estimates', err);
+      res.status(500).json({ message: err.message || 'Failed to get estimates' });
+    }
+  });
+
   app.get(api.projects.list.path, isAuthenticated, async (req, res) => {
     try {
       const user = req.user as any;

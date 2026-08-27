@@ -11,17 +11,6 @@ export const users = pgTable("users", {
   hashedPassword: text("hashed_password").notNull(),
 });
 
-export const sessions = pgTable("sessions", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
-  expiresAt: timestamp("expires_at", {
-    withTimezone: true,
-    mode: "date",
-  }).notNull(),
-});
-
 export const projects = pgTable("projects", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -49,6 +38,17 @@ export const coordinates = pgTable("coordinates", {
   order: integer("order").notNull(),
   lat: doublePrecision("lat").notNull(),
   lng: doublePrecision("lng").notNull(),
+});
+
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // e.g., "6 ft. Cedar Fence Panel"
+  type: text("type", { enum: ["panel", "post", "concrete", "gate", "picket", "rail"] }).notNull(),
+  store: text("store", { enum: ["lowes", "home_depot"] }).notNull(),
+  price: doublePrecision("price").notNull(), // price per unit
+  unit: text("unit"), // e.g., "per panel", "per bag"
+  url: text("url"), // URL to the product page
+  sku: text("sku"), // Store's SKU
 });
 
 // === RELATIONS ===
@@ -94,6 +94,7 @@ export type FenceLine = typeof fenceLines.$inferSelect;
 export type InsertFenceLine = z.infer<typeof insertFenceLineSchema>;
 export type Coordinate = typeof coordinates.$inferSelect;
 export type InsertCoordinate = z.infer<typeof insertCoordinateSchema>;
+export type Product = typeof products.$inferSelect;
 
 // Detailed types for frontend
 export type ProjectWithLines = Project & {
