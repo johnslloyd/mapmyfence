@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;600&family=Outfit:wght@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap');
 @import 'leaflet/dist/leaflet.css';
 
 @tailwind base;
@@ -6,69 +6,43 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: 'DM Sans', sans-serif;
-  --font-display: 'Outfit', sans-serif;
+  --font-sans: 'IBM Plex Sans', sans-serif;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
 
-  /* New color theme */
-  --background: 210 20% 99%;
-  --foreground: 220 20% 12%;
+  /* Precision theme — dark, technical. Converted from the OKLCH palette in
+     the "Precision" homepage direction (see the design canvas artifact) via
+     an OKLCH->sRGB->HSL conversion, not eyeballed, so these are the exact
+     same colors, just in the HSL format this token system uses. */
+  --background: 217 29% 6%;
+  --foreground: 217 26% 95%;
 
-  --card: 0 0% 100%;
-  --card-foreground: 220 20% 12%;
+  --card: 217 22% 8%;
+  --card-foreground: 217 26% 95%;
 
-  --popover: 0 0% 100%;
-  --popover-foreground: 220 20% 12%;
+  --popover: 217 22% 8%;
+  --popover-foreground: 217 26% 95%;
 
-  --primary: 165 95% 20%;     /* New Green */
-  --primary-foreground: 165 100% 98%;
+  --primary: 138 74% 61%;      /* Lime */
+  --primary-foreground: 217 29% 6%;
 
-  --secondary: 210 20% 96%;
-  --secondary-foreground: 220 20% 12%;
+  --secondary: 217 22% 9%;
+  --secondary-foreground: 217 26% 95%;
 
-  --muted: 210 20% 96%;
-  --muted-foreground: 220 15% 46%;
+  --muted: 217 22% 9%;
+  --muted-foreground: 217 10% 61%;
 
-  --accent: 165 85% 94%;      /* Soft New Green tint */
-  --accent-foreground: 165 65% 32%;
-
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 98%;
-
-  --border: 220 15% 90%;
-  --input: 220 15% 90%;
-  --ring: 165 95% 20%;
-
-  --radius: 0.75rem;
-}
-
-.dark {
-  --background: 224 20% 10%;
-  --foreground: 210 20% 98%;
-
-  --card: 224 20% 12%;
-  --card-foreground: 210 20% 98%;
-
-  --popover: 224 20% 12%;
-  --popover-foreground: 210 20% 98%;
-
-  --primary: 165 95% 20%;
-  --primary-foreground: 165 100% 98%;
-
-  --secondary: 217 20% 18%;
-  --secondary-foreground: 210 20% 98%;
-
-  --muted: 217 20% 18%;
-  --muted-foreground: 215 20% 65%;
-
-  --accent: 217 20% 18%;
-  --accent-foreground: 210 20% 98%;
+  --accent: 134 34% 15%;       /* Dim lime tint */
+  --accent-foreground: 138 74% 61%;
 
   --destructive: 0 62% 30%;
   --destructive-foreground: 210 20% 98%;
 
-  --border: 217 20% 18%;
-  --input: 217 20% 18%;
-  --ring: 165 95% 20%;
+  --border: 217 13% 19%;
+  --input: 217 13% 19%;
+  --ring: 138 74% 61%;
+
+  --radius: 0.5rem;
 }
 
 @layer base {

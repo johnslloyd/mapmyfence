@@ -4,6 +4,33 @@ DIY fence-planning tool: users map fence lines on a satellite view of their
 property and get material estimates. Longer-term direction is a full yard
 management feature set — fencing is the first vertical, not the whole product.
 
+## Brand: "Precision" — dark, technical
+
+The site's visual identity is intentional, not incidental: dark near-black
+background, a single lime-green accent, Space Grotesk (display) + IBM Plex
+Sans (body) + IBM Plex Mono (technical/measurement accents). Chosen from
+three explored directions (see the design canvas artifact from that
+session if it still exists) — "Precision" was picked over a warmer
+evolution of the old green/Outfit brand and a warm cream/serif editorial
+direction. All three tokens (`--background`, `--primary`, etc. in
+`client/src/index.css`) and the two font variables are the real, live
+theme — not a demo. Don't casually revert individual pieces (e.g. "just
+make the button green again") without knowing this was a deliberate,
+reviewed choice; if it's time for another rebrand, that's a real
+decision to have explicitly, the same way this one was.
+
+`client/src/index.css`'s old `.dark` class block was deleted — it was
+dead code (`next-themes` is a dependency but was never wired to a
+`ThemeProvider`, so `.dark` was never actually applied). The `:root`
+tokens ARE the dark theme now; there's no separate light/dark mode.
+
+Also fixed while touching this: `tailwind.config.ts`'s `fontFamily` never
+had a `display` entry, even though `font-display` has been used on
+headings across the app since early in the project. Every `font-display`
+class was silently falling back to `font-sans` the entire time — not a
+new mistake, just finally caught and fixed alongside the rest of the
+token work.
+
 ## Project history — read before assuming anything
 
 This repo was built across several different tools/environments before
