@@ -46,8 +46,9 @@ concrete consequences, both still true as of writing:
 
 - There are **two auth implementations** in this repo. Only one is real —
   see "Auth" below. Do not "complete" the other one; delete it instead.
-- There are **two deployment configs** (Replit and a VPS). Only the VPS is
-  real — see "Deployment" below. Treat `.replit` as legacy.
+- There were **two deployment configs** (Replit and a VPS) — resolved. The
+  `.replit` file and the Replit-only dev dependencies it needed have been
+  removed; the VPS is the only deployment path now. See "Deployment" below.
 
 When you hit something that looks unfinished or duplicated, assume it's a
 leftover from a prior tool, not a deliberate abstraction. Check before
@@ -265,11 +266,16 @@ npm run start   # NODE_ENV=production node dist/index.cjs
 client-side routing. `PORT` env var controls the listen port (default 5051
 in dev per `server/index.ts`; check what's actually set on the VPS for prod).
 
-The `.replit` file and the `@replit/vite-plugin-*` dev dependencies are
-**legacy** from when this ran on Replit — they're currently harmless (guarded
-by `REPL_ID` checks or just unused outside Replit's environment) but aren't
-the deployment path. Don't add Replit-specific features assuming they're
-load-bearing; safe to remove once confirmed unused.
+**Removed.** The `.replit` file, the three `@replit/vite-plugin-*` dev
+dependencies (`vite.config.ts` used to conditionally load two of them
+behind a `REPL_ID` check, and unconditionally loaded the third —
+`runtime-error-modal` — in every environment), and the unused `@assets`
+alias (`vite.config.ts` pointed it at an `attached_assets/` directory
+that didn't exist and nothing imported from it) were all confirmed
+unused outside Replit's environment and deleted. The site's favicon
+was also still Replit's literal logo (the orange checkerboard icon) —
+replaced with the actual brand mark (the same folded-map icon + deep
+green used in the nav, `client/src/components/Layout.tsx`).
 
 `script/build.ts`'s esbuild `allowlist` still references packages this
 project doesn't use (`stripe`, `openai`, `multer`, `nanoid`, `cors`, etc.) —
