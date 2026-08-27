@@ -197,6 +197,7 @@ export function useCreateFenceLine() {
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: [api.projects.get.path, projectId] });
+      queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId] });
       toast({ title: "Success", description: "Fence line saved" });
     },
     onError: (error) => {
@@ -225,6 +226,7 @@ export function useDeleteFenceLine() {
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: [api.projects.get.path, projectId] });
+      queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId] });
       toast({ title: "Deleted", description: "Fence line removed" });
     },
   });
@@ -251,6 +253,7 @@ export function useUpdateFenceLine() {
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: [api.projects.get.path, projectId] });
+      queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId] });
       toast({ title: "Saved", description: "Fence line updated" });
     },
     onError: (error) => {

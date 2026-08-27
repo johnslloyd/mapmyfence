@@ -1,4 +1,5 @@
 import { Layout } from "@/components/Layout";
+import { LatLng } from "leaflet";
 import { useRoute, useLocation } from "wouter";
 import { useProject, useCreateFenceLine, useDeleteFenceLine, useUpdateFenceLine, useEstimates } from "@/hooks/use-projects";
 import { MapEditorComponent } from "@/components/MapEditorComponent";
@@ -169,13 +170,20 @@ export default function Editor() {
 
   const handleUpdateLine = async (line: any) => {
     if (!line) return;
-    let dist = 0;
+    // Great-circle distance via Leaflet's LatLng.distanceTo (matches how
+    // MapEditorComponent computes length while drawing) — NOT a flat
+    // sqrt(dLat^2 + dLng^2) * metersPerDegree approximation. A degree of
+    // longitude is shorter than a degree of latitude by cos(latitude), so
+    // that naive formula overestimated east-west lines by ~29% at this
+    // project's test latitude (~39N). Every edit was silently inflating
+    // the line's length, and therefore its material estimate.
+    let distMeters = 0;
     for (let i = 0; i < line.coordinates.length - 1; i++) {
-      const p1 = { lat: line.coordinates[i].lat, lng: line.coordinates[i].lng };
-      const p2 = { lat: line.coordinates[i + 1].lat, lng: line.coordinates[i + 1].lng };
-      dist += Math.sqrt(Math.pow(p2.lat - p1.lat, 2) + Math.pow(p2.lng - p1.lng, 2));
+      const p1 = new LatLng(line.coordinates[i].lat, line.coordinates[i].lng);
+      const p2 = new LatLng(line.coordinates[i + 1].lat, line.coordinates[i + 1].lng);
+      distMeters += p1.distanceTo(p2);
     }
-    const newLength = dist * 3.28084 * 111320;
+    const newLength = distMeters * 3.28084;
 
     try {
       await updateLineMutation.mutateAsync({
