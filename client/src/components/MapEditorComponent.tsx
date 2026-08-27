@@ -349,7 +349,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   );
 
   return (
-    <div className="relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden border shadow-inner">
+    <div className="relative w-full h-full min-h-[500px]">
       <MapContainer ref={mapRef} center={initialCenter} zoom={12} maxZoom={MAP_MAX_ZOOM} scrollWheelZoom={true} className="w-full h-full z-0">
         <TileLayer
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
