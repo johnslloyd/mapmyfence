@@ -90,7 +90,8 @@ function MaterialEstimates({ projectId }: { projectId: number }) {
         ))}
       </div>
       <div className="text-xs text-muted-foreground pt-2">
-        Estimates are based on standard material prices and do not include taxes or other fees.
+        Estimate assumes a standard wood post-and-picket fence. Prices are based on
+        current material listings and do not include taxes, delivery, or labor.
       </div>
     </div>
   );
