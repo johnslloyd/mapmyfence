@@ -429,7 +429,13 @@ export default function Editor() {
           case "DRAWING":
               return <NewFenceLineCard onCancel={cancelDrawing} />;
           case "SIDEBAR":
-              return <div className="bg-card h-full overflow-hidden shadow-lg rounded-lg"><EditorSidebar /></div>;
+              // Floating overlay needs its own card chrome (shadow, rounded
+              // corners, clipped) to read as a card sitting on the map.
+              // Docked, the panel's own border-l already delineates it —
+              // that chrome would just double up as a card-in-a-card.
+              return isPanelDocked
+                  ? <div className="h-full"><EditorSidebar /></div>
+                  : <div className="bg-card h-full overflow-hidden shadow-lg rounded-lg"><EditorSidebar /></div>;
           case "EDITING":
               return editingLine ? (
                   <EditFenceLineCard
@@ -446,16 +452,17 @@ export default function Editor() {
       }
   }
 
-  // Editing a line is the one state with real, dense content (material,
-  // height, per-line detail) — instead of letting it float over the map
-  // as an unbounded card, dock it as a real column so it can be wider and
-  // the map actually shrinks to make room. Every other state (browsing,
-  // instructions, drawing) keeps the compact floating overlay so the map
-  // stays maximized when there's little to show. MapEditorComponent
-  // notices the resulting resize on its own (ResizeObserver on the map
-  // container) and calls Leaflet's invalidateSize() — no coordination
-  // needed here.
-  const isEditingDocked = uiState === "EDITING";
+  // Before a fence line exists (INSTRUCTIONS/DRAWING), focus stays on the
+  // map — that's the whole point of those states, so the panel stays a
+  // compact floating overlay. Once there's something to review — the line
+  // list + material estimates (SIDEBAR), or a single line's detail
+  // (EDITING) — dock the panel as a real, wide column instead and let the
+  // map's flex container shrink to make room. This is the state that
+  // actually grows over time (more lines, richer estimates), so it gets
+  // the real estate. MapEditorComponent notices the resulting resize on
+  // its own (ResizeObserver on the map container) and calls Leaflet's
+  // invalidateSize() — no coordination needed here.
+  const isPanelDocked = uiState === "SIDEBAR" || uiState === "EDITING";
 
   return (
     <Layout>
@@ -492,17 +499,17 @@ export default function Editor() {
             </Sheet>
           </div>
 
-          {/* Desktop Right Panel — floating overlay (every state but editing) */}
-          {!isEditingDocked && (
+          {/* Desktop Right Panel — floating overlay (nothing to review yet) */}
+          {!isPanelDocked && (
             <div className="hidden md:block absolute top-4 right-4 z-10 w-80 lg:w-96 h-[calc(100%-2rem)]">
                 <RightPanel />
             </div>
           )}
         </div>
 
-        {/* Desktop Right Panel — docked column (editing: wider, map makes room) */}
-        {isEditingDocked && (
-          <div className="hidden md:block relative z-10 w-[420px] lg:w-[480px] h-full shrink-0 border-l border-border overflow-y-auto p-4">
+        {/* Desktop Right Panel — docked column (there's a line to review: wider, map makes room) */}
+        {isPanelDocked && (
+          <div className="hidden md:block relative z-10 w-[480px] lg:w-[560px] h-full shrink-0 border-l border-border overflow-y-auto p-4">
             <RightPanel />
           </div>
         )}

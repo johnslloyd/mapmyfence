@@ -164,6 +164,37 @@ this file's "fetch real data before trusting" standard, these two
 specific entries could NOT be confirmed by loading the actual page.
 Spot-check both (and re-seed) before trusting them for real users.
 
+## Editor panel layout — docked vs. floating
+
+`Editor.tsx`'s right-hand panel (`RightPanel`) has two presentations,
+chosen by `isPanelDocked = uiState === "SIDEBAR" || uiState === "EDITING"`.
+Before a line exists (`INSTRUCTIONS`, `DRAWING`) it's a compact floating
+card over the map — that's deliberate, focus belongs on the map while
+there's nothing to review yet. Once there's a line to review (the line
+list + material estimates, or a single line's edit detail) it docks as a
+real flex sibling (`w-[480px] lg:w-[560px]`) and the map's flex-1
+container actually shrinks to make room, instead of an unbounded card
+floating over the map and spilling past its edge. This state — not
+`EDITING` alone — is deliberately the one that gets the room, since it's
+the one that grows as more is built (more lines, richer estimates).
+Desktop only; mobile still uses the sidebar `Sheet`, untouched.
+
+`MapEditorComponent.tsx` has a `ResizeObserver` on the Leaflet map's own
+container that calls `invalidateSize()` on any resize — added because
+Leaflet sizes its tile grid at mount time and doesn't notice a
+CSS-driven resize on its own. This is what makes the dock/undock
+transition (and the mobile sidebar sheet, and plain window resizes)
+redraw cleanly instead of leaving stale/blank tile strips; it's
+self-contained, so no explicit coordination is needed from `Editor.tsx`
+when the layout changes.
+
+Two other layout directions were explored and set aside for now: a
+user-resizable split (drag the divider, remembered per device) and a
+map/review mode toggle (map shrinks to a strip in review mode). The
+docked approach was picked as the simplest to build and reason about;
+revisit resizable specifically if a fixed width keeps needing to grow
+again as more gets added to the panel.
+
 ## Map layers
 
 `MapEditorComponent.tsx` stacks three free, no-key tile layers on the
