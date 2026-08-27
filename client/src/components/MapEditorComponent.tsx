@@ -311,6 +311,16 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
           maxZoom={MAP_MAX_ZOOM}
           maxNativeZoom={TILE_NATIVE_ZOOM}
         />
+        {/* Hybrid overlay: transparent street name labels on top of the satellite
+            imagery above. (Esri also has a Reference/World_Boundaries_and_Places
+            layer that looks similar on paper, but it's country/state/county
+            boundaries and place names, not street labels — verified by fetching
+            real tiles before choosing between them.) */}
+        <TileLayer
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"
+          attribution='&copy; Esri'
+          maxZoom={MAP_MAX_ZOOM}
+        />
         <style>{`.leaflet-edit-marker { filter: hue-rotate(120deg); }`}</style>
         {(isDrawing || isExtending) && <MapEvents onMapClick={handleMapClick} />}
         
