@@ -121,6 +121,16 @@ export default function Editor() {
   const [hasTriedSavingPendingLine, setHasTriedSavingPendingLine] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
   const [editingLine, setEditingLine] = useState<any | null>(null);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // On mobile the fence-line list lives in a full-screen sheet over the map.
+  // Once the user starts drawing or editing a line, close it so the map
+  // (and the drawing/edit controls on it) are actually visible.
+  useEffect(() => {
+    if (uiState !== "SIDEBAR") {
+      setMobileSidebarOpen(false);
+    }
+  }, [uiState]);
 
   useEffect(() => {
     if (project && !isProjectLoading) {
@@ -451,9 +461,9 @@ export default function Editor() {
 
           {/* Mobile Menu Trigger */}
           <div className="md:hidden absolute top-4 left-4 z-30">
-            <Sheet>
+            <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
               <SheetTrigger asChild>
-                <Button size="icon" variant="secondary" className="shadow-md h-10 w-10 rounded-full">
+                <Button size="icon" variant="secondary" className="shadow-md h-10 w-10 rounded-full" aria-label="Open project menu">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>

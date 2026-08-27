@@ -269,8 +269,17 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   );
   
   const MobileContent = () => (
-      // Mobile content remains mostly the same, can be simplified or adjusted as needed
-      <div className="space-y-2">...</div>
+    <div className="space-y-3 p-4 pt-0">
+      <div className="flex items-center justify-between bg-secondary/50 rounded-lg px-3 py-2 border border-border/50">
+        <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Total Length</span>
+        <span className="text-lg font-mono font-bold text-foreground">{totalDistance.toFixed(1)} <span className="text-xs text-muted-foreground">ft</span></span>
+      </div>
+      <div className="flex gap-2">
+        <Button variant="outline" size="icon" onClick={handleUndo} disabled={points.length === 0} title="Undo last point"><Undo2 className="h-4 w-4" /></Button>
+        <Button variant="outline" size="icon" onClick={handleClear} disabled={points.length === 0} className="text-destructive hover:text-destructive" title="Clear all"><Trash2 className="h-4 w-4" /></Button>
+        <Button className="flex-1 gap-2 bg-primary hover:bg-primary/90" onClick={handleSave} disabled={points.length < 2 || isSaving}><Save className="h-4 w-4" />{isSaving ? "Saving..." : "Save Line"}</Button>
+      </div>
+    </div>
   );
 
   return (
