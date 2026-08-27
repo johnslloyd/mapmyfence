@@ -22,14 +22,22 @@ const defaultIcon = new Icon({
 // Esri's World_Imagery tile cache runs out of real detail at zoom 19 for
 // most areas (confirmed by fetching actual tiles: z19 returns real imagery,
 // z20+ returns a literal "Map data not yet available" placeholder image,
-// not a 404 — so it fails silently rather than erroring). The map used to
-// let users zoom to 22 anyway, which just upscaled/blurred the z19 tile 8x.
-// Tried swapping to USGS's free NAIP-based layer for better quality — at
-// two test locations (dense urban + suburban) it was no sharper at matched
-// zoom levels and its own real ceiling was z16, three levels shallower than
-// Esri here. Kept Esri; just fixed the zoom cap so it stops claiming
-// resolution past what it actually has.
-const TILE_MAX_ZOOM = 19;
+// not a 404 — so it fails silently rather than erroring). Tried swapping to
+// USGS's free NAIP-based layer for better quality — at two test locations
+// it was no sharper at matched zoom levels and its own real ceiling was
+// z16, shallower than Esri's. Kept Esri.
+//
+// TILE_NATIVE_ZOOM: the real resolution ceiling. Setting this as
+// maxNativeZoom keeps Leaflet from ever requesting tiles past z19 (which
+// would hit Esri's placeholder image) — past this it just upscales the z19
+// tile instead of fetching a new one.
+// MAP_MAX_ZOOM: how far the UI actually lets someone zoom. Deliberately set
+// higher than TILE_NATIVE_ZOOM — being able to zoom in for fine placement
+// of fence points matters more here than avoiding the resulting blur past
+// z19. This is a conscious tradeoff, not the old bug (the bug was these two
+// numbers being mismatched *by accident*, with no one having decided it).
+const TILE_NATIVE_ZOOM = 19;
+const MAP_MAX_ZOOM = 22;
 
 const editIcon = new Icon({
   iconUrl, iconRetinaUrl, shadowUrl,
@@ -296,12 +304,12 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
 
   return (
     <div className="relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden border shadow-inner">
-      <MapContainer ref={mapRef} center={initialCenter} zoom={12} maxZoom={TILE_MAX_ZOOM} scrollWheelZoom={true} className="w-full h-full z-0">
+      <MapContainer ref={mapRef} center={initialCenter} zoom={12} maxZoom={MAP_MAX_ZOOM} scrollWheelZoom={true} className="w-full h-full z-0">
         <TileLayer
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
           attribution='&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-          maxZoom={TILE_MAX_ZOOM}
-          maxNativeZoom={TILE_MAX_ZOOM}
+          maxZoom={MAP_MAX_ZOOM}
+          maxNativeZoom={TILE_NATIVE_ZOOM}
         />
         <style>{`.leaflet-edit-marker { filter: hue-rotate(120deg); }`}</style>
         {(isDrawing || isExtending) && <MapEvents onMapClick={handleMapClick} />}
