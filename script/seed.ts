@@ -7,6 +7,18 @@ async function main() {
 
   await db.delete(products);
 
+  // NOTE on picket/rail: the previous entries both used a placeholder
+  // sku/URL of literally "1000" — never swapped for a real product page,
+  // which is why the picket link resolved to an unrelated product (a
+  // light switch) instead of a fence picket. Replaced below with the
+  // closest-matching live listing found via web search. IMPORTANT: Lowe's
+  // blocks both this app's web-fetch tool and its browser tool (bot
+  // protection returns 403 / "Access Denied"), the same way Shelby County
+  // TN's GIS site blocks us with Cloudflare — so unlike the rest of this
+  // seed file, these two entries were NOT verified by loading the actual
+  // page and confirming the product/price. They're a best-effort match on
+  // product title/spec from search results only. Spot-check both before
+  // trusting the price, and swap in a directly-copied URL if you have one.
   const sampleProducts = [
     {
       name: "5/8-in x 5-1/2-in x 6-ft Western Red Cedar Dog Ear Fence Picket",
@@ -14,8 +26,8 @@ async function main() {
       store: "lowes" as const,
       price: 4.48,
       unit: "per picket",
-      url: "https://www.lowes.com/pd/Severe-Weather-Common-5-8-in-x-5-1-2-in-x-6-ft-Actual-5-8-in-x-5-1-2-in-x-6-ft-Western-Red-Cedar-Dog-Ear-Fence-Picket/1000",
-      sku: "1000",
+      url: "https://www.lowes.com/pd/5-8-in-x-5-1-2-in-x-6-ft-Western-Red-Cedar-Dog-Ear-Fence-Picket/5002727165",
+      sku: "5002727165",
     },
     {
       name: "2-in x 4-in x 8-ft #2 Prime Ground Contact Wood Pressure Treated Lumber",
@@ -23,8 +35,8 @@ async function main() {
       store: "lowes" as const,
       price: 6.98,
       unit: "per 8-ft rail",
-      url: "https://www.lowes.com/pd/2-in-x-4-in-x-8-ft-2-Prime-Ground-Contact-Wood-Pressure-Treated-Lumber/1000",
-      sku: "1000",
+      url: "https://www.lowes.com/pd/Severe-Weather-2-4-8-TC-TREATED-2-PRIME/5014119401",
+      sku: "5014119401",
     },
     {
       name: "4-in x 4-in x 8-ft #2 Ground Contact Wood Pressure Treated Post",

@@ -138,6 +138,32 @@ migrate unsupervised. Material values in the DB are inconsistent free text
 (`wood_cedar` vs `Cedar` vs `wood`, no enum constraint) — a data-quality
 issue, not fixed.
 
+**Fence line edits were silently corrupting length/cost estimates: fixed.**
+`Editor.tsx`'s `handleUpdateLine` used to recompute a line's length with a
+flat `sqrt(dLat^2 + dLng^2) * 111320` approximation on every save — wrong
+everywhere except the equator, since a degree of longitude is shorter than
+a degree of latitude by `cos(latitude)`. At this project's usual test
+latitude (~39N) that inflated east-west lines by ~29%, and it fired on
+*any* edit (e.g. just switching material), even with no point moved. Now
+uses Leaflet's `LatLng.distanceTo()`, matching what `MapEditorComponent`
+already used for the initial draw. Also: `useCreateFenceLine`,
+`useUpdateFenceLine`, and `useDeleteFenceLine` (`use-projects.ts`) now all
+invalidate the estimates query, not just the project query — previously
+the estimate panel just showed stale numbers after any line change until
+a manual refresh.
+
+**Seed data's picket/rail Lowe's links were broken: patched, not fully
+verified.** `script/seed.ts`'s picket and rail entries both had a
+placeholder `sku`/URL of literally `"1000"` — never swapped for a real
+product page, which is why the picket link resolved to an unrelated
+product (a light switch). Replaced with the closest-matching live listing
+found via web search — but Lowe's blocks both this app's web-fetch tool
+and its browser tool (bot protection, 403/"Access Denied"), the same way
+Shelby County TN's GIS blocks us with Cloudflare, so unlike the rest of
+this file's "fetch real data before trusting" standard, these two
+specific entries could NOT be confirmed by loading the actual page.
+Spot-check both (and re-seed) before trusting them for real users.
+
 ## Map layers
 
 `MapEditorComponent.tsx` stacks three free, no-key tile layers on the
