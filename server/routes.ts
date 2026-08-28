@@ -33,7 +33,7 @@ export async function registerRoutes(
       const totalLength = project.fenceLines.reduce((acc, line) => acc + (line.length || 0), 0);
   
       if (totalLength === 0) {
-          return res.json({ materials: [], totalCost: 0 });
+          return res.json({ options: [] });
       }
   
       const estimate = await calculateEstimate(totalLength);

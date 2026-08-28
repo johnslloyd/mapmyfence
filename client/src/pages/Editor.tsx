@@ -34,6 +34,12 @@ const STORE_LABELS: Record<string, string> = {
 
 function MaterialEstimates({ projectId }: { projectId: number }) {
   const { data: estimates, isLoading, error } = useEstimates(projectId);
+  // Homeowners shop at one store, not a mix — the server returns one
+  // complete option per store (sorted cheapest-first); this just tracks
+  // which one is currently shown. Falls back to the cheapest whenever the
+  // selection doesn't match an available option (initial load, or the
+  // selected store dropped out because it no longer prices everything).
+  const [selectedStore, setSelectedStore] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -51,7 +57,7 @@ function MaterialEstimates({ projectId }: { projectId: number }) {
     );
   }
 
-  if (!estimates || estimates.materials.length === 0) {
+  if (!estimates || estimates.options.length === 0) {
     return (
       <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
         <p className="text-sm">No materials needed.</p>
@@ -59,14 +65,45 @@ function MaterialEstimates({ projectId }: { projectId: number }) {
     );
   }
 
+  const options = estimates.options;
+  const active = options.find((o) => o.store === selectedStore) ?? options[0];
+
   return (
     <div className="space-y-4">
+      {options.length > 1 && (
+        <div className="grid grid-cols-2 gap-2">
+          {options.map((option, i) => (
+            <button
+              key={option.store}
+              onClick={() => setSelectedStore(option.store)}
+              className={cn(
+                "rounded-lg border px-3 py-2 text-left transition-colors",
+                option.store === active.store
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/40"
+              )}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-xs font-medium text-muted-foreground truncate">
+                  {STORE_LABELS[option.store] || option.store}
+                </span>
+                {i === 0 && (
+                  <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-normal border-primary/30 text-primary shrink-0">
+                    Best price
+                  </Badge>
+                )}
+              </div>
+              <div className="font-bold">${option.totalCost.toFixed(2)}</div>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex justify-between items-center font-bold">
         <span>Total Estimated Cost:</span>
-        <span>${(estimates.totalCost || 0).toFixed(2)}</span>
+        <span>${active.totalCost.toFixed(2)}</span>
       </div>
       <div className="space-y-2">
-        {estimates.materials.map((item) => (
+        {active.materials.map((item) => (
           <div key={item.id} className="flex justify-between items-center text-sm gap-2">
             <span className="min-w-0">
               {item.quantity}x{" "}
@@ -82,16 +119,14 @@ function MaterialEstimates({ projectId }: { projectId: number }) {
               ) : (
                 item.name
               )}
-              <span className="text-muted-foreground">
-                {" "}at {STORE_LABELS[item.store] || item.store}
-              </span>
             </span>
             <span className="shrink-0">${item.totalCost.toFixed(2)}</span>
           </div>
         ))}
       </div>
       <div className="text-xs text-muted-foreground pt-2">
-        Estimate assumes a standard wood post-and-picket fence. Prices are based on
+        Estimate assumes a standard wood post-and-picket fence, all materials
+        from {STORE_LABELS[active.store] || active.store}. Prices are based on
         current material listings and do not include taxes, delivery, or labor.
       </div>
     </div>

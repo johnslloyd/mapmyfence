@@ -63,20 +63,29 @@ export const api = {
       method: 'GET' as const,
       path: '/api/projects/:id/estimates',
       responses: {
+        // Homeowners shop at one store, not a mix — so this is one
+        // complete, independently-priced option PER STORE (each store's
+        // own cheapest post/rail/picket/concrete), not a single list
+        // cherry-picking the cheapest item across stores. A store is only
+        // included if it has pricing for every required material type.
+        // Sorted cheapest-total-first by the server.
         200: z.object({
-          materials: z.array(z.object({
-            id: z.number(),
-            name: z.string(),
-            type: z.string(),
+          options: z.array(z.object({
             store: z.string(),
-            price: z.number(),
-            unit: z.string().nullable(),
-            url: z.string().nullable(),
-            sku: z.string().nullable(),
-            quantity: z.number(),
+            materials: z.array(z.object({
+              id: z.number(),
+              name: z.string(),
+              type: z.string(),
+              store: z.string(),
+              price: z.number(),
+              unit: z.string().nullable(),
+              url: z.string().nullable(),
+              sku: z.string().nullable(),
+              quantity: z.number(),
+              totalCost: z.number(),
+            })),
             totalCost: z.number(),
           })),
-          totalCost: z.number(),
         }),
         404: errorSchemas.notFound,
       },

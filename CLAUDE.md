@@ -129,23 +129,31 @@ New endpoints should follow the existing pattern, not the shortcut taken by
 normal parse-against-contract convention. `products` needs seeding — see
 Commands.
 
-**Cross-retailer pricing: real, but Home Depot rows are unverified.**
-`products.store` now has real Lowe's *and* Home Depot rows for all four
-required wood-fence types, so "cheapest per type" is an actual comparison,
-not Lowe's-only — verified live: a test line's estimate dropped from
-$2298.86 (all-Lowe's) to $2001.86 once Home Depot's post/rail/picket
-(all cheaper) were seeded, with concrete still sourced from Lowe's
-(cheaper there). BUT: Home Depot blocks this app's web-fetch and browser
-tools exactly like Lowe's did (403/"Access Denied") — worse than the
-Lowe's picket/rail patch, there was no existing price to fall back to
-here, so all four Home Depot prices in `script/seed.ts` were
+**Cross-retailer pricing: real, one full option per store — not a mix.**
+`calculateEstimate` (`server/estimates.ts`) returns one COMPLETE,
+independently-priced option per store (that store's own cheapest
+post/rail/picket/concrete), not a single list cherry-picking the
+cheapest item across stores — a homeowner shops at one store, not half
+a fence from each. A store is only included if it prices every required
+type; response shape is `{ options: [{ store, materials, totalCost },
+...] }`, sorted cheapest-total-first by the server.
+`client/src/pages/Editor.tsx`'s `MaterialEstimates` shows a picker (only
+rendered when there's more than one option) with the cheapest store
+badged "Best price," defaulting to it. Verified live: a test line came
+back with two real, different totals — Home Depot $2016.35 (marked
+best) and Lowe's $2298.86 — and switching the picker correctly swapped
+in that store's own complete material list and links, not a blend.
+
+`products.store` has real Lowe's *and* Home Depot rows for all four
+required wood-fence types. Home Depot blocks this app's web-fetch and
+browser tools exactly like Lowe's did (403/"Access Denied") — worse than
+the Lowe's picket/rail patch, there was no existing price to fall back
+to here, so all four Home Depot prices in `script/seed.ts` were
 reconstructed from search-result snippets showing per-location price
 variance (e.g. the rail ranged $4.48-$4.98 across stores) rather than
 loaded from the live page. Product identity (model number, spec) is
-decently cross-referenced; **prices are the weak point** — a wrong
-Home Depot price could make the cheapest-picker actively recommend a
-worse deal than the real one. Spot-check all four before trusting this
-for real users.
+decently cross-referenced; **prices are the weak point** — spot-check
+all four on homedepot.com before trusting this for real users.
 
 The fence line `material` field (Wood/Vinyl/Iron) is **not** wired to the
 estimate calculation — it only ever prices a standard wood post-and-picket
