@@ -411,6 +411,42 @@ banner, entered drawing mode, and placed two points on the map that
 correctly computed a real distance — all of which was simply impossible
 before this fix.
 
+**A second, distinct geocoding failure mode: partially mitigated, not
+solved.** Reported as "I typed a bad address and it still took me to an
+unclickable weird random zoom-in," after the fix above had already
+shipped — and reproducing it showed why: Nominatim doesn't just fail on
+garbage input, it often *fuzzy-matches* it to a real, unrelated place
+worldwide and returns a normal success. `1234 Fake St` resolved to a
+residential block in Xi'an, China; `asdf` resolved to a village in
+Germany. Since the app treats this as a successful geocode, neither the
+toast nor the `geocodeIssue` banner above ever fires — the map just
+silently zooms to z20 on a random wrong location with zero indication
+anything went wrong. (The map itself was confirmed still clickable there
+— points landed correctly — so "unclickable" was almost certainly this
+disorienting teleport, not a real interactivity bug.)
+
+Tried filtering on Nominatim's own confidence signals first — not
+reliable enough to use: a real, correct address in this project's usual
+test region (Jackson, MS) scored a *lower* `importance` than the bogus
+China match, and `class`/`type`/`place_rank` weren't consistent between
+runs either (same garbage query matched a `highway/track` in one request
+and a `shop` with full address-level `place_rank` in another). Nominatim
+gives no trustworthy per-result confidence score to filter bad matches
+on.
+
+What shipped instead: `handleSearch`'s fetch now passes
+`countrycodes=us` — this product is entirely US-scoped already (Lowe's/
+Home Depot pricing, Mississippi-only parcel lookups), so there's no
+legitimate reason to ever geocode outside the US. Verified live: the
+same `1234 Fake St` query that previously teleported to China now lands
+in Massachusetts instead — still the wrong location, but no longer a
+different continent. This is a real, meaningful narrowing of the failure
+mode, **not a fix** — a US-scoped fuzzy match to the wrong place is still
+possible and confirmed to still happen. A real fix needs the geocode
+result surfaced to the user for confirmation before the map commits to
+it (e.g. "We found: {display_name} — is this right?"), which is a bigger
+UX change and was deliberately not built without asking first.
+
 ## Editor panel layout — docked vs. floating
 
 `Editor.tsx`'s right-hand panel (`RightPanel`) has two presentations,

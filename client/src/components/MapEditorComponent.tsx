@@ -243,7 +243,19 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
     if (!searchAddress.trim()) return;
     setIsSearching(true);
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchAddress)}&limit=1`);
+      // countrycodes=us: this app is entirely US-focused (retailer pricing,
+      // MS-only parcel lookups) — restricting the geocoder to the US stops
+      // it fuzzy-matching junk/placeholder text to a real but wildly wrong
+      // location on another continent. Confirmed live: without this,
+      // "1234 Fake St" silently "succeeded" and zoomed to a residential
+      // block in Xi'an, China with no error shown at all (Nominatim's
+      // match-confidence fields aren't reliable enough to filter on — a
+      // real address like "200 E Capitol St, Jackson, MS" scored a LOWER
+      // importance than that bogus China match). This narrows the blast
+      // radius to "wrong US location" instead of "wrong continent," but
+      // doesn't eliminate bad fuzzy matches entirely — Nominatim gives no
+      // trustworthy signal to do that with.
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=us&q=${encodeURIComponent(searchAddress)}&limit=1`);
       const results = await response.json();
       if (results.length > 0) {
         const { lat, lon } = results[0];
