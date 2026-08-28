@@ -24,13 +24,10 @@ import { Label } from "@/components/ui/label";
 import { NewProjectInstructions } from "@/components/NewProjectInstructions";
 import { EditFenceLineCard } from "@/components/EditFenceLineCard";
 import { NewFenceLineCard } from "@/components/NewFenceLineCard";
+import { STORE_LABELS, consolidateMaterials } from "@/lib/estimates";
+import { ClipboardCheck } from "lucide-react";
 
 type UiState = "HIDDEN" | "INSTRUCTIONS" | "DRAWING" | "SIDEBAR" | "EDITING";
-
-const STORE_LABELS: Record<string, string> = {
-  lowes: "Lowe's",
-  home_depot: "Home Depot",
-};
 
 // Default name for a newly-drawn fence line — was "Line 1", "Line 2",
 // ... (just a counter, no real information). Users can rename it
@@ -39,7 +36,7 @@ function defaultLineName(address: string | null | undefined) {
   return address ? `New Fence at ${address}` : "New Fence Line";
 }
 
-function MaterialEstimates({ projectId }: { projectId: number }) {
+function MaterialEstimates({ projectId, isGuest }: { projectId: number; isGuest: boolean }) {
   const { data: estimates, isLoading, error } = useEstimates(projectId);
   // Homeowners shop at one store, not a mix — the server returns one
   // complete option per store (sorted cheapest-first); this just tracks
@@ -74,6 +71,11 @@ function MaterialEstimates({ projectId }: { projectId: number }) {
 
   const options = estimates.options;
   const active = options.find((o) => o.store === selectedStore) ?? options[0];
+  // Same product can legitimately appear twice in the raw materials array
+  // (e.g. pine rail priced separately for a pine-6ft group and a
+  // pine-8ft group) — collapse to one row per product before rendering,
+  // see consolidateMaterials for why.
+  const activeMaterials = consolidateMaterials(active.materials);
 
   return (
     <div className="space-y-4">
@@ -110,7 +112,7 @@ function MaterialEstimates({ projectId }: { projectId: number }) {
         <span>${active.totalCost.toFixed(2)}</span>
       </div>
       <div className="space-y-2">
-        {active.materials.map((item) => (
+        {activeMaterials.map((item) => (
           <div key={item.id} className="flex justify-between items-center text-sm gap-2">
             <span className="min-w-0">
               {item.quantity}x{" "}
@@ -136,6 +138,12 @@ function MaterialEstimates({ projectId }: { projectId: number }) {
         from {STORE_LABELS[active.store] || active.store}. Prices are based on
         current material listings and do not include taxes, delivery, or labor.
       </div>
+      <Link
+        href={`/editor/${projectId}/shopping-list${isGuest ? "?guest=true" : ""}`}
+        className="flex items-center justify-center gap-2 w-full rounded-md border border-primary/30 text-primary text-sm font-medium py-2 hover:bg-primary/5 transition-colors"
+      >
+        <ClipboardCheck className="w-4 h-4" /> View Shopping List
+      </Link>
     </div>
   );
 }
@@ -441,7 +449,7 @@ export default function Editor() {
                 <ClipboardList className="w-4 h-4" />
                 Material Estimates
               </h4>
-              <MaterialEstimates projectId={project.id} />
+              <MaterialEstimates projectId={project.id} isGuest={isGuest} />
             </div>
           </TabsContent>
           <TabsContent value="details" className="p-4">

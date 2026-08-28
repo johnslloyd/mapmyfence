@@ -447,6 +447,78 @@ result surfaced to the user for confirmation before the map commits to
 it (e.g. "We found: {display_name} — is this right?"), which is a bigger
 UX change and was deliberately not built without asking first.
 
+## Shopping list — the first slice of "give execution its own focused state"
+
+PM-roadmap item 2 (per the user: after tightening plan→execution — item
+1, fasteners/species/height pricing above — execution itself needs a
+focused state, not just more sidebar content). This is the first piece:
+a dedicated, printable shopping-list view, built deliberately on a
+line-item data shape so it can be extended later without a rewrite.
+
+**Architecture decision, made explicit before building:** the user raised
+two future directions this needs to survive — (1) an eventual affiliate
+program (send users to buy online, not just print a list), and (2) Pro
+users reusing this same list as the basis of a customer quote (markup,
+labor, travel cost added on top). Neither is built here. What IS
+deliberate: `calculateEstimate` (`server/estimates.ts`) already returned
+real line items (`{id, name, type, store, price, unit, url, sku,
+quantity, totalCost}`) rather than a pre-summed blob — that shape is the
+shared foundation both future directions sit on (a DIYer checklist is
+that list rendered plain; a Pro quote would be the same list with
+markup/labor/travel line items appended and different presentation).
+Nothing new needed on the server or the contract for this feature — it
+was already there. Affiliate-readiness is just discipline: `products.url`
+stays a plain, swappable field rather than link-building logic baked
+into UI, so tagged/affiliate URLs later are a data change, not a UI
+rework. Actual affiliate integration and actual Pro accounts/roles/
+persisted quotes are NOT built — those need a real affiliate agreement
+and a real schema addition (a `quotes` table) respectively, out of scope
+here.
+
+**What shipped:** `client/src/pages/ShoppingList.tsx` at
+`/editor/:id/shopping-list` (registered in `App.tsx`, same guest-access
+pattern as `Editor.tsx` — `ProtectedRoute` doesn't actually gate
+unauthenticated users, see `ProtectedRoute.tsx`). Reuses the exact same
+`useEstimates` data as the sidebar's `MaterialEstimates`, presented as a
+real checklist: grouped by material type in buying order (posts →
+concrete → rail → pickets → fasteners), a store picker matching the
+sidebar's (same "Best price" badge logic), a progress bar, and a
+"Print" button (`window.print()` + Tailwind's `print:` variant — added
+`print:hidden` to `Layout.tsx`'s header too, so the site nav doesn't
+print on any page, not just this one). Checked-item state persists to
+`localStorage`, keyed per `(projectId, store)` — not a schema addition,
+same class of simplification `pendingFenceLine` already makes: a real
+shopping trip can span days so plain component state isn't enough, but
+no other viewer needs to see these checks, so a table is overkill.
+Switching stores correctly shows a separate, independent checklist
+(verified live) — checking items at Lowe's doesn't bleed into Home
+Depot's list, since they're genuinely different physical shopping trips.
+
+**Found and fixed while building this, not asked for but a real
+correctness bug**: `calculateEstimate` can legitimately return the SAME
+product twice in one store's `materials` array — e.g. a project with
+both a pine-6ft and a pine-8ft line needs pine rail priced for each
+(species, height) group separately (rail isn't height-specific, but the
+grouping loop iterates per group regardless), so the same rail product
+appeared as two separate rows with different quantities. Correct for the
+pricing math, wrong to show a shopper as two lines — and the sidebar's
+existing `key={item.id}` on that list was a latent React key collision
+whenever this happened. Added `consolidateMaterials()` in the new
+`client/src/lib/estimates.ts` (also home to `STORE_LABELS` and the
+material-type label/order maps, pulled out of `Editor.tsx` so both
+pages share one source of truth) — merges same-product rows by id,
+summing quantity and cost, before rendering anywhere. Used in both the
+new shopping list and retrofitted into the sidebar's `MaterialEstimates`.
+
+Verified live end-to-end: created a project, drew a line, saved it,
+opened the shopping list from a new "View Shopping List" link in the
+sidebar, confirmed grouping/prices/SKUs/order-online links matched the
+sidebar's numbers exactly, checked an item (progress bar updated to "1
+of 5 items checked"), reloaded the page and confirmed the check
+survived, switched stores and confirmed Home Depot's own products/prices
+loaded with its own independent (unchecked) progress, then switched back
+to Lowe's and confirmed its checked state was still intact.
+
 ## Editor panel layout — docked vs. floating
 
 `Editor.tsx`'s right-hand panel (`RightPanel`) has two presentations,

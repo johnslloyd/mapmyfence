@@ -46,7 +46,7 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className="h-screen bg-secondary/30 flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+      <header className="z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60 print:hidden">
         <div className="w-full flex h-16 items-center px-4 md:px-6 lg:px-8">
           {/* Logo */}
           <Link href="/" className="mr-6 flex items-center gap-2">
