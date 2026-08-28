@@ -1,5 +1,7 @@
 
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
+import crypto from "crypto";
 import { passport, toSafeUser } from "./auth";
 import { db } from "./db";
 import { users, projects } from "@shared/schema";
@@ -7,8 +9,39 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { Scrypt, generateId } from "lucia";
 import { logEvent } from "./events";
+import { sendEmail } from "./email";
 
 export const authRouter = Router();
+
+// Applied to every auth-sensitive route below (register, login, forgot/
+// reset password) — previously NONE of these had any rate limiting at
+// all, meaning unlimited scripted account creation and unlimited login/
+// password-reset guessing. Two tiers: a looser one for register/login
+// (real users retrying a typo'd password shouldn't get blocked), a
+// tighter one for forgot-password specifically since it's also an
+// email-bombing vector against a real inbox, not just a credential-
+// guessing target.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many attempts. Please wait a bit and try again." },
+});
+
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please wait a bit and try again." },
+});
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+function hashToken(rawToken: string) {
+  return crypto.createHash("sha256").update(rawToken).digest("hex");
+}
 
 authRouter.get("/api/user", (req, res) => {
   if (req.isAuthenticated()) {
@@ -21,10 +54,18 @@ authRouter.get("/api/user", (req, res) => {
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
-  projectId: z.string().optional(),
+  // .nullable() as well as .optional(): Register.tsx reads projectId from
+  // a URLSearchParams.get(), which returns `null` (not `undefined`) when
+  // absent — i.e. every direct signup that didn't arrive via a guest
+  // project's "Sign Up" redirect. z.string().optional() alone accepts
+  // `undefined` but rejects `null`, so plain top-level registration (the
+  // homepage's own "Sign up" link) was failing Zod validation outright.
+  // Found live while testing the new forgot-password work, unrelated to
+  // it — a real, pre-existing bug on the main signup path.
+  projectId: z.string().nullable().optional(),
 });
 
-authRouter.post("/api/register", async (req, res, next) => {
+authRouter.post("/api/register", authLimiter, async (req, res, next) => {
   try {
     // Validate input with better error handling
     const result = registerSchema.safeParse(req.body);
@@ -84,7 +125,7 @@ const loginSchema = z.object({
   password: z.string(),
 });
 
-authRouter.post("/api/login", (req, res, next) => {
+authRouter.post("/api/login", authLimiter, (req, res, next) => {
   const result = loginSchema.safeParse(req.body);
   if (!result.success) {
     return res.status(400).json({ message: "Invalid input" });
@@ -113,4 +154,124 @@ authRouter.post("/api/logout", (req, res, next) => {
       res.json({ message: "Logged out" });
     });
   });
+});
+
+const forgotPasswordSchema = z.object({ email: z.string().email() });
+
+authRouter.post("/api/forgot-password", passwordResetLimiter, async (req, res, next) => {
+  try {
+    const result = forgotPasswordSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ message: "Please enter a valid email address." });
+    }
+    const { email } = result.data;
+
+    // Always respond with the same generic message whether or not the
+    // email is registered — unlike /api/register's "Email already
+    // registered" (a known, accepted minor enumeration tradeoff there),
+    // this endpoint is unauthenticated and specifically about proving
+    // account existence, so it gets the stricter treatment.
+    const genericResponse = {
+      message: "If an account exists for that email, we've sent a password reset link.",
+    };
+
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    if (user) {
+      const rawToken = crypto.randomBytes(32).toString("hex");
+      await db
+        .update(users)
+        .set({
+          resetTokenHash: hashToken(rawToken),
+          resetTokenExpiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+        })
+        .where(eq(users.id, user.id));
+
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const resetUrl = `${origin}/reset-password?token=${rawToken}`;
+      await sendEmail({
+        to: email,
+        subject: "Reset your MapMyFence password",
+        text: `We got a request to reset your MapMyFence password. This link expires in 1 hour and can only be used once:\n\n${resetUrl}\n\nIf you didn't request this, you can ignore this email — your password hasn't been changed.`,
+        html: `<p>We got a request to reset your MapMyFence password. This link expires in 1 hour and can only be used once:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can ignore this email — your password hasn't been changed.</p>`,
+      });
+    }
+
+    res.json(genericResponse);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8),
+});
+
+authRouter.post("/api/reset-password", passwordResetLimiter, async (req, res, next) => {
+  try {
+    const result = resetPasswordSchema.safeParse(req.body);
+    if (!result.success) {
+      const errorMessage = result.error.errors[0]?.message || "Invalid input";
+      return res.status(400).json({ message: errorMessage });
+    }
+    const { token, password } = result.data;
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.resetTokenHash, hashToken(token)));
+
+    if (!user || !user.resetTokenExpiresAt || user.resetTokenExpiresAt < new Date()) {
+      return res.status(400).json({ message: "This reset link is invalid or has expired. Request a new one." });
+    }
+
+    const scrypt = new Scrypt();
+    const hashedPassword = await scrypt.hash(password);
+    await db
+      .update(users)
+      .set({ hashedPassword, resetTokenHash: null, resetTokenExpiresAt: null })
+      .where(eq(users.id, user.id));
+
+    res.json({ message: "Password updated. You can now log in with your new password." });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
+authRouter.post("/api/account/change-password", authLimiter, async (req, res, next) => {
+  try {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "You must be logged in to do that." });
+    }
+    const result = changePasswordSchema.safeParse(req.body);
+    if (!result.success) {
+      const errorMessage = result.error.errors[0]?.message || "Invalid input";
+      return res.status(400).json({ message: errorMessage });
+    }
+    const { currentPassword, newPassword } = result.data;
+    const sessionUser = req.user as typeof users.$inferSelect;
+
+    const [user] = await db.select().from(users).where(eq(users.id, sessionUser.id));
+    if (!user) {
+      return res.status(404).json({ message: "Account not found." });
+    }
+
+    const scrypt = new Scrypt();
+    const isValid = await scrypt.verify(user.hashedPassword, currentPassword);
+    if (!isValid) {
+      return res.status(400).json({ message: "Current password is incorrect." });
+    }
+
+    const hashedPassword = await scrypt.hash(newPassword);
+    await db.update(users).set({ hashedPassword }).where(eq(users.id, user.id));
+
+    res.json({ message: "Password updated." });
+  } catch (error) {
+    next(error);
+  }
 });

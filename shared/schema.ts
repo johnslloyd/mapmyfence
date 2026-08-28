@@ -9,6 +9,13 @@ export const users = pgTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   hashedPassword: text("hashed_password").notNull(),
+  // Password reset — set together, cleared together. Store a SHA-256
+  // HASH of the reset token here, never the raw token (same reasoning as
+  // hashing the password itself: a DB leak shouldn't hand out usable
+  // credentials). The raw token only ever exists in the emailed link and
+  // the incoming request that redeems it.
+  resetTokenHash: text("reset_token_hash"),
+  resetTokenExpiresAt: timestamp("reset_token_expires_at"),
 });
 
 export const projects = pgTable("projects", {

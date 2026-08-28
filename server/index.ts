@@ -87,6 +87,9 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     secure: false, // Set to false to allow HTTP connections (e.g. via IP address)
+    sameSite: "lax", // wasn't set at all before — a same-site-only default
+    // that still allows normal top-level navigation (e.g. clicking a link
+    // to the app from email/Slack) is a real, free CSRF-hardening step
     maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
   }
 }));

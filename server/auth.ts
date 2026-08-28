@@ -5,10 +5,12 @@ import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { Scrypt } from "lucia";
 
-// Strip fields that should never leave the server (password hash, etc.)
-// before a user record goes into a JSON response or req.session.
+// Strip fields that should never leave the server (password hash, reset
+// token hash/expiry) before a user record goes into a JSON response or
+// req.session. resetTokenHash is a hash, not the raw token, but there's
+// no reason to hand a client its own internal reset state either.
 export function toSafeUser(user: typeof users.$inferSelect) {
-  const { hashedPassword, ...safeUser } = user;
+  const { hashedPassword, resetTokenHash, resetTokenExpiresAt, ...safeUser } = user;
   return safeUser;
 }
 

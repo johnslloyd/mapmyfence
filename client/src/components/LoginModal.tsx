@@ -86,6 +86,11 @@ export function LoginModal({ onLoginSuccess }: { onLoginSuccess: () => void }) {
               className="col-span-3"
             />
           </div>
+          <div className="text-right -mt-2">
+            <Link href="/forgot-password" className="text-sm underline text-muted-foreground hover:text-foreground">
+              Forgot password?
+            </Link>
+          </div>
           <Button type="submit" className="w-full">
             Login
           </Button>

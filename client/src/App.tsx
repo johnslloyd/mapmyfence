@@ -12,6 +12,10 @@ import BeforeYouDig from "@/pages/BeforeYouDig";
 import { AuthProvider } from "./hooks/use-auth";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import Account from "./pages/Account";
+import Privacy from "./pages/Privacy";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function Router() {
@@ -22,6 +26,14 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/privacy" component={Privacy} />
+      {/* Account itself enforces the auth check (redirects to /login) —
+          not a passthrough like ProtectedRoute below, since unlike the
+          editor's deliberate guest access, there's no guest-meaningful
+          version of this page. */}
+      <Route path="/account" component={Account} />
       <ProtectedRoute path="/projects" component={Projects} />
       {/* Redirect-like behavior for bare /editor */}
       <ProtectedRoute path="/editor" component={Editor} />

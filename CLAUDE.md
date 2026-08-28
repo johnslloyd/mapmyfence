@@ -146,7 +146,85 @@ resolved with the same cookie — sessions now survive a restart/redeploy.
 **Still open**: `cookie.secure` is still hardcoded `false`. Leave it that way
 until TLS termination is confirmed on the VPS — flipping it early would
 silently break login (browsers won't send a `secure` cookie over plain
-HTTP).
+HTTP). **This is a genuine hard launch blocker, not just a "someday"
+item** — don't go live to real users over the public internet without
+flipping it, and set a real `SESSION_SECRET` in the VPS environment at
+the same time (see Environment below). Neither of these can be verified
+or done from a local dev session — they need someone with VPS access to
+confirm TLS is actually live, then make both changes there.
+
+**Password reset: added.** There was no way to recover a locked-out
+account at all before this — `server/email.ts`, `/api/forgot-password`
+and `/api/reset-password` (`server/authRoutes.ts`), `ForgotPassword.tsx`
+and `ResetPassword.tsx`. Reset tokens are stored as a SHA-256 hash
+(`users.resetTokenHash` / `resetTokenExpiresAt`, added via the direct-
+`ALTER TABLE` escape hatch documented under Database migrations) — never
+the raw token, same reasoning as hashing the password itself. `/api/
+forgot-password` always returns the same generic message regardless of
+whether the email is registered, unlike `/api/register`'s "Email already
+registered" (an accepted, lower-stakes tradeoff there) — this endpoint
+is unauthenticated and specifically about account existence, so it gets
+the stricter treatment. `toSafeUser` (`server/auth.ts`) now also strips
+`resetTokenHash`/`resetTokenExpiresAt`, not just `hashedPassword`, before
+a user record reaches the client — needed updating the moment those
+columns were added or they'd have leaked into `/api/user`'s response.
+
+`server/email.ts` calls Resend's plain HTTP API directly (a `fetch` call,
+not their SDK — matches how this app already calls Nominatim/Esri/ArcGIS
+directly rather than pulling in a client library per external service).
+**No `RESEND_API_KEY` is set anywhere yet** — without one, `sendEmail`
+logs the email's full content to the server console instead of sending
+it, which keeps the whole reset flow testable end-to-end (verified live:
+registered a user, requested a reset, read the link out of the console
+log, reset the password, logged in with it) but means **email doesn't
+actually reach anyone yet**. A real `RESEND_API_KEY` (or swapping in
+whatever provider is actually chosen) needs to be set before this goes
+in front of real users, or password reset silently does nothing for them
+beyond a reassuring on-screen message.
+
+**Account page: added.** `client/src/pages/Account.tsx` at `/account` —
+unlike `Editor.tsx`, this enforces its own auth redirect-to-`/login`
+directly in the component rather than relying on `ProtectedRoute` (which
+is a no-op passthrough, see `ProtectedRoute.tsx`), since there's no
+guest-meaningful version of an account page the way there deliberately
+is for the editor. Two pieces: change password (`/api/account/change-
+password`, requires the current password, verified via the same `Scrypt`
+used for login), and delete-account — **deliberately not automated**.
+`projects.userId` has no `ON DELETE` behavior defined, so a real
+self-serve instant delete would need to decide what happens to a user's
+existing projects/fence lines first; for a beta-sized user base, a
+working "email us and we'll take care of it" (`mailto:support@
+mapmyfence.app`, prefilled subject) is the honest, safe scope — a real
+automated flow can follow once that's actually been thought through.
+**The support address is a placeholder** — nothing currently receives
+mail at `support@mapmyfence.app`; swap it for a real monitored inbox
+(here and in `Privacy.tsx`) before relying on it.
+
+**Rate limiting: added.** Every auth-sensitive route had zero rate
+limiting before this — unlimited scripted account creation, unlimited
+login/password-reset guessing. `express-rate-limit`, two tiers in
+`authRoutes.ts`: `authLimiter` (20/15min — register, login, change-
+password) and the tighter `passwordResetLimiter` (5/hour — forgot/reset-
+password, since that route is also an email-bombing vector against a
+real inbox, not just a credential-guessing target). Verified live: 22
+rapid login attempts against the same IP correctly started returning 429
+partway through.
+
+**Session cookie `sameSite`: added.** Wasn't set at all before (`server/
+index.ts`) — now `sameSite: "lax"`, a real, free CSRF-hardening step that
+still allows normal top-level navigation (clicking a link to the app
+from email). Verified live via a raw `curl -i` login request that the
+`Set-Cookie` header actually carries `SameSite=Lax`.
+
+**Found and fixed in passing**: `/api/register`'s Zod schema had
+`projectId: z.string().optional()` — `.optional()` alone accepts
+`undefined` but rejects `null`, and `Register.tsx` reads `projectId` from
+`URLSearchParams.get()`, which returns `null` (not `undefined`) when
+absent. Every *direct* signup — the homepage's own "Sign up" link, not
+arriving via a guest project's save-prompt redirect — was failing
+validation outright with "Expected string, received null." Pre-existing,
+unrelated to this pass, caught live while testing the new forgot-
+password work. Fixed with `.nullable().optional()`.
 
 ## Security settings — do not loosen these to silence an error
 
@@ -612,6 +690,60 @@ search URL, `call811.com`/`tel:811` links resolved to the correct
 destinations, and the disclaimer banner renders before any actionable
 content on the page.
 
+## Dashboard — collapsed into Projects for logged-in users
+
+`Dashboard.tsx` used to render two completely different things depending
+on auth state: for a logged-out visitor, the real marketing landing page
+(hero, value props, steps, final CTA — genuinely distinct, kept as-is);
+for a logged-in user, its own "mini Projects page" — 2 stat cards (one,
+"total footage," was **hardcoded mock data**, `totalFootage = 1250`,
+computed but never actually displayed anywhere — dead code left over
+from an earlier version) plus the 3 most recent projects, which was just
+a subset of what `/projects` already shows in full with search.
+
+Per direct user direction ("is there really a need for a dashboard and a
+projects page, they seem so similar") — there wasn't, for the logged-in
+case. `Dashboard.tsx` now redirects (`<Redirect to="/projects" />`, from
+`wouter`) straight to `/projects` once authenticated, instead of showing
+that redundant, partly-fake summary. Removed the entire authenticated
+render branch, the now-unused `StatCard` component, and the dead mock
+stat along with it. A *real* stats dashboard (actual aggregate footage/
+cost across all of a user's projects) is a legitimate future feature,
+but needs a real aggregation query that doesn't exist yet — not worth
+faking again just to have a distinct page. Verified live: registering a
+new account lands on `/projects`, not a stats page.
+
+## Privacy Policy
+
+`client/src/pages/Privacy.tsx` at `/privacy` — added as part of the same
+MVP-beta-readiness pass as the security/auth work above. Plain, honest
+description of what this app ACTUALLY does, written from directly
+auditing the codebase rather than generic privacy-policy boilerplate:
+real data collected (email, hashed password, project/fence-line data,
+the local-only `events` log), an explicit "what we don't do" section
+(no third-party analytics/ads/tracking — verified by grepping the whole
+client for analytics/tracking script patterns and finding none; no
+marketing cookies — the only cookie this app sets at all is the
+`connect.sid` session cookie), and who else sees data through the app
+(Lowe's/Home Depot product links, Esri/Nominatim for maps/geocoding).
+**This is a beta-stage disclosure a PM/engineer wrote from the actual
+code, not a document reviewed by an attorney** — treat it as a real
+starting point, not a finished legal document, before any wider public
+launch. Linked from `Register.tsx` ("by signing up, you agree to...")
+and the guest landing page's hero — deliberately NOT added as a global
+footer in `Layout.tsx`, since `Layout` is `h-screen flex flex-col` with
+`main` as `flex-1 overflow-y-auto`; a footer there would eat real
+vertical space from the full-height map editor on every single page,
+not just this one.
+
+**Cookie-consent banner: deliberately not built.** Investigated first —
+the only cookie this app sets is the strictly-necessary session cookie
+covered above, and strictly-necessary cookies don't require opt-in
+consent under GDPR/ePrivacy or CCPA. No analytics/ad/tracking scripts
+exist anywhere in the codebase to require one for. If that ever changes
+(a real analytics tool gets added later), revisit this — a consent
+banner would become genuinely necessary at that point, not before.
+
 ## Editor panel layout — docked vs. floating
 
 `Editor.tsx`'s right-hand panel (`RightPanel`) has two presentations,
@@ -777,6 +909,12 @@ points: `account_created`, `project_created`, `fence_line_created`,
 - `SESSION_SECRET` — falls back to a hardcoded default (`"secret_key"`) in
   `server/index.ts` if unset. Set a real one in the VPS environment; don't
   rely on the fallback outside local dev.
+- `RESEND_API_KEY` — **not set anywhere yet.** Used by `server/email.ts`
+  for password-reset emails. Without it, `sendEmail` logs to the server
+  console instead of sending — fine for local dev/testing (the reset flow
+  is fully testable this way), but means password reset silently reaches
+  no one until a real key is set. `EMAIL_FROM` (optional) overrides the
+  default `MapMyFence <onboarding@resend.dev>` sender.
 
 ## Commands
 
