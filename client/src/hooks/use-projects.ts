@@ -70,7 +70,7 @@ export function useCreateProject() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
-      toast({ title: "Success", description: "Project created successfully" });
+      toast({ title: "Success", description: "Project created successfully", variant: "success" });
     },
     onError: (error) => {
       toast({ 
@@ -104,7 +104,7 @@ export function useUpdateProject() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.projects.get.path, id] });
-      toast({ title: "Saved", description: "Project updated" });
+      toast({ title: "Saved", description: "Project updated", variant: "success" });
     },
   });
 }
@@ -125,7 +125,7 @@ export function useDeleteProject() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
-      toast({ title: "Deleted", description: "Project removed successfully" });
+      toast({ title: "Deleted", description: "Project removed successfully", variant: "success" });
     },
   });
 }
@@ -208,7 +208,7 @@ export function useCreateFenceLine() {
       // while still unmounted, means the cache is already fresh by the
       // time the panel remounts.
       queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId], refetchType: 'all' });
-      toast({ title: "Success", description: "Fence line saved" });
+      toast({ title: "Success", description: "Fence line saved", variant: "success" });
     },
     onError: (error) => {
       toast({ 
@@ -247,7 +247,7 @@ export function useDeleteFenceLine() {
       // while still unmounted, means the cache is already fresh by the
       // time the panel remounts.
       queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId], refetchType: 'all' });
-      toast({ title: "Deleted", description: "Fence line removed" });
+      toast({ title: "Deleted", description: "Fence line removed", variant: "success" });
     },
   });
 }
@@ -284,7 +284,7 @@ export function useUpdateFenceLine() {
       // while still unmounted, means the cache is already fresh by the
       // time the panel remounts.
       queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId], refetchType: 'all' });
-      toast({ title: "Saved", description: "Fence line updated" });
+      toast({ title: "Saved", description: "Fence line updated", variant: "success" });
     },
     onError: (error) => {
       toast({ 

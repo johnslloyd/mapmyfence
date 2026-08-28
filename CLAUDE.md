@@ -72,6 +72,28 @@ the fill. `sidebar-primary`/`sidebar-accent` have the identical
 bare-`var()` bug and were deliberately left alone — see "Known dead
 files," `client/src/components/ui/sidebar.tsx` is unused.
 
+**Toasts: success is green, errors are red, both from the real theme
+tokens.** Previously every toast — success or error — rendered with the
+same `default` variant (`bg-background`, the warm tan/cream surface
+color), because no `success` variant existed at all; only `default` and
+`destructive` did. Every `onSuccess`/success-titled `toast()` call
+across `use-projects.ts`, `Editor.tsx`, and `Register.tsx` now passes
+`variant: "success"`. `toast.tsx`'s `toastVariants` gained a `success`
+entry styled `bg-primary text-primary-foreground border-primary` — the
+site's own deep muted green, not a generic bright green — mirroring how
+`destructive` already reused `--destructive`. While in there, also
+fixed `ToastClose`'s `group-[.destructive]:` styling, which used
+hardcoded Tailwind `red-300`/`red-50`/`red-400`/`red-600` utilities
+instead of the theme's own `--destructive`/`--destructive-foreground`
+tokens — inconsistent with the rest of this app's token-driven styling
+(same shape of issue as the `-border` bug above, just not a hard
+failure this time, just off-palette hardcoded color). Added matching
+`group-[.success]:` treatment to both `ToastClose` and `ToastAction` for
+parity. Verified live: triggered a real success toast (project created)
+and a real error toast (geocoding an invalid address) side by side —
+green and red respectively, both clearly legible and visibly part of
+the same warm/muted palette rather than a bolted-on alert-library look.
+
 ## Project history — read before assuming anything
 
 This repo was built across several different tools/environments before

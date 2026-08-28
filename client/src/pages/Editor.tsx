@@ -229,7 +229,7 @@ export default function Editor() {
         material: line.material,
         height: line.height,
       });
-      toast({ title: "Success", description: "Fence line updated." });
+      toast({ title: "Success", description: "Fence line updated.", variant: "success" });
       setSelectedLineId(null);
       setUiState("SIDEBAR");
     } catch (error: any) {
@@ -265,7 +265,7 @@ export default function Editor() {
                 order: idx
               }))
             });
-            toast({ title: "Success", description: "Your fence line has been saved." });
+            toast({ title: "Success", description: "Your fence line has been saved.", variant: "success" });
             localStorage.removeItem(`pendingFenceLine_${projectId}`);
             refetchProject();
             setUiState("SIDEBAR");
@@ -317,7 +317,7 @@ export default function Editor() {
           order: idx
         }))
       });
-      toast({ title: "Success", description: "Fence line saved." });
+      toast({ title: "Success", description: "Fence line saved.", variant: "success" });
       setIsDrawing(false);
       setUiState("SIDEBAR");
     } catch (error: any) {

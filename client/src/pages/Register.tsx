@@ -48,7 +48,7 @@ export default function Register() {
       if (res.ok) {
         const data = await res.json();
         login(data.user);
-        toast({ title: "Account created", description: "You are now signed in." });
+        toast({ title: "Account created", description: "You are now signed in.", variant: "success" });
         if (projectId) {
           setLocation(`/editor/${projectId}`);
         } else {
