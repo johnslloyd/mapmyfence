@@ -25,7 +25,7 @@ import { NewProjectInstructions } from "@/components/NewProjectInstructions";
 import { EditFenceLineCard } from "@/components/EditFenceLineCard";
 import { NewFenceLineCard } from "@/components/NewFenceLineCard";
 import { STORE_LABELS, consolidateMaterials } from "@/lib/estimates";
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, ShieldAlert } from "lucide-react";
 
 type UiState = "HIDDEN" | "INSTRUCTIONS" | "DRAWING" | "SIDEBAR" | "EDITING";
 
@@ -143,6 +143,12 @@ function MaterialEstimates({ projectId, isGuest }: { projectId: number; isGuest:
         className="flex items-center justify-center gap-2 w-full rounded-md border border-primary/30 text-primary text-sm font-medium py-2 hover:bg-primary/5 transition-colors"
       >
         <ClipboardCheck className="w-4 h-4" /> View Shopping List
+      </Link>
+      <Link
+        href={`/editor/${projectId}/before-you-dig${isGuest ? "?guest=true" : ""}`}
+        className="flex items-center justify-center gap-2 w-full rounded-md border border-border text-muted-foreground text-sm font-medium py-2 hover:bg-secondary/40 hover:text-foreground transition-colors"
+      >
+        <ShieldAlert className="w-4 h-4" /> Before You Dig & Permits
       </Link>
     </div>
   );

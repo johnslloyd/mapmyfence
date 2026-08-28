@@ -8,6 +8,7 @@ import Dashboard from "@/pages/Dashboard";
 import Projects from "@/pages/Projects";
 import Editor from "@/pages/Editor";
 import ShoppingList from "@/pages/ShoppingList";
+import BeforeYouDig from "@/pages/BeforeYouDig";
 import { AuthProvider } from "./hooks/use-auth";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -25,6 +26,7 @@ function Router() {
       {/* Redirect-like behavior for bare /editor */}
       <ProtectedRoute path="/editor" component={Editor} />
       <ProtectedRoute path="/editor/:id/shopping-list" component={ShoppingList} />
+      <ProtectedRoute path="/editor/:id/before-you-dig" component={BeforeYouDig} />
       <ProtectedRoute path="/editor/:id" component={Editor} />
       <Route component={NotFound} />
     </Switch>

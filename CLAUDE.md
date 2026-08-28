@@ -560,6 +560,58 @@ survived, switched stores and confirmed Home Depot's own products/prices
 loaded with its own independent (unchecked) progress, then switched back
 to Lowe's and confirmed its checked state was still intact.
 
+## Before You Dig & Permits — informational only, deliberately no clearance
+
+Second and third pieces of roadmap item 2 (after the shopping list
+above): utility-locate (811) and permit guidance. **Explicit user
+direction on scope, not a default I chose**: treat both purely as
+disclaimer/informational content pointing homeowners to the real
+authorities — never assert or imply that a project IS cleared to dig or
+build. This app has no way to actually know that, and getting it wrong
+is a real liability the user was explicit about not wanting to take on.
+Every sentence on this page describes a process or names a contact;
+none of it states an outcome on the user's behalf. If this page is ever
+extended, keep that same shape.
+
+`client/src/pages/BeforeYouDig.tsx` at `/editor/:id/before-you-dig`
+(same route/registration/guest-access pattern as `ShoppingList.tsx`;
+linked from the sidebar next to "View Shopping List" as "Before You Dig
+& Permits"). A persistent `Alert` at the top states the disclaimer
+before anything else: *"This is general information, not a clearance to
+build."*
+
+- **811**: real, verified facts only — 811 is the free, nationwide
+  call-before-you-dig number, legally required before digging in all 50
+  states (a national number that routes to the correct state/regional
+  one-call center, so no per-state research/customization was needed the
+  way parcels required). Deliberately did NOT assert a specific notice
+  period as universal ("a few business days" — phrased as varying by
+  state, since exact required lead time does vary). Links to
+  `call811.com` (verified live: redirects to `811beforeyoudig.com`, the
+  real Common Ground Alliance site — confirmed by reading its actual
+  page content, not assumed from the domain name, same rigor as the
+  tile-layer/parcel-source lessons elsewhere in this file) and a
+  `tel:811` quick-dial button.
+- **Permits**: NO fabricated rules, on purpose — fence permit
+  requirements (whether one's needed at all, height/setback/material
+  limits) are hyper-local (city/county/HOA) and this app has no real
+  data source for them, the same category of gap as Tennessee/Arkansas
+  parcels. Content is limited to "contact your local building/zoning
+  department, and check your HOA if you have one." The one convenience
+  added is a pre-filled Google search link
+  (`fence permit requirements {project.address}`) — explicitly labeled
+  as "a convenience, not an answer" in the UI, never presented as
+  authoritative.
+- No checkboxes/"mark as done" state on this page, unlike the shopping
+  list — deliberately omitted. A checked "I called 811" box could visually
+  read as the app vouching that it's actually safe to dig, which is
+  exactly the implied-clearance risk this page exists to avoid.
+
+Verified live: real project address flowed correctly into the permit
+search URL, `call811.com`/`tel:811` links resolved to the correct
+destinations, and the disclaimer banner renders before any actionable
+content on the page.
+
 ## Editor panel layout — docked vs. floating
 
 `Editor.tsx`'s right-hand panel (`RightPanel`) has two presentations,
