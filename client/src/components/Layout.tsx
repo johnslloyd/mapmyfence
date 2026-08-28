@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Map, FolderKanban, Menu, X, LogOut, User as UserIcon } from "lucide-react";
+import { Map, FolderKanban, Menu, X, LogOut, User as UserIcon } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { CreateProjectDialog } from "./CreateProjectDialog";
@@ -29,8 +29,11 @@ export function Layout({ children }: LayoutProps) {
 
   const closeLoginModal = () => setLoginModalOpen(false);
 
+  // "Dashboard" (-> "/") used to be a distinct authenticated view; now
+  // that Dashboard.tsx just redirects logged-in users straight to
+  // /projects (see CLAUDE.md), a nav link to it was a pointless bounce.
+  // The logo already links home for guests, so nothing lost by dropping it.
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'My Projects', href: '/projects', icon: FolderKanban },
   ];
 
