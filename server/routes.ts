@@ -31,12 +31,17 @@ export async function registerRoutes(
       }
   
       const totalLength = project.fenceLines.reduce((acc, line) => acc + (line.length || 0), 0);
-  
+
       if (totalLength === 0) {
           return res.json({ options: [] });
       }
-  
-      const estimate = await calculateEstimate(totalLength);
+
+      // Pass each line's own material through — a project can mix pine and
+      // cedar lines, and calculateEstimate prices each species separately
+      // rather than assuming the whole project is one material.
+      const estimate = await calculateEstimate(
+        project.fenceLines.map((line) => ({ length: line.length || 0, material: line.material })),
+      );
 
       logEvent("estimate_viewed", { projectId, userId: (req.user as any)?.id });
       res.json(estimate);

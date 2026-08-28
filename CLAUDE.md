@@ -183,19 +183,50 @@ store's own complete material list and links, not a blend. Which store
 wins changes as the underlying prices get re-verified — don't treat
 either total as a fixed expectation.
 
-`products.store` has real Lowe's *and* Home Depot rows for all four
+`products.store` has real Lowe's *and* Home Depot rows for all five
 required wood-fence types — see "Seed data" below for how confident to
 be in that data specifically.
 
-The fence line `material` field (Wood/Vinyl/Iron) is **not** wired to the
-estimate calculation — it only ever prices a standard wood post-and-picket
-fence. Vinyl/Iron are disabled in the material picker
-(`EditFenceLineCard.tsx`) with a "pricing coming soon" label rather than
-silently producing a wrong estimate. 3 real fence lines already have
-`material: "vinyl"` from before this was caught — left alone, not mine to
-migrate unsupervised. Material values in the DB are inconsistent free text
-(`wood_cedar` vs `Cedar` vs `wood`, no enum constraint) — a data-quality
-issue, not fixed.
+**Fasteners: added.** The BOM was missing hardware entirely — no way to
+build a real fence with just post/concrete/rail/picket. `products.type`
+now includes `"fasteners"` (a box of ~300-350 exterior wood screws;
+`server/estimates.ts` estimates 1 box per 3 8-ft sections, the same
+rule-of-thumb spirit as "one bag of concrete per post"). Tools
+(post-hole digger, etc.) were deliberately NOT added here — homeowners
+rent or already own them, they're not a per-fence purchase; that belongs
+in a future execution/build checklist, not the cost estimate.
+
+**Pine vs. cedar pricing: wired up, per fence line.** Previously the
+fence line `material` field (Wood: Pine / Wood: Cedar / Vinyl / Iron)
+was completely decorative — switching a line between pine and cedar
+never changed its price, because the whole project was priced as one
+generic "standard wood fence" regardless of what any line said. Fixed:
+`products` has a new `material` column (`"pine" | "cedar"`, only
+meaningful for `type: "picket"` — post/rail/concrete/fasteners are the
+same pressure-treated commodity lumber either way, so those stay
+untagged/shared). `calculateEstimate` (`server/estimates.ts`) now takes
+the project's fence lines directly (not a single summed length),
+buckets them by species, and prices each species' pickets separately —
+so a project can mix pine and cedar lines and get a correct combined
+total, and editing a line's material actually changes its price.
+Verified live: switching a line from cedar to pine dropped its
+project's Lowe's total from $2113.48 to $1643.08 — exactly the 336
+pickets × ($3.58 − $2.18) difference, nothing else moved.
+
+Species-agnostic legacy/unrecognized material values (`Cedar`, `wood`,
+free text) and Vinyl/Iron all fall back to cedar pricing — the same
+generic-wood-fence simplification this app already made project-wide,
+just applied per line now instead of uniformly. This is NOT a claim
+that a vinyl line "is cedar" — Vinyl/Iron remain disabled in the
+material picker (`EditFenceLineCard.tsx`, "pricing coming soon") because
+they need a genuinely different bill-of-materials (pre-fab panels, not
+individual pickets/rails), deliberately out of scope for now — 3 real
+fence lines already have `material: "vinyl"` from before this was
+caught, left alone, not mine to migrate unsupervised. Material values in
+the DB are still inconsistent free text (`wood_cedar` vs `Cedar` vs
+`wood`, no enum constraint) — a data-quality issue, not fixed, though
+narrower now that only the pine/not-pine distinction actually matters
+for pricing.
 
 **Fence line edits were silently corrupting length/cost estimates: fixed.**
 `Editor.tsx`'s `handleUpdateLine` used to recompute a line's length with a
@@ -368,6 +399,21 @@ create/drop), never a `session › ...` rename option. This can't be
 automated away without either declaring `session` in the schema (then
 Drizzle would try to manage a table it doesn't own) or switching session
 stores — not worth it for a prompt you answer once per migration.
+
+**Workaround for a non-interactive session (Claude Code, CI, etc.):**
+`text(name, { enum: [...] })` columns (`products.type`, `.store`, the new
+`.material`) are NOT native Postgres enums — Drizzle's `enum` option is
+TypeScript-only, so adding a new allowed string value (e.g. `"fasteners"`
+to `products.type`) needs no migration at all, just update the type and
+insert rows. A genuinely new *column* still needs a real `ALTER TABLE`,
+which can be run directly against `pool` (`server/db.ts`) with a
+one-off script — safe for a simple additive, nullable column (see how
+`products.material` was added) since it can't collide with the
+`session`-table ambiguity above, which is specific to `drizzle-kit push`'s
+own diffing. This is NOT a substitute for `db:push` in general — it's a
+narrow escape hatch for exactly "add one nullable column, need it now,
+no interactive terminal available." A destructive or renaming change
+still genuinely needs a human at `db:push`.
 
 ## Usage event logging
 

@@ -56,12 +56,17 @@ export const events = pgTable("events", {
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(), // e.g., "6 ft. Cedar Fence Panel"
-  type: text("type", { enum: ["panel", "post", "concrete", "gate", "picket", "rail"] }).notNull(),
+  type: text("type", { enum: ["panel", "post", "concrete", "gate", "picket", "rail", "fasteners"] }).notNull(),
   store: text("store", { enum: ["lowes", "home_depot"] }).notNull(),
   price: doublePrecision("price").notNull(), // price per unit
   unit: text("unit"), // e.g., "per panel", "per bag"
   url: text("url"), // URL to the product page
   sku: text("sku"), // Store's SKU
+  // Only meaningful for type "picket" — which wood species this listing is
+  // (pine vs cedar price very differently; post/rail/concrete/fasteners
+  // are the same pressure-treated commodity lumber regardless of which
+  // picket species a fence line uses, so they stay untagged/null).
+  material: text("material", { enum: ["pine", "cedar"] }),
 });
 
 // === RELATIONS ===

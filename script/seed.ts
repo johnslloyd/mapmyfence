@@ -33,6 +33,14 @@ async function main() {
   // context, this project's usual test region — pricing can vary by
   // location. Still worth a periodic spot-check; retailers change/
   // discontinue SKUs regularly, which is exactly what broke the old data.
+  // Picket rows are tagged by wood species (material: "pine" | "cedar") —
+  // calculateEstimate picks the right one per fence line. Post/rail/
+  // concrete/fasteners are the same pressure-treated commodity lumber
+  // regardless of picket species, so they're left untagged (material:
+  // null) and shared across both. Pine and fasteners entries verified
+  // live the same way as the rest of this file (see note above) —
+  // Lowe's/Home Depot's own site search, then the actual product page
+  // loaded and read directly, from the same Memphis, TN store context.
   const sampleProducts = [
     {
       name: "5/8-in x 5-1/2-in x 6-ft Unfinished Cedar Dog Ear Fence Picket",
@@ -42,6 +50,26 @@ async function main() {
       unit: "per picket",
       url: "https://www.lowes.com/pd/Severe-Weather-Common-5-8-in-x-5-1-2-in-x-6-ft-Actual-0-625-in-x-5-5-in-x-6-ft-Cedar-Dog-Ear-Wood-Fence-Picket/3556636",
       sku: "3556636",
+      material: "cedar" as const,
+    },
+    {
+      name: "5/8-in x 5-1/2-in x 6-ft Pressure Treated Southern Yellow Pine Dog Ear Fence Picket",
+      type: "picket",
+      store: "lowes" as const,
+      price: 2.18,
+      unit: "per picket",
+      url: "https://www.lowes.com/pd/Severe-Weather-5-8-in-x-5-1-2-in-x-6-ft-Pressure-Treated-Southern-Yellow-Pine-Dog-Ear-Fence-Picket/5013086547",
+      sku: "5013086547",
+      material: "pine" as const,
+    },
+    {
+      name: "Deck Plus #10 x 3-in Wood to Wood Deck Screws (310-Per Box)",
+      type: "fasteners",
+      store: "lowes" as const,
+      price: 29.98,
+      unit: "per box (~310 screws)",
+      url: "https://www.lowes.com/pd/Deck-Plus-10-x-3-in-Ceramic-Deck-Screws-5-lb/1000318525",
+      sku: "1000318525",
     },
     {
       name: "2-in x 4-in x 8-ft #2 Prime Above Ground Pressure Treated Southern Yellow Pine Lumber",
@@ -87,6 +115,26 @@ async function main() {
       unit: "per picket",
       url: "https://www.homedepot.com/p/Alta-Forest-Products-5-8-in-x-5-1-2-in-x-6-ft-American-Western-Red-Cedar-Dog-Ear-Fence-Picket-63023/205757688",
       sku: "63023",
+      material: "cedar" as const,
+    },
+    {
+      name: "5/8 in. x 5-1/2 in. x 6 ft. Pressure-Treated Pine Dog-Eared Wood Fence Picket",
+      type: "picket",
+      store: "home_depot" as const,
+      price: 2.28,
+      unit: "per picket",
+      url: "https://www.homedepot.com/p/5-8-in-x-5-1-2-in-x-6-ft-Pressure-Treated-Pine-Dog-Eared-Wood-Fence-Picket-102560/202319053",
+      sku: "202319053",
+      material: "pine" as const,
+    },
+    {
+      name: "Everbilt #10 x 3-in Star Drive Exterior Wood Screws (347-Piece Box)",
+      type: "fasteners",
+      store: "home_depot" as const,
+      price: 45.96,
+      unit: "per box (~347 screws)",
+      url: "https://www.homedepot.com/p/Everbilt-10-x-3-in-Star-Drive-Flat-Head-Exterior-Wood-Screws-5-lbs-Box-347-Piece-117357/316219999",
+      sku: "316219999",
     },
     {
       name: "WeatherShield 2-in x 4-in x 8-ft #2 Prime Ground Contact Pressure-Treated Southern Yellow Pine Lumber",
