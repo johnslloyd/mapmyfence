@@ -64,7 +64,58 @@ async function main() {
         unit: "per gate",
         url: "https://www.lowes.com/pd/YARDLINK-4-ft-Black-Steel-Fence-Gate/1000371193",
         sku: "1000371193",
-    }
+    },
+    // Home Depot — added for cross-retailer price comparison (calculateEstimate
+    // already picks the cheapest product per type across stores; this is what
+    // actually makes that comparison real instead of Lowe's-only). Same
+    // caveat as the Lowe's picket/rail note above, and worse here: Home Depot
+    // ALSO blocks both the web-fetch and browser tools (403), so NONE of
+    // these four were confirmed by loading the live page. Unlike the Lowe's
+    // fix, there was no existing price to fall back to — these prices are
+    // reconstructed from search-result snippets that themselves showed
+    // per-location variance (e.g. the rail ranged $4.48-$4.98 across
+    // different stores); picked a representative mid-range value each time.
+    // Product identity (model number, spec) is decently cross-referenced
+    // across multiple sources; PRICES ARE THE WEAK POINT — spot-check all
+    // four on homedepot.com before trusting this for real users, since a
+    // wrong-but-lower Home Depot price would make the "cheapest" picker
+    // actively recommend a worse deal than the real one.
+    {
+      name: "Alta Forest Products 5/8-in x 5-1/2-in x 6-ft American Western Red Cedar Dog-Ear Fence Picket",
+      type: "picket",
+      store: "home_depot" as const,
+      price: 4.18,
+      unit: "per picket",
+      url: "https://www.homedepot.com/p/Alta-Forest-Products-5-8-in-x-5-1-2-in-x-6-ft-American-Western-Red-Cedar-Dog-Ear-Fence-Picket-63023/205757688",
+      sku: "63023",
+    },
+    {
+      name: "WeatherShield 2-in x 4-in x 8-ft #2 Prime Ground Contact Pressure-Treated Southern Yellow Pine Lumber",
+      type: "rail",
+      store: "home_depot" as const,
+      price: 4.68,
+      unit: "per 8-ft rail",
+      url: "https://www.homedepot.com/p/WeatherShield-2-in-x-4-in-x-8-ft-2-Prime-Ground-Contact-Pressure-Treated-Southern-Yellow-Pine-Lumber-291224/301836994",
+      sku: "291224",
+    },
+    {
+      name: "4-in x 4-in x 8-ft #2 Ground Contact Pressure-Treated Southern Yellow Pine Wood Post",
+      type: "post",
+      store: "home_depot" as const,
+      price: 10.98,
+      unit: "per post",
+      url: "https://www.homedepot.com/p/4-in-x-4-in-x-8-ft-2-Ground-Contact-Pressure-Treated-Southern-Yellow-Pine-Wood-Post-194354/205220341",
+      sku: "194354",
+    },
+    {
+      name: "Quikrete 50-lb Fast-Setting Concrete Mix",
+      type: "concrete",
+      store: "home_depot" as const,
+      price: 7.97,
+      unit: "per bag",
+      url: "https://www.homedepot.com/p/Quikrete-50-lb-Fast-Setting-Concrete-Mix-100450/313478684",
+      sku: "100450",
+    },
   ];
 
   await db.insert(products).values(sampleProducts);
