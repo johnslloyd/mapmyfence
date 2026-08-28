@@ -482,17 +482,58 @@ unauthenticated users, see `ProtectedRoute.tsx`). Reuses the exact same
 `useEstimates` data as the sidebar's `MaterialEstimates`, presented as a
 real checklist: grouped by material type in buying order (posts →
 concrete → rail → pickets → fasteners), a store picker matching the
-sidebar's (same "Best price" badge logic), a progress bar, and a
-"Print" button (`window.print()` + Tailwind's `print:` variant — added
-`print:hidden` to `Layout.tsx`'s header too, so the site nav doesn't
-print on any page, not just this one). Checked-item state persists to
-`localStorage`, keyed per `(projectId, store)` — not a schema addition,
-same class of simplification `pendingFenceLine` already makes: a real
-shopping trip can span days so plain component state isn't enough, but
-no other viewer needs to see these checks, so a table is overkill.
-Switching stores correctly shows a separate, independent checklist
-(verified live) — checking items at Lowe's doesn't bleed into Home
-Depot's list, since they're genuinely different physical shopping trips.
+sidebar's (same "Best price" badge logic), and a "Print" button
+(`window.print()` + Tailwind's `print:` variant — added `print:hidden`
+to `Layout.tsx`'s header too, so the site nav doesn't print on any page,
+not just this one). Switching stores correctly shows a separate,
+independent list (verified live) — nothing selected at one store bleeds
+into the other, since they're genuinely different physical shopping
+trips.
+
+**Checkboxes: redesigned before the first real use, per direct user
+feedback.** Shipped first as a "mark as gathered" tracker driving a
+progress bar — the user pointed out this doesn't map to how anyone
+actually uses the page: you either print it (physical pen ticks, no
+digital state needed) or click straight through to a product page,
+neither of which involves pre-checking boxes in the app. Their own
+framing: repurpose the checkbox as a **selector for a future batch
+action** ("give them control here to select what gets batched"),
+anticipating the same future-quote/ordering direction from the
+architecture note above. Rebuilt around that: checking an item now
+means "include it," with "Select all" / "Clear" plus an "Open N online"
+button that opens every selected (and linked) item's product page in a
+new tab — a real, immediately useful action with zero new backend,
+and the natural, small, un-scoped-creep step toward an eventual real
+"send as a batch order" feature. The progress bar is gone; selection
+state still persists to `localStorage` per `(projectId, store)` — not a
+schema addition, same class of simplification `pendingFenceLine`
+already makes elsewhere: no other viewer needs to see it, and it's fine
+if it goes stale after a project's materials change materially. The
+printed view is unaffected either way — its checkboxes render as plain
+blank boxes regardless of on-screen selection, since a paper checklist
+still means "tick it off as you physically grab it," a use case that
+never went away.
+
+Also fixed while redesigning: `useSelectedItems`'s `toggle` originally
+computed its next state as `{ ...selected, [id]: ... }` off the outer
+render's `selected` closure rather than a functional `setState`
+updater. Caught live during the same feedback pass — two checkbox
+clicks dispatched back-to-back in one script (no re-render in between)
+both read the same stale snapshot, so the second toggle silently
+clobbered the first instead of composing with it (checking two boxes
+in the same tick left only the second one checked). `toggle`,
+`selectAll`, and `clear` all use the functional form now; verified live
+that selecting three items in immediate succession leaves all three
+selected.
+
+**Visual redesign, also per direct user feedback**: the page originally
+sat directly on the app's muted page background with only per-item
+borders — felt flat/gray. Wrapped the whole list in
+`bg-panel text-panel-foreground`, the same lighter-surface treatment
+already established for the editor's right-hand panel (`EditorSidebar`,
+`EditFenceLineCard`, etc. — see the Brand section), so this page reads
+as visually consistent with the rest of the app's execution-focused
+surfaces instead of introducing its own look.
 
 **Found and fixed while building this, not asked for but a real
 correctness bug**: `calculateEstimate` can legitimately return the SAME
