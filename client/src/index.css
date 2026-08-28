@@ -16,34 +16,70 @@
      OKLCH->sRGB->HSL script, not eyeballed. Supersedes the earlier dark
      "Precision" theme — the organic-hills exploration that followed this
      artboard was tried and set aside; this is the plain version that was
-     actually picked. */
-  --background: 40 38% 89%;
+     actually picked. Lightened a pass further (background/secondary/muted/
+     accent/border all nudged up in L, down slightly in S) after the tan
+     tones read as "muddied," especially where several of these overlap
+     (e.g. bg-secondary/40 bands). */
+  --background: 40 32% 92%;
   --foreground: 44 38% 7%;
 
-  --card: 40 50% 94%;
+  --card: 40 40% 96%;
   --card-foreground: 44 38% 7%;
+  /* tailwind.config.ts's card/popover/secondary/muted/accent/primary/
+     destructive color groups all reference a "-border" sub-token
+     (border-card-border, border-primary-border, ...) that was never
+     defined here — same shape of bug as the font-display miss earlier in
+     this project's history. hsl(var(--card-border) / <alpha>) with an
+     empty --card-border is invalid CSS, so the browser drops that
+     declaration and falls back to the CSS default of currentColor —
+     which meant every Card with no explicit border override (e.g. the
+     EditFenceLineCard "Editing Line" panel) rendered a harsh near-black
+     border (matching --card-foreground, its text color), and every
+     bg-primary button rendered a pale cream rim (matching
+     --primary-foreground) instead of a clean edge. Confirmed live via
+     computed styles before fixing, not guessed. Filled in below —
+     surface roles get a soft neutral line (matching --border), fill
+     roles (primary/destructive) get their own color so the border seam
+     disappears into the fill instead of outlining it.
+  */
+  --card-border: 40 14% 84%;
 
-  --popover: 40 50% 94%;
+  --popover: 40 40% 96%;
   --popover-foreground: 44 38% 7%;
+  --popover-border: 40 14% 84%;
 
   --primary: 144 43% 21%;      /* Deep muted green */
   --primary-foreground: 40 50% 94%;
+  --primary-border: 144 43% 21%;
 
-  --secondary: 40 28% 85%;
+  --secondary: 40 22% 89%;
   --secondary-foreground: 44 38% 7%;
+  --secondary-border: 40 14% 84%;
 
-  --muted: 40 28% 85%;
+  --muted: 40 22% 89%;
   --muted-foreground: 34 19% 42%;
+  --muted-border: 40 14% 84%;
 
-  --accent: 40 34% 82%;        /* Soft cream tint */
+  --accent: 40 26% 87%;        /* Soft cream tint */
   --accent-foreground: 144 43% 21%;
+  --accent-border: 40 14% 84%;
 
   --destructive: 0 62% 30%;
   --destructive-foreground: 210 20% 98%;
+  --destructive-border: 0 62% 30%;
 
-  --border: 40 19% 79%;
-  --input: 40 19% 79%;
+  --border: 40 14% 84%;
+  --input: 40 14% 84%;
   --ring: 144 43% 21%;
+  --badge-outline: 40 14% 84%; /* badge.tsx's outline variant — same latent-token bug as above */
+
+  /* The editor's right-hand panel (line list, material estimates, the
+     line-editing card) is meant to read as a distinctly lighter, calmer
+     surface than the rest of the app — not just proportionally lighter
+     along with everything else. Applied to EditorSidebar, the floating
+     SIDEBAR-state wrapper, and EditFenceLineCard. */
+  --panel: 40 28% 98%;
+  --panel-foreground: 44 38% 7%;
 
   --radius: 0.5rem;
 }

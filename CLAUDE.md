@@ -36,6 +36,42 @@ class was silently falling back to `font-sans` the entire time — not a
 new mistake, just finally caught and fixed alongside the rest of the
 token work.
 
+**Lightened, and a real latent-token bug fixed (2026-08-27).** The
+palette read "muddied," so `background`/`secondary`/`muted`/`accent`/
+`border` were all nudged lighter and less saturated in `index.css`, and
+a new `--panel`/`--panel-foreground` pair (significantly lighter than
+`--card`) was added specifically for the editor's right-hand panel
+(`EditorSidebar`, `EditFenceLineCard`, `NewFenceLineCard`,
+`NewProjectInstructions`, and `MapEditorComponent`'s own drawing-controls
+card — every state of that panel, not just one). While in there, found
+and fixed the SAME shape of bug as the `font-display` miss above, but
+worse — two layers of it:
+
+1. `tailwind.config.ts`'s `card`/`popover`/`secondary`/`muted`/`accent`/
+   `primary`/`destructive` color groups each reference a `-border`
+   sub-token (`--card-border`, `--primary-border`, ...) that was never
+   defined in `index.css` at all. `border-card-border` resolving to
+   `hsl(var(--card-border) / <alpha>)` with an empty variable is invalid
+   CSS, so the browser drops it and falls back to the spec default of
+   `currentColor` — confirmed live via computed styles: every `Card`
+   without an explicit border override (e.g. the "Editing Line" panel)
+   was rendering a harsh near-black border (matching its own text
+   color), and every `bg-primary` button had a pale cream rim (matching
+   its own text color) instead of a clean edge.
+2. Even after adding those tokens, `primary`/`secondary`/`muted`/
+   `accent`/`destructive` (unlike `card`/`popover`) referenced their
+   border token as a bare `var(--x-border)` with no `hsl()` wrapper —
+   so a proper `H S% L%` triplet still didn't parse there either. Fixed
+   by wrapping all of them in `hsl(var(--x-border) / <alpha-value>)`
+   consistently, matching how `card`/`popover` already did it.
+
+Surface roles (`card`/`popover`/`secondary`/`muted`/`accent`) now get a
+soft neutral `-border` matching `--border`; fill roles (`primary`/
+`destructive`) get their own color so the border seam disappears into
+the fill. `sidebar-primary`/`sidebar-accent` have the identical
+bare-`var()` bug and were deliberately left alone — see "Known dead
+files," `client/src/components/ui/sidebar.tsx` is unused.
+
 ## Project history — read before assuming anything
 
 This repo was built across several different tools/environments before
@@ -363,3 +399,10 @@ yet — needs one `npm run db:push` run interactively.
 ## Known dead files
 
 - ~~`server/db.ts.save`~~ — removed.
+- `client/src/components/ui/sidebar.tsx` — a full shadcn collapsible
+  app-sidebar primitive (`SidebarProvider`, `SidebarTrigger`, etc.),
+  never imported anywhere. The app's real right-hand panel is the
+  hand-rolled `EditorSidebar` in `Editor.tsx`. Its `--sidebar-*` tokens
+  in `tailwind.config.ts` are unwired the same way `--card-border` was
+  (see Brand section) — left alone since nothing renders it; wire or
+  remove together if this component is ever actually adopted.

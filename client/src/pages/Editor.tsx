@@ -349,7 +349,7 @@ export default function Editor() {
   };
 
   const EditorSidebar = () => (
-    <div className="flex flex-col bg-card z-10 w-full h-full">
+    <div className="flex flex-col bg-panel z-10 w-full h-full">
       <div className="p-4 border-b">
         {!isAuthenticated ? (
           <Button
@@ -370,7 +370,7 @@ export default function Editor() {
       </div>
       <ScrollArea className="flex-1">
         <Tabs defaultValue="lines">
-          <div className="px-4 pt-4 sticky top-0 bg-card z-10 border-b">
+          <div className="px-4 pt-4 sticky top-0 bg-panel z-10 border-b">
             <TabsList className="w-full grid grid-cols-2">
               <TabsTrigger value="lines">Fence Lines</TabsTrigger>
               <TabsTrigger value="details">Project Details</TabsTrigger>
@@ -470,7 +470,7 @@ export default function Editor() {
               // that chrome would just double up as a card-in-a-card.
               return isPanelDocked
                   ? <div className="h-full"><EditorSidebar /></div>
-                  : <div className="bg-card h-full overflow-hidden shadow-lg rounded-lg"><EditorSidebar /></div>;
+                  : <div className="bg-panel h-full overflow-hidden shadow-lg rounded-lg"><EditorSidebar /></div>;
           case "EDITING":
               return editingLine ? (
                   <EditFenceLineCard

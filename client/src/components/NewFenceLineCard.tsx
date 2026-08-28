@@ -10,7 +10,7 @@ export function NewFenceLineCard({
   className?: string;
 }) {
   return (
-    <Card className={cn("z-10 w-full max-w-md rounded-lg", className)}>
+    <Card className={cn("z-10 w-full max-w-md rounded-lg bg-panel text-panel-foreground", className)}>
       <CardHeader>
         <CardTitle>New Fence Line</CardTitle>
       </CardHeader>

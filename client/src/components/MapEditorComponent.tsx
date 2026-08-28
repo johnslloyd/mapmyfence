@@ -417,7 +417,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
       </MapContainer>
 
       {isDrawing && !editingLine && (
-        <Card className={cn("absolute top-4 z-40 bg-background/95 backdrop-blur shadow-xl border-border/50 rounded-lg", isMobile ? "left-4 right-4 w-auto" : `${controlsPosition === 'left' ? 'left-4' : 'right-4'} w-full max-w-md lg:w-96 p-4`)}>
+        <Card className={cn("absolute top-4 z-40 bg-panel/95 text-panel-foreground backdrop-blur shadow-xl border-border/50 rounded-lg", isMobile ? "left-4 right-4 w-auto" : `${controlsPosition === 'left' ? 'left-4' : 'right-4'} w-full max-w-md lg:w-96 p-4`)}>
           <h3 className={cn("font-display font-bold text-lg flex items-center gap-2", isMobile ? "mb-0 p-4" : "mb-4")}><Ruler className="w-5 h-5 text-primary" /> New Fence Line</h3>
           {isMobile ? <MobileContent /> : <DesktopContent />}
         </Card>

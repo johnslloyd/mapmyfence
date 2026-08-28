@@ -10,7 +10,7 @@ interface NewProjectInstructionsProps {
 
 export function NewProjectInstructions({ onStartDrawing, className }: NewProjectInstructionsProps) {
   return (
-    <Card className={cn("z-10 w-full max-w-md rounded-lg", className)}>
+    <Card className={cn("z-10 w-full max-w-md rounded-lg bg-panel text-panel-foreground", className)}>
       <CardHeader>
         <CardTitle>Create your first fence line</CardTitle>
       </CardHeader>
