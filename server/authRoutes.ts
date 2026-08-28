@@ -190,9 +190,9 @@ authRouter.post("/api/forgot-password", passwordResetLimiter, async (req, res, n
       const resetUrl = `${origin}/reset-password?token=${rawToken}`;
       await sendEmail({
         to: email,
-        subject: "Reset your MapMyFence password",
-        text: `We got a request to reset your MapMyFence password. This link expires in 1 hour and can only be used once:\n\n${resetUrl}\n\nIf you didn't request this, you can ignore this email — your password hasn't been changed.`,
-        html: `<p>We got a request to reset your MapMyFence password. This link expires in 1 hour and can only be used once:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can ignore this email — your password hasn't been changed.</p>`,
+        subject: "Reset your Yard Stick password",
+        text: `We got a request to reset your Yard Stick password. This link expires in 1 hour and can only be used once:\n\n${resetUrl}\n\nIf you didn't request this, you can ignore this email — your password hasn't been changed.`,
+        html: `<p>We got a request to reset your Yard Stick password. This link expires in 1 hour and can only be used once:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can ignore this email — your password hasn't been changed.</p>`,
       });
     }
 

@@ -47,6 +47,32 @@ export const coordinates = pgTable("coordinates", {
   lng: doublePrecision("lng").notNull(),
 });
 
+// Yard-care vertical groundwork — schema only, nothing else built yet.
+// A yard boundary is the enclosed polygon for a property, distinct from
+// fenceLines (open polylines with a length): fertilizer/pre-emergent/
+// herbicide coverage is sold per square foot, the same way fence
+// materials are sold per linear foot, so a future lawn-care estimate
+// engine needs an area, not a length. One boundary per project (a
+// property has one yard, the same way it has one address) — enforced
+// via .unique() on projectId. No drawing UI, no area-based product
+// recommendations, and no timing/scheduling logic exist yet — see
+// "Yard Stick rebrand & lawn-care groundwork" in CLAUDE.md for what
+// this is (and isn't) meant to unblock.
+export const yardBoundaries = pgTable("yard_boundaries", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull().unique(),
+  areaSqFt: doublePrecision("area_sq_ft"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const yardBoundaryPoints = pgTable("yard_boundary_points", {
+  id: serial("id").primaryKey(),
+  yardBoundaryId: integer("yard_boundary_id").references(() => yardBoundaries.id, { onDelete: 'cascade' }).notNull(),
+  order: integer("order").notNull(),
+  lat: doublePrecision("lat").notNull(),
+  lng: doublePrecision("lng").notNull(),
+});
+
 // Minimal local usage funnel logging — no external analytics service.
 // Deliberately NOT foreign-keyed to projects/users: this is an append-only
 // log, and a hard FK would block deleting a project/user that has history.
@@ -63,7 +89,13 @@ export const events = pgTable("events", {
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(), // e.g., "6 ft. Cedar Fence Panel"
-  type: text("type", { enum: ["panel", "post", "concrete", "gate", "picket", "rail", "fasteners"] }).notNull(),
+  // "fertilizer"/"pre_emergent"/"herbicide"/"pesticide" are lawn-care
+  // groundwork — placeholder types only, nothing seeds or queries them
+  // yet (no lawn-care estimate engine exists). Added now because this
+  // is a TypeScript-only enum (Drizzle's `enum` option, not a native
+  // Postgres constraint — see "Database migrations" below), so there's
+  // zero migration cost to reserving the values ahead of the feature.
+  type: text("type", { enum: ["panel", "post", "concrete", "gate", "picket", "rail", "fasteners", "fertilizer", "pre_emergent", "herbicide", "pesticide"] }).notNull(),
   store: text("store", { enum: ["lowes", "home_depot"] }).notNull(),
   price: doublePrecision("price").notNull(), // price per unit
   unit: text("unit"), // e.g., "per panel", "per bag"
@@ -96,6 +128,10 @@ export const usersRelations = relations(users, ({ many }) => ({
 
 export const projectsRelations = relations(projects, ({ many, one }) => ({
   fenceLines: many(fenceLines),
+  yardBoundary: one(yardBoundaries, {
+    fields: [projects.id],
+    references: [yardBoundaries.projectId],
+  }),
   user: one(users, {
     fields: [projects.userId],
     references: [users.id],
@@ -110,6 +146,21 @@ export const fenceLinesRelations = relations(fenceLines, ({ one, many }) => ({
   coordinates: many(coordinates),
 }));
 
+export const yardBoundariesRelations = relations(yardBoundaries, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [yardBoundaries.projectId],
+    references: [projects.id],
+  }),
+  points: many(yardBoundaryPoints),
+}));
+
+export const yardBoundaryPointsRelations = relations(yardBoundaryPoints, ({ one }) => ({
+  yardBoundary: one(yardBoundaries, {
+    fields: [yardBoundaryPoints.yardBoundaryId],
+    references: [yardBoundaries.id],
+  }),
+}));
+
 export const coordinatesRelations = relations(coordinates, ({ one }) => ({
   fenceLine: one(fenceLines, {
     fields: [coordinates.fenceLineId],
@@ -122,6 +173,8 @@ export const coordinatesRelations = relations(coordinates, ({ one }) => ({
 export const insertProjectSchema = createInsertSchema(projects).omit({ id: true, createdAt: true });
 export const insertFenceLineSchema = createInsertSchema(fenceLines).omit({ id: true, createdAt: true });
 export const insertCoordinateSchema = createInsertSchema(coordinates).omit({ id: true });
+export const insertYardBoundarySchema = createInsertSchema(yardBoundaries).omit({ id: true, createdAt: true });
+export const insertYardBoundaryPointSchema = createInsertSchema(yardBoundaryPoints).omit({ id: true });
 
 // === EXPLICIT API CONTRACT TYPES ===
 
@@ -132,6 +185,10 @@ export type InsertFenceLine = z.infer<typeof insertFenceLineSchema>;
 export type Coordinate = typeof coordinates.$inferSelect;
 export type InsertCoordinate = z.infer<typeof insertCoordinateSchema>;
 export type Product = typeof products.$inferSelect;
+export type YardBoundary = typeof yardBoundaries.$inferSelect;
+export type InsertYardBoundary = z.infer<typeof insertYardBoundarySchema>;
+export type YardBoundaryPoint = typeof yardBoundaryPoints.$inferSelect;
+export type InsertYardBoundaryPoint = z.infer<typeof insertYardBoundaryPointSchema>;
 
 // Detailed types for frontend
 export type ProjectWithLines = Project & {

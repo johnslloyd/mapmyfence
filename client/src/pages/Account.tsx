@@ -17,7 +17,7 @@ import { useLocation } from "wouter";
 // user's existing projects/fence lines first. A stated, working way out
 // is what beta users are owed; building the automated flow safely can
 // follow once that's been thought through.
-const SUPPORT_EMAIL = "support@mapmyfence.app";
+const SUPPORT_EMAIL = "support@yardstick.app";
 
 function ChangePasswordCard() {
   const { toast } = useToast();
@@ -134,7 +134,7 @@ function DeleteAccountCard() {
           Account deletion isn't self-serve yet — email us and we'll take care of it for you.
         </p>
         <Button asChild variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10">
-          <a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("Delete my MapMyFence account")}`}>
+          <a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("Delete my Yard Stick account")}`}>
             Email {SUPPORT_EMAIL}
           </a>
         </Button>

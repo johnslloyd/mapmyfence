@@ -1,8 +1,23 @@
-# MapMyFence
+# Yard Stick
 
 DIY fence-planning tool: users map fence lines on a satellite view of their
 property and get material estimates. Longer-term direction is a full yard
-management feature set — fencing is the first vertical, not the whole product.
+management feature set — fencing is the first vertical, not the whole product,
+and a lawn-care vertical (yard boundary + area, fertilizer/pre-emergent/
+herbicide product recommendations, region-and-season timing guidance) is the
+planned second one — see "Lawn-care vertical — architecture groundwork
+only" below for what's actually been built toward it so far (schema
+only, nothing user-facing).
+
+**Formerly "MapMyFence."** Renamed to "Yard Stick" specifically because a
+second, non-fence vertical was coming — a yard-generic name fits a
+multi-vertical product where a fence-specific one didn't. The local
+directory (`/Users/johnlloyd/mapmyfence`) and the GitHub remote
+(`johnslloyd/mapmyfence`) still carry the old name — renaming either is a
+real, somewhat-disruptive infra action (breaks local shell muscle memory;
+a GitHub rename leaves redirects but still changes clone URLs) that
+wasn't part of this pass and should be a deliberate, separate call, not
+something done incidentally while renaming in-app strings.
 
 ## Brand: "Package" — warm light, deep green
 
@@ -23,6 +38,48 @@ casually revert individual pieces (e.g. "just make the button green
 again") without knowing this was a deliberate, reviewed choice; if it's
 time for another rebrand, that's a real decision to have explicitly, the
 same way this one was.
+
+**That next rebrand decision, made explicitly (2026-08-28): renamed
+"MapMyFence" → "Yard Stick," visual identity deliberately kept
+unchanged.** Prompted by the lawn-care vertical being planned (see the
+top of this file) — a yard-generic name fits a multi-vertical product,
+a fence-specific one didn't. Two options were considered for the visual
+side specifically: keep the current warm-cream/deep-green "Package"
+palette and just swap the name/mark, or open a full new visual-identity
+exploration. User chose to keep the palette — it isn't fence-specific
+to begin with (warm/earthy/green already reads as "outdoors/yard"), and
+it's the deliberate, already-reviewed system described above; a fresh
+visual exploration was explicitly deferred, not forgotten.
+
+What actually changed: the nav logo (`Layout.tsx`) swapped from a
+folded-map icon to a ruler icon (`lucide-react`'s `Ruler` — literally a
+"yard stick," and already used elsewhere in the app for the "New Fence
+Line" card header, so it wasn't a new visual element to the codebase)
+in the same rounded-square/deep-green treatment. The favicon changed
+the same way — `client/public/favicon.svg` (new) redraws that same
+ruler icon at the exact `--primary`/`--primary-foreground` hex values
+(`#1F4D31` / `#F7F2E8`, converted from the real HSL tokens, not
+eyeballed) on the same rounded-square background; `client/index.html`'s
+`<link rel="icon">` now points to it, and the old `favicon.png` (the
+folded-map mark) was deleted rather than left as a dead, wrong-brand
+asset. `client/index.html` also gained a `<title>` tag — it didn't have
+one at all before this (a genuine pre-existing gap, not something this
+rename introduced). Every other user-facing "MapMyFence" string was
+swapped app-wide: the register/login copy, transactional email subject/
+body/sender (`server/authRoutes.ts`, `server/email.ts`), the Before You
+Dig disclaimer text, the Privacy Policy, and the Account page's
+delete-account mailto subject. The placeholder support address also
+moved from `support@mapmyfence.app` to `support@yardstick.app` — still
+just a placeholder, still nothing receives mail there (see the MVP
+launch-blockers note elsewhere in this file) — only the domain string
+changed to stay consistent with the new name.
+
+What deliberately did NOT change, and is a separate decision for later:
+the local directory name, the GitHub remote/repo name, `package.json`'s
+`"name"` field (was already the generic leftover `"rest-express"`,
+now `"yard-stick"` — a real fix, but package names aren't user-facing
+so this was low-stakes to just do), and the `.claude/launch.json` dev
+server config name.
 
 `client/src/index.css`'s old `.dark` class block was deleted — it was
 dead code (`next-themes` is a dependency but was never wired to a
@@ -93,6 +150,53 @@ parity. Verified live: triggered a real success toast (project created)
 and a real error toast (geocoding an invalid address) side by side —
 green and red respectively, both clearly legible and visibly part of
 the same warm/muted palette rather than a bolted-on alert-library look.
+
+## Lawn-care vertical — architecture groundwork only
+
+Second product vertical, planned per the top of this file — fertilizer/
+pre-emergent/herbicide/pesticide planning by yard size and season,
+alongside the existing fence vertical on the same property. **Nothing
+user-facing exists yet.** What was deliberately laid down now, while
+touching schema for the rename anyway, because it's additive and
+essentially free:
+
+- `shared/schema.ts`: `yardBoundaries` (one per project — `.unique()`
+  on `projectId`, since a property has one yard the same way it has one
+  address — holding a computed `areaSqFt`) and `yardBoundaryPoints`
+  (ordered lat/lng points, same shape as the existing `fenceLines` /
+  `coordinates` pair). Deliberately a **separate table pair from
+  `fenceLines`**, not a reused one — a yard boundary is a closed
+  polygon with an area, fence lines are open polylines with a length;
+  forcing them into one shape would've been the wrong abstraction.
+  Created directly via the `pool` connection (`CREATE TABLE IF NOT
+  EXISTS`), not `drizzle-kit push` — seed "Database migrations" below:
+  this extends that escape hatch's reasoning from additive *columns* to
+  a brand new, non-destructive, non-renaming *table*. A new table can
+  never collide with `db:push`'s `session`-table rename ambiguity (that
+  ambiguity is specifically about whether an existing table's column
+  signature might match a rename candidate — a table that didn't exist
+  a moment ago has no such candidate), so the same "simple, additive,
+  unambiguous" justification applies even more cleanly here than it did
+  for a single nullable column.
+- `products.type` gained four placeholder values (`fertilizer`,
+  `pre_emergent`, `herbicide`, `pesticide`) — zero migration cost since
+  `type` is Drizzle's TypeScript-only `enum` option, not a native
+  Postgres constraint (same fact that made adding `"fasteners"`
+  free, originally).
+
+**What this does NOT include, on purpose**: no yard-boundary drawing UI
+(`MapEditorComponent.tsx` only draws open polylines today — a closed-
+polygon mode is real, separate frontend work), no geodesic area
+calculation (would need a real library — `@turf/area` was the
+candidate discussed, not `distanceTo()`-chain math, which only measures
+open-path length the way it's used for fence lines today), no lawn-care
+product seed data, and — the genuinely hard part — no timing/scheduling
+recommendation logic at all. That last piece needs real, sourced
+research (state extension-service lawn calendars, not a plausible-
+sounding hardcoded calendar) before any code, the same discipline that
+governed the Mississippi-only parcel data and the Before You Dig
+content — explicitly flagged as the highest-risk, do-this-last part of
+this vertical when it's actually greenlit.
 
 ## Project history — read before assuming anything
 
@@ -888,6 +992,18 @@ own diffing. This is NOT a substitute for `db:push` in general — it's a
 narrow escape hatch for exactly "add one nullable column, need it now,
 no interactive terminal available." A destructive or renaming change
 still genuinely needs a human at `db:push`.
+
+**Extended to a brand new table (2026-08-28, `yardBoundaries` /
+`yardBoundaryPoints` — see "Lawn-care vertical" above):** the same
+reasoning covers a genuinely new, non-destructive table too, not just a
+new column — a `CREATE TABLE IF NOT EXISTS` run directly against `pool`.
+A table that didn't exist before this can't possibly be the rename
+candidate `db:push`'s `session`-ambiguity prompt is asking about (that
+prompt is specifically "does this new table's column signature match an
+existing table I might have renamed" — there's no existing signature to
+match), so it's arguably even safer than the additive-column case. Still
+NOT a substitute for `db:push` for anything destructive, renaming, or
+touching an *existing* table's shape.
 
 ## Usage event logging
 
