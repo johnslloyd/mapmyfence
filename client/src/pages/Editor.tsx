@@ -32,6 +32,13 @@ const STORE_LABELS: Record<string, string> = {
   home_depot: "Home Depot",
 };
 
+// Default name for a newly-drawn fence line — was "Line 1", "Line 2",
+// ... (just a counter, no real information). Users can rename it
+// afterward via EditFenceLineCard's Name field.
+function defaultLineName(address: string | null | undefined) {
+  return address ? `New Fence at ${address}` : "New Fence Line";
+}
+
 function MaterialEstimates({ projectId }: { projectId: number }) {
   const { data: estimates, isLoading, error } = useEstimates(projectId);
   // Homeowners shop at one store, not a mix — the server returns one
@@ -226,6 +233,7 @@ export default function Editor() {
         projectId: project.id,
         coordinates: line.coordinates.map(({ id, fenceLineId, ...rest }: any, order: number) => ({ ...rest, order })),
         length: newLength,
+        name: line.name?.trim() || defaultLineName(project.address),
         material: line.material,
         height: line.height,
       });
@@ -254,7 +262,7 @@ export default function Editor() {
           try {
             await createLineMutation.mutateAsync({
               projectId: pendingLine.projectId,
-              name: `Line ${project.fenceLines ? project.fenceLines.length + 1 : 1}`,
+              name: defaultLineName(project.address),
               material: pendingLine.material,
               height: pendingLine.height,
               length: pendingLine.length,
@@ -307,7 +315,7 @@ export default function Editor() {
     try {
       await createLineMutation.mutateAsync({
         projectId: project.id,
-        name: `Line ${project.fenceLines ? project.fenceLines.length + 1 : 1}`,
+        name: defaultLineName(project.address),
         material: 'wood_cedar',
         height: 6,
         length,

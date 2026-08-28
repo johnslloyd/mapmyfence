@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,16 @@ export function EditFenceLineCard({
         <CardTitle>Editing Line</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label className="text-xs">Name</Label>
+          <Input
+            className="h-9"
+            value={editingLine.name ?? ""}
+            onChange={(e) => setEditingLine({ ...editingLine, name: e.target.value })}
+            placeholder="e.g. Backyard fence"
+            maxLength={100}
+          />
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <Label className="text-xs">Material</Label>

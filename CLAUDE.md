@@ -350,6 +350,37 @@ blocked again, don't silently fall back to guessing without saying so;
 that's exactly the gap that let three of these five Lowe's links break
 without anyone noticing.
 
+**Default fence line name: fixed.** A newly-drawn line used to default to
+`Line ${n}` (a plain counter — "Line 1", "Line 2", ...), which carried no
+real information and looked like a placeholder that was never filled in.
+`Editor.tsx` now has a `defaultLineName(address)` helper —
+`` `New Fence at ${address}` `` when the project has an address, else
+`"New Fence Line"` — used at both places a line's default name is set: the
+authenticated direct-save path (`handleSaveLine`) and the guest→signup
+pending-line-save effect. This was a client-only change: `shared/routes.ts`
+already accepted an optional `name` on fence line update, and
+`server/storage.ts`'s `updateFenceLine` already passed any field through
+generically, so no contract or server change was needed.
+
+Users can also now rename a line: `EditFenceLineCard.tsx` has a new Name
+`<Input>` above the Material/Height controls, wired to `editingLine.name`.
+`handleUpdateLine`'s save payload trims the value and falls back to
+`defaultLineName(project.address)` if cleared to empty, so a line can never
+end up with a blank name. Verified live: created a project with a
+geocodable address, drew a line as a guest, signed up (exercising the
+pending-line-save path), confirmed the sidebar showed "New Fence at 200 E
+Capitol St, Jackson, MS 39201", opened the edit panel, renamed it to
+"Backyard North Fence", saved, and confirmed the rename persisted after a
+full page reload (not just local state).
+
+Unrelated finding while testing this: a project whose address fails to
+geocode (nonexistent/malformed address — "address not found" toast) leaves
+the Leaflet map in a state where clicks don't register at all — not even
+via directly dispatching the map's own registered click handler, so it's
+not a browser-automation artifact. Not investigated further or fixed; a
+real, geocodable address works fine. Worth a look if a future report says
+"the map won't let me draw."
+
 ## Editor panel layout — docked vs. floating
 
 `Editor.tsx`'s right-hand panel (`RightPanel`) has two presentations,
