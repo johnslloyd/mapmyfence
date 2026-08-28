@@ -242,6 +242,41 @@ invalidate the estimates query, not just the project query — previously
 the estimate panel just showed stale numbers after any line change until
 a manual refresh.
 
+**Estimate query could briefly show stale data right after an edit: fixed.**
+Reported as "the price changes but the link still points to the old
+material" — the underlying data and calc were actually correct (verified:
+switching a line's material always produced the right product/price in
+the API response), but `MaterialEstimates` (the component that owns the
+`useEstimates` query) is UNMOUNTED while the right panel shows the
+drawing/editing card instead of the sidebar. `invalidateQueries`'s
+default `refetchType: 'active'` only force-refetches queries with a
+current observer — an invalidate that fires while `MaterialEstimates`
+is unmounted just marks the query stale and waits for its NEXT mount to
+lazily refetch, so the panel could remount showing the previous
+(stale, cached) material's product for a moment before the background
+refetch resolved. `useCreateFenceLine`/`useUpdateFenceLine`/
+`useDeleteFenceLine` (`use-projects.ts`) now pass `refetchType: 'all'`
+on the estimates invalidation, forcing the refetch immediately while
+still unmounted so the cache is already fresh by the time the panel
+remounts. Verified live checking the link with zero artificial wait
+after save (previously my own testing missed this because I was
+waiting ~1s between actions, long enough to mask it).
+
+**Height does NOT affect the estimate at all — a real gap, not fixed.**
+Verified live: switching a line between 6 ft and 8 ft with material
+unchanged produces byte-identical materials and total cost. Every
+picket product in `products` is a 6-ft SKU, and `sharedQuantitiesFor`
+never takes height into account (rail count is a flat 3 per section
+regardless of height — a real 8-ft privacy fence typically needs 4).
+The "4 ft" height option was removed from the picker
+(`EditFenceLineCard.tsx`) since it was actively useless (not stocked at
+all, not priced), but "8 ft" stays even though it's currently just as
+inaccurate as 4 ft was — no 8-ft picket/rail product data has been
+sourced yet, and rail-count-by-height would need a small BOM change.
+Flagging this rather than silently leaving it: fixing it properly needs
+real 8-ft product data (same rigor as everything else in this file) and
+a height-aware quantity formula, not a quick patch.
+
 **Seed data: all nine product rows verified live, not guessed — but this
 needs periodic re-checking.** `script/seed.ts` went through three rounds:
 first a hardcoded price list, then Lowe's-only real products (one entry,

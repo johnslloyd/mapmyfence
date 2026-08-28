@@ -197,7 +197,17 @@ export function useCreateFenceLine() {
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: [api.projects.get.path, projectId] });
-      queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId] });
+      // refetchType: 'all' (not the default 'active') — MaterialEstimates,
+      // which owns this query, is UNMOUNTED whenever the right panel is
+      // showing the drawing/editing card instead of the sidebar, so at the
+      // moment this fires the query has no active observer. Without this,
+      // invalidateQueries only marks it stale and waits for the next
+      // mount to lazily refetch — meaning the panel can remount showing
+      // briefly-stale cached data (e.g. the previous material's product)
+      // before the background refetch resolves. Forcing the refetch now,
+      // while still unmounted, means the cache is already fresh by the
+      // time the panel remounts.
+      queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId], refetchType: 'all' });
       toast({ title: "Success", description: "Fence line saved" });
     },
     onError: (error) => {
@@ -226,7 +236,17 @@ export function useDeleteFenceLine() {
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: [api.projects.get.path, projectId] });
-      queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId] });
+      // refetchType: 'all' (not the default 'active') — MaterialEstimates,
+      // which owns this query, is UNMOUNTED whenever the right panel is
+      // showing the drawing/editing card instead of the sidebar, so at the
+      // moment this fires the query has no active observer. Without this,
+      // invalidateQueries only marks it stale and waits for the next
+      // mount to lazily refetch — meaning the panel can remount showing
+      // briefly-stale cached data (e.g. the previous material's product)
+      // before the background refetch resolves. Forcing the refetch now,
+      // while still unmounted, means the cache is already fresh by the
+      // time the panel remounts.
+      queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId], refetchType: 'all' });
       toast({ title: "Deleted", description: "Fence line removed" });
     },
   });
@@ -253,7 +273,17 @@ export function useUpdateFenceLine() {
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: [api.projects.get.path, projectId] });
-      queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId] });
+      // refetchType: 'all' (not the default 'active') — MaterialEstimates,
+      // which owns this query, is UNMOUNTED whenever the right panel is
+      // showing the drawing/editing card instead of the sidebar, so at the
+      // moment this fires the query has no active observer. Without this,
+      // invalidateQueries only marks it stale and waits for the next
+      // mount to lazily refetch — meaning the panel can remount showing
+      // briefly-stale cached data (e.g. the previous material's product)
+      // before the background refetch resolves. Forcing the refetch now,
+      // while still unmounted, means the cache is already fresh by the
+      // time the panel remounts.
+      queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId], refetchType: 'all' });
       toast({ title: "Saved", description: "Fence line updated" });
     },
     onError: (error) => {

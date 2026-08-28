@@ -55,7 +55,6 @@ export function EditFenceLineCard({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="4">4 ft</SelectItem>
                 <SelectItem value="6">6 ft</SelectItem>
                 <SelectItem value="8">8 ft</SelectItem>
               </SelectContent>
