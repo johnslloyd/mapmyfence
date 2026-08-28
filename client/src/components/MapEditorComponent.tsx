@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, Fragment } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, GeoJSON, useMapEvents, Tooltip, CircleMarker } from "react-leaflet";
 import { LatLng, Icon } from "leaflet";
 import { Button } from "@/components/ui/button";
-import { Undo2, Save, Trash2, Ruler, Search, Loader2, MapPinned } from "lucide-react";
+import { Undo2, Save, Trash2, Ruler, Search, Loader2, MapPinned, AlertTriangle, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +39,21 @@ const defaultIcon = new Icon({
 // numbers being mismatched *by accident*, with no one having decided it).
 const TILE_NATIVE_ZOOM = 19;
 const MAP_MAX_ZOOM = 22;
+
+// Fallback for when there's no geocoded point yet — a brand-new project,
+// or one whose address failed to geocode (see the initialAddress effect
+// below). `initialCenter` is undefined in every real call site today
+// (Editor.tsx has no lat/lng to give it — geocoding happens client-side,
+// not at project-creation time), so without this the MapContainer's
+// `center` prop was always `undefined`. That's not just "no imagery
+// visible" — Leaflet never receives a valid initial view, so the map
+// genuinely never finishes initializing: confirmed live that even a
+// directly-dispatched click on the map's own registered Leaflet handler
+// did nothing when this happened. Continental-US centroid, zoomed out,
+// so the map is always interactive regardless of whether geocoding ever
+// succeeds; a successful geocode immediately recenters it via setView.
+const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795];
+const DEFAULT_ZOOM = 4;
 
 const editIcon = new Icon({
   iconUrl, iconRetinaUrl, shadowUrl,
@@ -138,10 +153,10 @@ function MapEvents({ onMapClick }: { onMapClick: (e: any) => void }) {
   return null;
 }
 
-function AddressSearchInput({ value, onValueChange, onSearch, isSearching }: { value: string, onValueChange: (value: string) => void, onSearch: () => void, isSearching: boolean }) {
+function AddressSearchInput({ value, onValueChange, onSearch, isSearching, autoFocus }: { value: string, onValueChange: (value: string) => void, onSearch: () => void, isSearching: boolean, autoFocus?: boolean }) {
   return (
     <div className="flex gap-2">
-      <Input placeholder="Enter property address..." value={value} onChange={(e) => onValueChange(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onSearch()} disabled={isSearching} className="text-sm" />
+      <Input autoFocus={autoFocus} placeholder="Enter property address..." value={value} onChange={(e) => onValueChange(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onSearch()} disabled={isSearching} className="text-sm" />
       <Button size="icon" onClick={onSearch} disabled={isSearching || !value.trim()} variant="outline">
         {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
       </Button>
@@ -183,6 +198,15 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
     geometry?: GeoJSON.Polygon | GeoJSON.MultiPolygon | any;
   } | null>(null);
   const parcelLookup = useParcelLookup();
+  // Persistent (non-toast) guidance for when the address can't be located —
+  // null once there's no unresolved issue. The toast alone used to be the
+  // only feedback: it disappears in a few seconds and leaves the user with
+  // a map that (before the DEFAULT_CENTER fix above) wasn't even
+  // interactive and, either way, no obvious next step. This banner stays
+  // up, keeps the failed address visible, and gives them a search box
+  // right there to retry — see the render block near the bottom of this
+  // component.
+  const [geocodeIssue, setGeocodeIssue] = useState<{ address: string; message: string } | null>(null);
 
   // Leaflet sizes its tile grid off the container's dimensions at mount
   // time (or the last invalidateSize() call) — it doesn't notice a
@@ -224,12 +248,21 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
       if (results.length > 0) {
         const { lat, lon } = results[0];
         handleAddressFound(parseFloat(lat), parseFloat(lon), zoomToState ? 8 : 20);
+        setGeocodeIssue(null);
       } else {
         toast({ title: "Address not found", description: "The provided address could not be located.", variant: "destructive" });
+        setGeocodeIssue({
+          address: searchAddress,
+          message: "Try adding more detail (city, state, ZIP) — or search a nearby address and pan/zoom to your property.",
+        });
       }
     } catch (error) {
       console.error("Geocoding error:", error);
       toast({ title: "Search Error", description: "An error occurred while searching.", variant: "destructive" });
+      setGeocodeIssue({
+        address: searchAddress,
+        message: "Something went wrong searching for that address. Try again, or pan/zoom the map manually to find your property.",
+      });
     } finally {
       setIsSearching(false);
     }
@@ -350,7 +383,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
 
   return (
     <div className="relative w-full h-full min-h-[500px]">
-      <MapContainer ref={mapRef} center={initialCenter} zoom={12} maxZoom={MAP_MAX_ZOOM} scrollWheelZoom={true} className="w-full h-full z-0">
+      <MapContainer ref={mapRef} center={initialCenter ?? DEFAULT_CENTER} zoom={initialCenter ? 12 : DEFAULT_ZOOM} maxZoom={MAP_MAX_ZOOM} scrollWheelZoom={true} className="w-full h-full z-0">
         <TileLayer
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
           attribution='&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
@@ -420,6 +453,38 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
         <Card className={cn("absolute top-4 z-40 bg-panel/95 text-panel-foreground backdrop-blur shadow-xl border-border/50 rounded-lg", isMobile ? "left-4 right-4 w-auto" : `${controlsPosition === 'left' ? 'left-4' : 'right-4'} w-full max-w-md lg:w-96 p-4`)}>
           <h3 className={cn("font-display font-bold text-lg flex items-center gap-2", isMobile ? "mb-0 p-4" : "mb-4")}><Ruler className="w-5 h-5 text-primary" /> New Fence Line</h3>
           {isMobile ? <MobileContent /> : <DesktopContent />}
+        </Card>
+      )}
+
+      {/* Persistent geocode-failure guidance. Suppressed while the "New
+          Fence Line" card above is showing — it already has its own
+          address search box, so a second one here would just be
+          redundant clutter. This is the case that used to strand a user:
+          a project created with an address that doesn't geocode landed
+          them on a map with only a transient toast and (before the
+          DEFAULT_CENTER fix above) no way to even interact with the map,
+          let alone fix the address, before clicking into drawing mode. */}
+      {geocodeIssue && !isDrawing && (
+        <Card className="absolute top-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-md bg-panel/95 text-panel-foreground backdrop-blur shadow-xl border-border/50 rounded-lg p-4 space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5 text-destructive shrink-0" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Couldn't locate "{geocodeIssue.address}"</p>
+                <p className="text-xs text-muted-foreground">{geocodeIssue.message}</p>
+              </div>
+            </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6 -mt-1 -mr-1 shrink-0"
+              onClick={() => setGeocodeIssue(null)}
+              aria-label="Dismiss"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <AddressSearchInput value={address} onValueChange={setAddress} onSearch={onManualSearch} isSearching={isSearching} autoFocus />
         </Card>
       )}
       

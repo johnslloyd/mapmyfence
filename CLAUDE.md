@@ -373,13 +373,43 @@ Capitol St, Jackson, MS 39201", opened the edit panel, renamed it to
 "Backyard North Fence", saved, and confirmed the rename persisted after a
 full page reload (not just local state).
 
-Unrelated finding while testing this: a project whose address fails to
-geocode (nonexistent/malformed address — "address not found" toast) leaves
-the Leaflet map in a state where clicks don't register at all — not even
-via directly dispatching the map's own registered click handler, so it's
-not a browser-automation artifact. Not investigated further or fixed; a
-real, geocodable address works fine. Worth a look if a future report says
-"the map won't let me draw."
+**Failed-geocode dead end: fixed.** Follow-up to the finding above. A
+project whose address fails to geocode (nonexistent/malformed address)
+used to leave the Leaflet map in a state where clicks didn't register at
+all — not even via directly dispatching the map's own registered click
+handler, so it wasn't a browser-automation artifact. Root cause:
+`Editor.tsx` hardcodes `initialCenter={undefined}` on every render — there
+was never a real value to pass (geocoding happens client-side in
+`MapEditorComponent`, not at project-creation time) — and that flowed
+straight into `MapContainer`'s `center` prop. When the automatic
+`initialAddress` geocode (fired from a `useEffect` on mount) failed,
+nothing ever called `map.setView(...)`, so Leaflet never received a valid
+initial view and its own click handling never actually finished
+initializing. `MapEditorComponent.tsx` now has a `DEFAULT_CENTER`/
+`DEFAULT_ZOOM` fallback (continental-US centroid, zoom 4) used whenever
+`initialCenter` is absent, so the map is always interactive regardless of
+whether geocoding ever succeeds; a later successful geocode still
+recenters it via the existing `setView` call.
+
+Separately, the only feedback on a failed geocode was a toast that
+disappears in a few seconds, leaving no obvious next step — especially
+before a fence line exists, when the address search box only lives inside
+the (not-yet-visible) "New Fence Line" card. `MapEditorComponent` now
+tracks a `geocodeIssue` state and renders a persistent, dismissible
+banner (distinct top-center position so it doesn't collide with either
+the "New Fence Line" card or `Editor.tsx`'s own floating "Create your
+first fence line" instructions, both anchored top-right) naming the
+address that failed, plain-language guidance, and its own
+auto-focused retry search box — usable immediately, with no dependency on
+first finding/clicking into drawing mode. Suppressed while the "New Fence
+Line" card is showing, since that card already has its own address search
+box and a second one would just be redundant. Verified live: created a
+project with an unresolvable address, confirmed the map loaded fully
+interactive (real satellite imagery, no longer blank/stuck) with the
+banner shown alongside the toast and the INSTRUCTIONS card, dismissed the
+banner, entered drawing mode, and placed two points on the map that
+correctly computed a real distance — all of which was simply impossible
+before this fix.
 
 ## Editor panel layout — docked vs. floating
 
