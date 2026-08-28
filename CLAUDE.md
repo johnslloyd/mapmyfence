@@ -175,21 +175,17 @@ type; response shape is `{ options: [{ store, materials, totalCost },
 ...] }`, sorted cheapest-total-first by the server.
 `client/src/pages/Editor.tsx`'s `MaterialEstimates` shows a picker (only
 rendered when there's more than one option) with the cheapest store
-badged "Best price," defaulting to it. Verified live: a test line came
-back with two real, different totals — Home Depot $2016.35 (marked
-best) and Lowe's $2298.86 — and switching the picker correctly swapped
-in that store's own complete material list and links, not a blend.
+badged "Best price," defaulting to it. Verified live (most recently
+after the seed-data re-verification below): a test line came back with
+two real, different totals — Lowe's $1813.85 (marked best) and Home
+Depot $2043.85 — and switching the picker correctly swapped in that
+store's own complete material list and links, not a blend. Which store
+wins changes as the underlying prices get re-verified — don't treat
+either total as a fixed expectation.
 
 `products.store` has real Lowe's *and* Home Depot rows for all four
-required wood-fence types. Home Depot blocks this app's web-fetch and
-browser tools exactly like Lowe's did (403/"Access Denied") — worse than
-the Lowe's picket/rail patch, there was no existing price to fall back
-to here, so all four Home Depot prices in `script/seed.ts` were
-reconstructed from search-result snippets showing per-location price
-variance (e.g. the rail ranged $4.48-$4.98 across stores) rather than
-loaded from the live page. Product identity (model number, spec) is
-decently cross-referenced; **prices are the weak point** — spot-check
-all four on homedepot.com before trusting this for real users.
+required wood-fence types — see "Seed data" below for how confident to
+be in that data specifically.
 
 The fence line `material` field (Wood/Vinyl/Iron) is **not** wired to the
 estimate calculation — it only ever prices a standard wood post-and-picket
@@ -215,17 +211,33 @@ invalidate the estimates query, not just the project query — previously
 the estimate panel just showed stale numbers after any line change until
 a manual refresh.
 
-**Seed data's picket/rail Lowe's links were broken: patched, not fully
-verified.** `script/seed.ts`'s picket and rail entries both had a
-placeholder `sku`/URL of literally `"1000"` — never swapped for a real
-product page, which is why the picket link resolved to an unrelated
-product (a light switch). Replaced with the closest-matching live listing
-found via web search — but Lowe's blocks both this app's web-fetch tool
-and its browser tool (bot protection, 403/"Access Denied"), the same way
-Shelby County TN's GIS blocks us with Cloudflare, so unlike the rest of
-this file's "fetch real data before trusting" standard, these two
-specific entries could NOT be confirmed by loading the actual page.
-Spot-check both (and re-seed) before trusting them for real users.
+**Seed data: all nine product rows verified live, not guessed — but this
+needs periodic re-checking.** `script/seed.ts` went through three rounds:
+first a hardcoded price list, then Lowe's-only real products (one entry,
+picket, had a placeholder `sku`/URL of literally `"1000"` and resolved to
+a light switch), then Home Depot added for cross-retailer pricing but
+seeded from web-search snippets because both retailers were blocking this
+app's web-fetch and browser tools (403/"Access Denied") at the time —
+same bot protection Shelby County TN's GIS uses against this app.
+
+On a later pass, both sites let the browser tool through, so every
+existing entry was re-checked by actually loading its product page — and
+that surfaced three MORE broken links that had never been caught: Lowe's
+"post" resolved to a light switch, "gate" to an area rug, "concrete" to a
+cabinet hardware knob, and Home Depot's "concrete" URL 404'd outright.
+The picket/rail entries from the earlier patch were themselves the right
+product, just discontinued/out of stock. All nine rows are now the
+result of an actual page load confirming name, live price, and in-stock
+status (checked from a Memphis, TN store context, this project's usual
+test region).
+
+This does NOT mean the data stays correct indefinitely — it means
+today's snapshot is real, not that retailers won't change/discontinue
+these same SKUs again. Bot-blocking on both sites has been inconsistent
+across sessions (sometimes 403, sometimes not) — if a future check gets
+blocked again, don't silently fall back to guessing without saying so;
+that's exactly the gap that let three of these five Lowe's links break
+without anyone noticing.
 
 ## Editor panel layout — docked vs. floating
 
