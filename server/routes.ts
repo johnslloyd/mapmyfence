@@ -36,11 +36,12 @@ export async function registerRoutes(
           return res.json({ options: [] });
       }
 
-      // Pass each line's own material through — a project can mix pine and
-      // cedar lines, and calculateEstimate prices each species separately
-      // rather than assuming the whole project is one material.
+      // Pass each line's own material AND height through — a project can
+      // mix pine/cedar and 6ft/8ft lines, and calculateEstimate prices
+      // each (species, height) combination separately rather than
+      // assuming the whole project is one material at one height.
       const estimate = await calculateEstimate(
-        project.fenceLines.map((line) => ({ length: line.length || 0, material: line.material })),
+        project.fenceLines.map((line) => ({ length: line.length || 0, material: line.material, height: line.height })),
       );
 
       logEvent("estimate_viewed", { projectId, userId: (req.user as any)?.id });

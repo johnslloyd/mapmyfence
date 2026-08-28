@@ -196,22 +196,23 @@ rule-of-thumb spirit as "one bag of concrete per post"). Tools
 rent or already own them, they're not a per-fence purchase; that belongs
 in a future execution/build checklist, not the cost estimate.
 
-**Pine vs. cedar pricing: wired up, per fence line.** Previously the
-fence line `material` field (Wood: Pine / Wood: Cedar / Vinyl / Iron)
-was completely decorative — switching a line between pine and cedar
-never changed its price, because the whole project was priced as one
-generic "standard wood fence" regardless of what any line said. Fixed:
-`products` has a new `material` column (`"pine" | "cedar"`, only
-meaningful for `type: "picket"` — post/rail/concrete/fasteners are the
-same pressure-treated commodity lumber either way, so those stay
-untagged/shared). `calculateEstimate` (`server/estimates.ts`) now takes
-the project's fence lines directly (not a single summed length),
-buckets them by species, and prices each species' pickets separately —
-so a project can mix pine and cedar lines and get a correct combined
-total, and editing a line's material actually changes its price.
-Verified live: switching a line from cedar to pine dropped its
-project's Lowe's total from $2113.48 to $1643.08 — exactly the 336
-pickets × ($3.58 − $2.18) difference, nothing else moved.
+**Pine vs. cedar pricing: wired up, fully species-consistent, per fence
+line.** Previously the fence line `material` field (Wood: Pine / Wood:
+Cedar / Vinyl / Iron) was completely decorative. Fixed in two passes:
+first just the picket (species-tagging only `type: "picket"`, since
+that's the visible/face material and post/rail were assumed
+pressure-treated regardless — matching common real-world practice), then
+widened to full consistency after explicit user direction: "Wood: Cedar"
+now means cedar posts and cedar rails too, not just cedar pickets.
+`products.material` (`"pine" | "cedar"`) is now meaningful for `post`,
+`rail`, AND `picket`; only `concrete`/`fasteners`/`gate` stay untagged —
+no species variant genuinely exists for hardware/consumables.
+`calculateEstimate` (`server/estimates.ts`) takes the project's fence
+lines directly (not a single summed length) and buckets them by
+species (and height — see below), pricing each combination's
+post/rail/picket separately, so a project can mix pine and cedar lines
+and get a correct combined total, and editing a line's material
+actually changes every wood line item's price, not just the picket's.
 
 Species-agnostic legacy/unrecognized material values (`Cedar`, `wood`,
 free text) and Vinyl/Iron all fall back to cedar pricing — the same
@@ -262,22 +263,44 @@ remounts. Verified live checking the link with zero artificial wait
 after save (previously my own testing missed this because I was
 waiting ~1s between actions, long enough to mask it).
 
-**Height does NOT affect the estimate at all — a real gap, not fixed.**
-Verified live: switching a line between 6 ft and 8 ft with material
-unchanged produces byte-identical materials and total cost. Every
-picket product in `products` is a 6-ft SKU, and `sharedQuantitiesFor`
-never takes height into account (rail count is a flat 3 per section
-regardless of height — a real 8-ft privacy fence typically needs 4).
-The "4 ft" height option was removed from the picker
-(`EditFenceLineCard.tsx`) since it was actively useless (not stocked at
-all, not priced), but "8 ft" stays even though it's currently just as
-inaccurate as 4 ft was — no 8-ft picket/rail product data has been
-sourced yet, and rail-count-by-height would need a small BOM change.
-Flagging this rather than silently leaving it: fixing it properly needs
-real 8-ft product data (same rigor as everything else in this file) and
-a height-aware quantity formula, not a quick patch.
+**Height (6ft vs 8ft): wired up.** Was a real gap — switching a line's
+height used to produce byte-identical materials and cost, because every
+picket was a 6-ft SKU and posts/rail quantities never looked at height.
+Fixed alongside the full species-consistency work above, since sourcing
+was the same exercise either way:
+- `products.forHeight` (`6 | 8`) is now meaningful for `post` and
+  `picket` — an 8-ft-tall fence needs a longer post to bury (this app
+  uses the same "+2ft over nominal fence height" convention already
+  implicit in the original 6ft-fence/8ft-post data: a 6ft fence uses an
+  8-ft post, so an 8ft fence uses a 10-ft post) and a genuinely
+  different, often thicker-profile 8-ft picket, not just a taller 6-ft
+  one. `rail` is NOT height-tagged — the horizontal 2x4x8 board is the
+  same length regardless of fence height; only the quantity per section
+  changes (`RAILS_PER_SECTION` in `server/estimates.ts`: 3 for 6ft, 4
+  for 8ft — a standard construction rule of thumb for privacy fences
+  over 6ft, not independently verified against a retailer spec the way
+  prices are).
+- `calculateEstimate` now groups lines by **(species, height)** pairs,
+  not species alone, and looks up a matching post+picket for every
+  group a store must be able to price before that store is offered as
+  an option at all.
+- **Real, honest finding from sourcing this, not a data gap on this
+  app's part**: Lowe's does not stock a 10-ft cedar 4x4 post at all
+  (checked twice, two different search phrasings — only 6ft/8ft cedar
+  4x4 lengths exist there); Home Depot does. Verified live: a cedar+8ft
+  line correctly shows only ONE store option (Home Depot) with no
+  store-picker UI at all, rather than a broken or incomplete Lowe's
+  entry — the existing "only offer a store if it can fulfill
+  everything" rule handles this correctly with no special-casing
+  needed.
+- Verified live end-to-end: pine 6ft→8ft on the same line jumped the
+  Lowe's total from $1643.08 to $2361.36 (taller post $230.56→$380.16,
+  8ft picket $732.48→unchanged-count-but-different-product, rail
+  quantity 63→84 from the 3→4 rails-per-section rule) — matches the
+  real-world expectation that an 8ft fence costs meaningfully more, not
+  just a little.
 
-**Seed data: all nine product rows verified live, not guessed — but this
+**Seed data: all 21 product rows verified live, not guessed — but this
 needs periodic re-checking.** `script/seed.ts` went through three rounds:
 first a hardcoded price list, then Lowe's-only real products (one entry,
 picket, had a placeholder `sku`/URL of literally `"1000"` and resolved to

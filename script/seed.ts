@@ -7,41 +7,46 @@ async function main() {
 
   await db.delete(products);
 
-  // All nine entries below were verified LIVE on 2026-08-27/28 — loaded the
-  // actual product page (both Lowe's and Home Depot's bot protection let
-  // this app's browser tool through this session, unlike earlier attempts
-  // this project's history that got 403/"Access Denied") and read the real
-  // name, price, and stock status directly off the page. This replaces two
-  // earlier rounds of guessing:
-  //   - The original picket/rail/post/concrete/gate Lowe's entries were
-  //     seeded with placeholder or unverified SKUs. Checking them live this
-  //     time found post (1000049931) resolved to a light switch, gate
-  //     (1000371193) to an area rug, and concrete (3057343) to a cabinet
-  //     hardware knob — three more broken links than were ever caught
-  //     before, on top of the picket/rail bug fixed earlier. The old
-  //     picket/rail entries themselves turned out to be the RIGHT product
-  //     but no longer sold / temporarily out of stock — swapped for
-  //     in-stock equivalents rather than left pointing at dead listings.
-  //   - The Home Depot entries added for cross-retailer pricing were
-  //     best-effort from search snippets (Home Depot blocked direct access
-  //     at the time). Re-checked live now: picket/rail/post were already
-  //     correct (prices adjusted to the exact live figures), but concrete
-  //     (313478684) was a dead product ID — fixed to the real one.
-  // Prices are each product's standard listed price, not a temporary sale
-  // price (e.g. Lowe's concrete showed a $7.17 promo through Sep 9 off a
-  // $7.97 regular price — used $7.97). Checked from a Memphis, TN store
-  // context, this project's usual test region — pricing can vary by
-  // location. Still worth a periodic spot-check; retailers change/
-  // discontinue SKUs regularly, which is exactly what broke the old data.
-  // Picket rows are tagged by wood species (material: "pine" | "cedar") —
-  // calculateEstimate picks the right one per fence line. Post/rail/
-  // concrete/fasteners are the same pressure-treated commodity lumber
-  // regardless of picket species, so they're left untagged (material:
-  // null) and shared across both. Pine and fasteners entries verified
-  // live the same way as the rest of this file (see note above) —
-  // Lowe's/Home Depot's own site search, then the actual product page
-  // loaded and read directly, from the same Memphis, TN store context.
+  // Every entry below was verified LIVE — loaded the actual product page
+  // (both Lowe's and Home Depot's bot protection have let this app's
+  // browser tool through this session, unlike earlier attempts in this
+  // project's history that got 403/"Access Denied") and read the real
+  // name, price, and stock status directly off the page, from a Memphis,
+  // TN store context (this project's usual test region). This has gone
+  // through several rounds — a hardcoded price list, then real Lowe's
+  // products (one entry, picket, had a placeholder sku/URL of literally
+  // "1000" and resolved to a light switch), then Home Depot for
+  // cross-retailer pricing, then a full re-check that found THREE MORE
+  // broken Lowe's links nobody had caught (post → light switch, gate →
+  // area rug, concrete → cabinet hardware) and one dead Home Depot
+  // product ID. Bot-blocking has been inconsistent across sessions —
+  // if a future check gets blocked again, say so explicitly rather than
+  // silently falling back to guessed data; that inconsistency is exactly
+  // what let this many links break unnoticed before.
+  //
+  // Full species x height matrix, added to make "Wood: Pine" vs
+  // "Wood: Cedar" and 6-ft vs 8-ft height both genuinely affect pricing:
+  //   - picket and post are tagged by BOTH material (pine|cedar) and
+  //     forHeight (6|8) — a post long enough to bury for a 6-ft fence
+  //     isn't long enough for an 8-ft one, and 8-ft pickets are a
+  //     different (often thicker-profile) product, not just a longer
+  //     6-ft one.
+  //   - rail is tagged by material only — the horizontal 2x4x8 board
+  //     itself doesn't change length with fence height, only how many
+  //     are needed per section (see RAILS_PER_SECTION in
+  //     server/estimates.ts).
+  //   - concrete/fasteners/gate stay untagged — genuinely no species or
+  //     height variant exists for hardware/consumables.
+  // One real, honest gap found while sourcing this: Lowe's does not
+  // stock a 10-ft CEDAR 4x4 post at all (checked twice, two different
+  // search phrasings) — only 6-ft and 8-ft cedar 4x4 lengths exist
+  // there. Home Depot does carry one. This is a genuine market
+  // difference, not a data gap — calculateEstimate's existing
+  // "only offer a store if it can fulfill everything" rule means Lowe's
+  // is correctly excluded as an option for any project with an 8-ft
+  // cedar line, while Home Depot still works.
   const sampleProducts = [
+    // ---- Lowe's ----
     {
       name: "5/8-in x 5-1/2-in x 6-ft Unfinished Cedar Dog Ear Fence Picket",
       type: "picket",
@@ -51,6 +56,18 @@ async function main() {
       url: "https://www.lowes.com/pd/Severe-Weather-Common-5-8-in-x-5-1-2-in-x-6-ft-Actual-0-625-in-x-5-5-in-x-6-ft-Cedar-Dog-Ear-Wood-Fence-Picket/3556636",
       sku: "3556636",
       material: "cedar" as const,
+      forHeight: 6,
+    },
+    {
+      name: "5/8-in x 6-in x 8-ft Unfinished Cedar Dog Ear Fence Picket",
+      type: "picket",
+      store: "lowes" as const,
+      price: 5.78,
+      unit: "per picket",
+      url: "https://www.lowes.com/pd/Common-5-8-in-x-6-in-x-8-ft-Actual-0-625-in-x-5-5-in-x-8-ft-Cedar-Dog-Ear-Wood-Fence-Picket/1000179357",
+      sku: "1000179357",
+      material: "cedar" as const,
+      forHeight: 8,
     },
     {
       name: "5/8-in x 5-1/2-in x 6-ft Pressure Treated Southern Yellow Pine Dog Ear Fence Picket",
@@ -61,15 +78,64 @@ async function main() {
       url: "https://www.lowes.com/pd/Severe-Weather-5-8-in-x-5-1-2-in-x-6-ft-Pressure-Treated-Southern-Yellow-Pine-Dog-Ear-Fence-Picket/5013086547",
       sku: "5013086547",
       material: "pine" as const,
+      forHeight: 6,
     },
     {
-      name: "Deck Plus #10 x 3-in Wood to Wood Deck Screws (310-Per Box)",
-      type: "fasteners",
+      name: "1-in x 6-in x 8-ft Pressure Treated Southern Yellow Pine Dog Ear Fence Picket",
+      type: "picket",
       store: "lowes" as const,
-      price: 29.98,
-      unit: "per box (~310 screws)",
-      url: "https://www.lowes.com/pd/Deck-Plus-10-x-3-in-Ceramic-Deck-Screws-5-lb/1000318525",
-      sku: "1000318525",
+      price: 3.58,
+      unit: "per picket",
+      url: "https://www.lowes.com/pd/Severe-Weather-1-in-x-6-in-W-x-8-ft-H-Pressure-Treated-Southern-Yellow-Pine-Dog-Ear-Fence-Picket/5002097981",
+      sku: "5002097981",
+      material: "pine" as const,
+      forHeight: 8,
+    },
+    {
+      name: "4-in x 4-in x 8-ft Cedar Green Lumber",
+      type: "post",
+      store: "lowes" as const,
+      price: 49.98,
+      unit: "per post",
+      url: "https://www.lowes.com/pd/Top-Choice-4-in-x-4-in-x-8-ft-Cedar-Lumber-Common-3-5-in-x-3-5-in-x-8-ft-Actual/1000510451",
+      sku: "1000510451",
+      material: "cedar" as const,
+      forHeight: 6,
+    },
+    // No 10-ft cedar 4x4 post exists at Lowe's — see note above. This
+    // means Lowe's is correctly excluded for cedar+8ft projects; only
+    // Home Depot carries that combination.
+    {
+      name: "4-in x 4-in x 8-ft #2 Ground Contact Pressure Treated Southern Yellow Pine Post",
+      type: "post",
+      store: "lowes" as const,
+      price: 10.48,
+      unit: "per post",
+      url: "https://www.lowes.com/pd/Severe-Weather-Common-4-in-x-4-in-x-8-ft-Actual-3-5-in-x-3-5-in-x-8-ft-2-Treated-Lumber/50121083",
+      sku: "50121083",
+      material: "pine" as const,
+      forHeight: 6,
+    },
+    {
+      name: "4-in x 4-in x 10-ft #2 Ground Contact Pressure Treated Southern Yellow Pine Post",
+      type: "post",
+      store: "lowes" as const,
+      price: 17.28,
+      unit: "per post",
+      url: "https://www.lowes.com/pd/Severe-Weather-Common-4-in-x-4-in-x-10-ft-Actual-3-5-in-x-3-5-in-x-10-ft-2-Treated-Lumber/4222509",
+      sku: "4222509",
+      material: "pine" as const,
+      forHeight: 8,
+    },
+    {
+      name: "2-in x 4-in x 8-ft Cedar Green Lumber",
+      type: "rail",
+      store: "lowes" as const,
+      price: 23.98,
+      unit: "per 8-ft rail",
+      url: "https://www.lowes.com/pd/Cedar/1000512633",
+      sku: "1000512633",
+      material: "cedar" as const,
     },
     {
       name: "2-in x 4-in x 8-ft #2 Prime Above Ground Pressure Treated Southern Yellow Pine Lumber",
@@ -79,15 +145,16 @@ async function main() {
       unit: "per 8-ft rail",
       url: "https://www.lowes.com/pd/Severe-Weather-Common-2-in-x-4-in-x-8-ft-Actual-1-5-in-x-3-5-in-x-8-ft-2-Prime-Treated-Lumber/4564608",
       sku: "4564608",
+      material: "pine" as const,
     },
     {
-      name: "4-in x 4-in x 8-ft #2 Ground Contact Pressure Treated Southern Yellow Pine Post",
-      type: "post",
+      name: "Deck Plus #10 x 3-in Wood to Wood Deck Screws (310-Per Box)",
+      type: "fasteners",
       store: "lowes" as const,
-      price: 10.48,
-      unit: "per post",
-      url: "https://www.lowes.com/pd/Severe-Weather-Common-4-in-x-4-in-x-8-ft-Actual-3-5-in-x-3-5-in-x-8-ft-2-Treated-Lumber/50121083",
-      sku: "50121083",
+      price: 29.98,
+      unit: "per box (~310 screws)",
+      url: "https://www.lowes.com/pd/Deck-Plus-10-x-3-in-Ceramic-Deck-Screws-5-lb/1000318525",
+      sku: "1000318525",
     },
     {
       name: "Sakrete 50-lb Fast Setting Concrete Mix",
@@ -107,6 +174,8 @@ async function main() {
       url: "https://www.lowes.com/pd/No-Dig-Common-4-3-ft-x-1-63-ft-Actual-4-3-ft-x-1-63-ft-Black-Powder-Coated-Steel-Decorative-Metal-Fence-Gate/4744229",
       sku: "4744229",
     },
+
+    // ---- Home Depot ----
     {
       name: "Alta Forest Products 5/8-in x 5-1/2-in x 6-ft American Western Red Cedar Dog-Ear Fence Picket",
       type: "picket",
@@ -116,6 +185,18 @@ async function main() {
       url: "https://www.homedepot.com/p/Alta-Forest-Products-5-8-in-x-5-1-2-in-x-6-ft-American-Western-Red-Cedar-Dog-Ear-Fence-Picket-63023/205757688",
       sku: "63023",
       material: "cedar" as const,
+      forHeight: 6,
+    },
+    {
+      name: "Alta Forest Products 5/8-in x 5-1/2-in x 8-ft American Western Red Cedar Dog-Ear Fence Picket",
+      type: "picket",
+      store: "home_depot" as const,
+      price: 6.48,
+      unit: "per picket",
+      url: "https://www.homedepot.com/p/Alta-Forest-Products-5-8-in-x-5-1-2-in-x-8-ft-American-Western-Red-Cedar-Dog-Ear-Fence-Picket-63027/205757690",
+      sku: "205757690",
+      material: "cedar" as const,
+      forHeight: 8,
     },
     {
       name: "5/8 in. x 5-1/2 in. x 6 ft. Pressure-Treated Pine Dog-Eared Wood Fence Picket",
@@ -126,24 +207,40 @@ async function main() {
       url: "https://www.homedepot.com/p/5-8-in-x-5-1-2-in-x-6-ft-Pressure-Treated-Pine-Dog-Eared-Wood-Fence-Picket-102560/202319053",
       sku: "202319053",
       material: "pine" as const,
+      forHeight: 6,
     },
     {
-      name: "Everbilt #10 x 3-in Star Drive Exterior Wood Screws (347-Piece Box)",
-      type: "fasteners",
+      name: "3/4 in. x 5-1/2 in. x 8 ft. Pressure-Treated Pine Dog-Eared Wood Fence Picket",
+      type: "picket",
       store: "home_depot" as const,
-      price: 45.96,
-      unit: "per box (~347 screws)",
-      url: "https://www.homedepot.com/p/Everbilt-10-x-3-in-Star-Drive-Flat-Head-Exterior-Wood-Screws-5-lbs-Box-347-Piece-117357/316219999",
-      sku: "316219999",
+      price: 3.58,
+      unit: "per picket",
+      url: "https://www.homedepot.com/p/3-4-in-x-5-1-2-in-x-8-ft-Pressure-Treated-Pine-Dog-Eared-Wood-Fence-Picket-102582/203091053",
+      sku: "203091053",
+      material: "pine" as const,
+      forHeight: 8,
     },
     {
-      name: "WeatherShield 2-in x 4-in x 8-ft #2 Prime Ground Contact Pressure-Treated Southern Yellow Pine Lumber",
-      type: "rail",
+      name: "4 in. x 4 in. x 8 ft. Rough Green Western Red Cedar Lumber",
+      type: "post",
       store: "home_depot" as const,
-      price: 4.78,
-      unit: "per 8-ft rail",
-      url: "https://www.homedepot.com/p/WeatherShield-2-in-x-4-in-x-8-ft-2-Prime-Ground-Contact-Pressure-Treated-Southern-Yellow-Pine-Lumber-291224/301836994",
-      sku: "291224",
+      price: 49.98,
+      unit: "per post",
+      url: "https://www.homedepot.com/p/4-in-x-4-in-x-8-ft-Rough-Green-Western-Red-Cedar-Lumber-635251/202636959",
+      sku: "202636959",
+      material: "cedar" as const,
+      forHeight: 6,
+    },
+    {
+      name: "4 in. x 4 in. x 10 ft. Western Red Cedar Timber",
+      type: "post",
+      store: "home_depot" as const,
+      price: 45.98,
+      unit: "per post",
+      url: "https://www.homedepot.com/p/4-in-x-4-in-x-10-ft-Western-Red-Cedar-Timber-RCT204410/203819871",
+      sku: "203819871",
+      material: "cedar" as const,
+      forHeight: 8,
     },
     {
       name: "4-in x 4-in x 8-ft #2 Ground Contact Pressure-Treated Southern Yellow Pine Wood Post",
@@ -153,6 +250,48 @@ async function main() {
       unit: "per post",
       url: "https://www.homedepot.com/p/4-in-x-4-in-x-8-ft-2-Ground-Contact-Pressure-Treated-Southern-Yellow-Pine-Wood-Post-194354/205220341",
       sku: "194354",
+      material: "pine" as const,
+      forHeight: 6,
+    },
+    {
+      name: "4 in. x 4 in. x 10 ft. #2 Pressure-Treated Ground Contact Southern Pine Wood Post",
+      type: "post",
+      store: "home_depot" as const,
+      price: 17.28,
+      unit: "per post",
+      url: "https://www.homedepot.com/p/4-in-x-4-in-x-10-ft-2-Pressure-Treated-Ground-Contact-Southern-Pine-Wood-Post-4220254/100025396",
+      sku: "100025396",
+      material: "pine" as const,
+      forHeight: 8,
+    },
+    {
+      name: "2 in. x 4 in. x 8 ft. Rough Green Western Red Cedar Lumber",
+      type: "rail",
+      store: "home_depot" as const,
+      price: 23.98,
+      unit: "per 8-ft rail",
+      url: "https://www.homedepot.com/p/2-in-x-4-in-x-8-ft-Rough-Green-Western-Red-Cedar-Lumber-702145/202594092",
+      sku: "202594092",
+      material: "cedar" as const,
+    },
+    {
+      name: "WeatherShield 2-in x 4-in x 8-ft #2 Prime Ground Contact Pressure-Treated Southern Yellow Pine Lumber",
+      type: "rail",
+      store: "home_depot" as const,
+      price: 4.78,
+      unit: "per 8-ft rail",
+      url: "https://www.homedepot.com/p/WeatherShield-2-in-x-4-in-x-8-ft-2-Prime-Ground-Contact-Pressure-Treated-Southern-Yellow-Pine-Lumber-291224/301836994",
+      sku: "291224",
+      material: "pine" as const,
+    },
+    {
+      name: "Everbilt #10 x 3-in Star Drive Exterior Wood Screws (347-Piece Box)",
+      type: "fasteners",
+      store: "home_depot" as const,
+      price: 45.96,
+      unit: "per box (~347 screws)",
+      url: "https://www.homedepot.com/p/Everbilt-10-x-3-in-Star-Drive-Flat-Head-Exterior-Wood-Screws-5-lbs-Box-347-Piece-117357/316219999",
+      sku: "316219999",
     },
     {
       name: "Quikrete 50-lb Fast-Setting Concrete Mix",

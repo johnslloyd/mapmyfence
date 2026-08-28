@@ -62,11 +62,23 @@ export const products = pgTable("products", {
   unit: text("unit"), // e.g., "per panel", "per bag"
   url: text("url"), // URL to the product page
   sku: text("sku"), // Store's SKU
-  // Only meaningful for type "picket" — which wood species this listing is
-  // (pine vs cedar price very differently; post/rail/concrete/fasteners
-  // are the same pressure-treated commodity lumber regardless of which
-  // picket species a fence line uses, so they stay untagged/null).
+  // Meaningful for "post", "rail", and "picket" — which wood species this
+  // listing is. Full species consistency: a "Wood: Cedar" fence line uses
+  // cedar posts and rails too, not just cedar pickets (a deliberate
+  // decision — the more common real-world default is PT pine framing
+  // regardless of picket species, but this app intentionally goes
+  // further). concrete/fasteners/gate stay untagged/null — genuinely no
+  // species variant exists for hardware/consumables.
   material: text("material", { enum: ["pine", "cedar"] }),
+  // Meaningful for "post" and "picket" — which fence height (ft) this
+  // listing is sized for. A post long enough to be buried for a 6-ft
+  // fence isn't long enough for an 8-ft fence, and 8-ft pickets are a
+  // different (longer, often thicker-profile) product than 6-ft ones.
+  // "rail" is NOT height-tagged — the horizontal board itself is the
+  // same 8-ft length regardless of fence height; only the QUANTITY per
+  // section changes for taller fences (see RAILS_PER_SECTION in
+  // server/estimates.ts). concrete/fasteners/gate stay untagged/null.
+  forHeight: integer("for_height"),
 });
 
 // === RELATIONS ===
