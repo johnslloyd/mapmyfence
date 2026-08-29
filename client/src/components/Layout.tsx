@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Ruler, FolderKanban, Menu, X, LogOut, User as UserIcon } from "lucide-react";
+import { LandPlot, FolderKanban, Menu, X, LogOut, User as UserIcon } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { CreateProjectDialog } from "./CreateProjectDialog";
@@ -54,7 +54,7 @@ export function Layout({ children }: LayoutProps) {
           {/* Logo */}
           <Link href="/" className="mr-6 flex items-center gap-2">
             <div className="bg-primary text-primary-foreground p-2 rounded-lg">
-              <Ruler className="w-6 h-6" />
+              <LandPlot className="w-6 h-6" />
             </div>
             <span className="font-display font-bold text-xl hidden sm:inline-block">MyYardManager</span>
           </Link>

@@ -126,16 +126,29 @@ crowded-search-term cost that was weighed and accepted rather than
 missed.
 
 Visual identity: unchanged again, still the same call as part 1 — same
-palette, same `Ruler` nav icon (still fits: "yard manager" is still a
-measuring/planning tool, nothing about the icon was ever tied to the
-literal words "yard stick"), same favicon. Every user-facing "Yard
-Stick" string from part 1 got the same treatment "MapMyFence" did:
-swapped to "MyYardManager" across `index.html`'s `<title>`, the nav
-logo text, transactional email subject/body/sender, the Before You Dig
-disclaimer, the Privacy Policy, and the Account page's delete-account
-mailto subject — and the placeholder support address moved again,
-`support@yardstick.app` → `support@myyardmanager.app`, still nothing
-receiving mail there (see MVP launch-blockers).
+palette, same favicon treatment (rounded-square, deep-green badge,
+cream icon). Every user-facing "Yard Stick" string from part 1 got the
+same treatment "MapMyFence" did: swapped to "MyYardManager" across
+`index.html`'s `<title>`, the nav logo text, transactional email
+subject/body/sender, the Before You Dig disclaimer, the Privacy
+Policy, and the Account page's delete-account mailto subject — and the
+placeholder support address moved again, `support@yardstick.app` →
+`support@myyardmanager.app`, still nothing receiving mail there (see
+MVP launch-blockers).
+
+**Icon swapped again, same day: `Ruler` → `LandPlot`.** User asked to
+see a handful of clean, simple mark candidates in the actual badge
+treatment (rendered a real comparison — six lucide icons in the exact
+rounded-square/deep-green/cream styling — rather than describing them
+in the abstract) and picked `LandPlot` (a flag-on-a-divided-plot glyph
+— literally "land plot," reads as parcel/triangulation rather than a
+generic tool), noting they may revisit other options later. Both
+`Layout.tsx`'s nav badge and `favicon.svg` updated to the same
+`LandPlot` path (`lucide-react`'s exact glyph, not hand-approximated).
+Homepage H1 also tightened same day, per direct wording feedback: "Plan
+your yard projects like a pro, one at a time." — comma instead of an
+em dash, and "one at a time" deliberately doesn't restate "project(s)"
+a third time.
 
 `client/src/index.css`'s old `.dark` class block was deleted — it was
 dead code (`next-themes` is a dependency but was never wired to a
