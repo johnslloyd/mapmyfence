@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertProjectSchema, type InsertProject } from "@shared/schema";
-import { useUpdateProject } from "@/hooks/use-projects";
+import { insertPropertySchema, type InsertProperty } from "@shared/schema";
+import { useUpdateProperty } from "@/hooks/use-projects";
 import {
   Dialog,
   DialogContent,
@@ -24,36 +24,41 @@ import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect } from "react";
 import { Pencil } from "lucide-react";
 
-export function EditProjectDialog({ 
-  project,
+// Renamed from EditProjectDialog in the Property/Project restructure —
+// name/address/description all live on the property now, not a project.
+// Not currently wired up to a trigger anywhere (same as before the
+// rename) — kept working and up to date in case it gets connected later,
+// see CLAUDE.md's "Known dead files" notes for the pattern.
+export function EditPropertyDialog({
+  property,
   children,
-}: { 
-  project: any,
+}: {
+  property: any,
   children?: React.ReactNode,
 }) {
   const [open, setOpen] = useState(false);
-  const { mutateAsync, isPending } = useUpdateProject();
-  
-  const form = useForm<Partial<InsertProject>>({
-    resolver: zodResolver(insertProjectSchema.partial()),
+  const { mutateAsync, isPending } = useUpdateProperty();
+
+  const form = useForm<Partial<InsertProperty>>({
+    resolver: zodResolver(insertPropertySchema.partial()),
     defaultValues: {
-      name: project.name,
-      address: project.address || "",
-      description: project.description || "",
+      name: property.name,
+      address: property.address || "",
+      description: property.description || "",
     },
   });
 
   useEffect(() => {
     form.reset({
-      name: project.name,
-      address: project.address || "",
-      description: project.description || "",
+      name: property.name,
+      address: property.address || "",
+      description: property.description || "",
     });
-  }, [project, form]);
+  }, [property, form]);
 
-  async function onSubmit(data: Partial<InsertProject>) {
+  async function onSubmit(data: Partial<InsertProperty>) {
     try {
-      await mutateAsync({ id: project.id, ...data });
+      await mutateAsync({ id: property.id, ...data });
       setOpen(false);
     } catch (error) {
       console.error(error);
@@ -64,9 +69,9 @@ export function EditProjectDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {children || (
-          <Button 
-            size="icon" 
-            variant="ghost" 
+          <Button
+            size="icon"
+            variant="ghost"
             className="h-8 w-8"
             onClick={(e) => e.stopPropagation()}
           >
@@ -76,9 +81,9 @@ export function EditProjectDialog({
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] rounded-2xl border-none shadow-2xl">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-display">Edit Project</DialogTitle>
+          <DialogTitle className="text-2xl font-display">Edit Property</DialogTitle>
           <DialogDescription>
-            Update your project details and notes.
+            Update your property details and notes.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -88,9 +93,9 @@ export function EditProjectDialog({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Project Name</FormLabel>
+                  <FormLabel>Property Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Backyard Renovation" className="rounded-xl" {...field} />
+                    <Input placeholder="e.g. Backyard" className="rounded-xl" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -116,10 +121,10 @@ export function EditProjectDialog({
                 <FormItem>
                   <FormLabel>Notes</FormLabel>
                   <FormControl>
-                    <Textarea 
-                      placeholder="Any specific requirements..." 
-                      className="resize-none rounded-xl" 
-                      {...field} 
+                    <Textarea
+                      placeholder="Any specific requirements..."
+                      className="resize-none rounded-xl"
+                      {...field}
                       value={field.value || ""}
                     />
                   </FormControl>
@@ -128,8 +133,8 @@ export function EditProjectDialog({
               )}
             />
             <div className="flex justify-end pt-4">
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={isPending}
                 className="rounded-xl"
               >

@@ -1,8 +1,8 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { insertProjectSchema, type InsertProject } from "@shared/schema";
-import { useCreateProject } from "@/hooks/use-projects";
+import { insertPropertySchema, type InsertProperty } from "@shared/schema";
+import { useCreateProperty } from "@/hooks/use-projects";
 import {
   Dialog,
   DialogContent,
@@ -27,42 +27,47 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
 import { useLocation } from "wouter";
 
-export function CreateProjectDialog({ 
+// Renamed from CreateProjectDialog in the Property/Project restructure
+// (see CLAUDE.md). This creates a PROPERTY (just an address — no type,
+// no status). The server auto-creates that property's first project
+// (type: fence) in the same request, so this dialog still lands the
+// user straight in the fence editor — zero added friction versus the
+// old flow, even though a property can now hold multiple projects.
+export function AddPropertyDialog({
   children,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange
-}: { 
+}: {
   children?: React.ReactNode,
   open?: boolean,
   onOpenChange?: (open: boolean) => void
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const [, setLocation] = useLocation();
-  const { mutateAsync, isPending } = useCreateProject();
+  const { mutateAsync, isPending } = useCreateProperty();
   const { toast } = useToast();
-  
+
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = isControlled ? controlledOnOpenChange! : setInternalOpen;
 
-  const form = useForm<InsertProject>({
+  const form = useForm<InsertProperty>({
     resolver: zodResolver(
-      insertProjectSchema
+      insertPropertySchema
         .omit({ userId: true })
         .extend({
-          name: z.string().min(1, "Project name is required"),
+          name: z.string().min(1, "Property name is required"),
         })
     ),
     defaultValues: {
       name: "",
       address: "",
       description: "",
-      status: "planning"
     },
   });
 
-  async function onSubmit(data: InsertProject) {
-    toast({ title: 'Creating project', description: 'Starting project creation' });
+  async function onSubmit(data: InsertProperty) {
+    toast({ title: 'Creating property', description: 'Starting property creation' });
     try {
       // Convert empty strings to null/undefined for optional fields
       const cleanedData = {
@@ -71,11 +76,11 @@ export function CreateProjectDialog({
         address: data.address?.trim() || null,
         description: data.description?.trim() || null,
       };
-      
-      const project = await mutateAsync(cleanedData);
-      // if we didn't get an id back, surface an error
-      if (!project || !project.id) {
-        console.error('Create project did not return an id', project);
+
+      const property = await mutateAsync(cleanedData);
+      const project = property?.projects?.[0];
+      if (!property || !project) {
+        console.error('Create property did not return a project to land on', property);
         toast({ title: 'Error', description: 'Server did not return a project id', variant: 'destructive' });
         return;
       }
@@ -86,9 +91,9 @@ export function CreateProjectDialog({
       setOpen(false);
       form.reset();
     } catch (error: any) {
-      console.error('create project error', error);
-      // Don't show toast here since useCreateProject already shows one
-      // toast({ title: 'Error', description: error?.message || 'Failed to create project', variant: 'destructive' });
+      console.error('create property error', error);
+      // Don't show toast here since useCreateProperty already shows one
+      // toast({ title: 'Error', description: error?.message || 'Failed to create property', variant: 'destructive' });
     }
   }
 
@@ -97,15 +102,15 @@ export function CreateProjectDialog({
       <DialogTrigger asChild>
         {children || (
           <Button className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20">
-            <Plus className="h-4 w-4" /> New Project
+            <Plus className="h-4 w-4" /> Add a Property
           </Button>
         )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] rounded-2xl border-none shadow-2xl">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-display">Create Project</DialogTitle>
+          <DialogTitle className="text-2xl font-display">Add a Property</DialogTitle>
           <DialogDescription>
-            Start planning your new fence installation.
+            Start planning your yard — fencing, lawn care, and more.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -122,9 +127,9 @@ export function CreateProjectDialog({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Project Name</FormLabel>
+                  <FormLabel>Property Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Backyard Renovation" className="rounded-xl" {...field} />
+                    <Input placeholder="e.g. Backyard" className="rounded-xl" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -150,10 +155,10 @@ export function CreateProjectDialog({
                 <FormItem>
                   <FormLabel>Notes</FormLabel>
                   <FormControl>
-                    <Textarea 
-                      placeholder="Any specific requirements..." 
-                      className="resize-none rounded-xl" 
-                      {...field} 
+                    <Textarea
+                      placeholder="Any specific requirements..."
+                      className="resize-none rounded-xl"
+                      {...field}
                       value={field.value || ""}
                     />
                   </FormControl>

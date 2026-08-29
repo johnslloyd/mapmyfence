@@ -150,7 +150,7 @@ function ShoppingListContent({ projectId, isGuest }: { projectId: number; isGues
           </h1>
           <p className="text-muted-foreground text-sm">
             {project.name}
-            {project.address ? ` — ${project.address}` : ""}
+            {project.property.address ? ` — ${project.property.address}` : ""}
           </p>
         </div>
 

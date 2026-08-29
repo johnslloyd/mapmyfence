@@ -18,14 +18,38 @@ export const users = pgTable("users", {
   resetTokenExpiresAt: timestamp("reset_token_expires_at"),
 });
 
-export const projects = pgTable("projects", {
+// A property is just an address — no type, no status. One user can have
+// many properties (multiple yards). Renamed from the original "projects"
+// table (2026-08-28 restructure, see CLAUDE.md's "Property / Project
+// restructure" section) once it became clear "project" was being asked
+// to carry two different meanings: the physical yard (never changes,
+// has an address) and a typed unit of work on that yard (has a status,
+// a lifecycle, and — with the lawn-care vertical coming — a type).
+export const properties = pgTable("properties", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   address: text("address"),
   description: text("description"),
-  status: text("status", { enum: ["planning", "quoting", "in-progress", "completed"] }).default("planning").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   userId: text("user_id").references(() => users.id),
+});
+
+// A project is a typed, named, statused unit of work under a property —
+// "Backyard Privacy Fence" (type: fence), "Spring Pre-Emergent Plan"
+// (type: lawn_care). This is the NEW entity that used to be conflated
+// with the property itself. `status` moved here from the old top-level
+// table — it always described work-in-progress, never the property.
+// Every existing property got exactly one type="fence" project created
+// for it during the restructure migration, so today's single-fence-plan
+// UX is unchanged; multiple projects per property (a second fence
+// project, or eventually a lawn-care project) is what this unlocks.
+export const projects = pgTable("projects", {
+  id: serial("id").primaryKey(),
+  propertyId: integer("property_id").references(() => properties.id, { onDelete: 'cascade' }).notNull(),
+  type: text("type", { enum: ["fence", "lawn_care"] }).notNull(),
+  name: text("name").notNull(),
+  status: text("status", { enum: ["planning", "quoting", "in-progress", "completed"] }).default("planning").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const fenceLines = pgTable("fence_lines", {
@@ -52,15 +76,17 @@ export const coordinates = pgTable("coordinates", {
 // fenceLines (open polylines with a length): fertilizer/pre-emergent/
 // herbicide coverage is sold per square foot, the same way fence
 // materials are sold per linear foot, so a future lawn-care estimate
-// engine needs an area, not a length. One boundary per project (a
-// property has one yard, the same way it has one address) — enforced
-// via .unique() on projectId. No drawing UI, no area-based product
-// recommendations, and no timing/scheduling logic exist yet — see
-// "Lawn-care vertical — architecture groundwork only" in CLAUDE.md for
-// what this is (and isn't) meant to unblock.
+// engine needs an area, not a length. Belongs to the PROPERTY, not a
+// project — the physical boundary doesn't change between (say) a Spring
+// and a Fall lawn-care project on the same yard, so it's measured once
+// per property and reused, not duplicated per project. One boundary per
+// property — enforced via .unique() on propertyId. No drawing UI, no
+// area-based product recommendations, and no timing/scheduling logic
+// exist yet — see "Lawn-care vertical — architecture groundwork only" in
+// CLAUDE.md for what this is (and isn't) meant to unblock.
 export const yardBoundaries = pgTable("yard_boundaries", {
   id: serial("id").primaryKey(),
-  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull().unique(),
+  propertyId: integer("property_id").references(() => properties.id, { onDelete: 'cascade' }).notNull().unique(),
   areaSqFt: doublePrecision("area_sq_ft"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -74,13 +100,20 @@ export const yardBoundaryPoints = pgTable("yard_boundary_points", {
 });
 
 // Minimal local usage funnel logging — no external analytics service.
-// Deliberately NOT foreign-keyed to projects/users: this is an append-only
-// log, and a hard FK would block deleting a project/user that has history.
+// Deliberately NOT foreign-keyed to properties/projects/users: this is an
+// append-only log, and a hard FK would block deleting a property/project/
+// user that has history.
 export const events = pgTable("events", {
   id: serial("id").primaryKey(),
+  // "property_created" added alongside the Property/Project restructure —
+  // fires on the top-level "Add a Property" action (which also creates
+  // that property's first project, so a property_created event is always
+  // paired with a project_created one today). "project_created" now means
+  // a typed project specifically, not the old top-level entity.
   type: text("type", {
-    enum: ["project_created", "fence_line_created", "estimate_viewed", "account_created"],
+    enum: ["property_created", "project_created", "fence_line_created", "estimate_viewed", "account_created"],
   }).notNull(),
+  propertyId: integer("property_id"),
   projectId: integer("project_id"),
   userId: text("user_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -123,18 +156,26 @@ export const products = pgTable("products", {
 // === RELATIONS ===
 
 export const usersRelations = relations(users, ({ many }) => ({
+  properties: many(properties),
+}));
+
+export const propertiesRelations = relations(properties, ({ many, one }) => ({
   projects: many(projects),
+  yardBoundary: one(yardBoundaries, {
+    fields: [properties.id],
+    references: [yardBoundaries.propertyId],
+  }),
+  user: one(users, {
+    fields: [properties.userId],
+    references: [users.id],
+  }),
 }));
 
 export const projectsRelations = relations(projects, ({ many, one }) => ({
   fenceLines: many(fenceLines),
-  yardBoundary: one(yardBoundaries, {
-    fields: [projects.id],
-    references: [yardBoundaries.projectId],
-  }),
-  user: one(users, {
-    fields: [projects.userId],
-    references: [users.id],
+  property: one(properties, {
+    fields: [projects.propertyId],
+    references: [properties.id],
   }),
 }));
 
@@ -147,9 +188,9 @@ export const fenceLinesRelations = relations(fenceLines, ({ one, many }) => ({
 }));
 
 export const yardBoundariesRelations = relations(yardBoundaries, ({ one, many }) => ({
-  project: one(projects, {
-    fields: [yardBoundaries.projectId],
-    references: [projects.id],
+  property: one(properties, {
+    fields: [yardBoundaries.propertyId],
+    references: [properties.id],
   }),
   points: many(yardBoundaryPoints),
 }));
@@ -170,6 +211,7 @@ export const coordinatesRelations = relations(coordinates, ({ one }) => ({
 
 // === BASE SCHEMAS ===
 
+export const insertPropertySchema = createInsertSchema(properties).omit({ id: true, createdAt: true });
 export const insertProjectSchema = createInsertSchema(projects).omit({ id: true, createdAt: true });
 export const insertFenceLineSchema = createInsertSchema(fenceLines).omit({ id: true, createdAt: true });
 export const insertCoordinateSchema = createInsertSchema(coordinates).omit({ id: true });
@@ -178,6 +220,8 @@ export const insertYardBoundaryPointSchema = createInsertSchema(yardBoundaryPoin
 
 // === EXPLICIT API CONTRACT TYPES ===
 
+export type Property = typeof properties.$inferSelect;
+export type InsertProperty = z.infer<typeof insertPropertySchema>;
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type FenceLine = typeof fenceLines.$inferSelect;
@@ -190,10 +234,23 @@ export type InsertYardBoundary = z.infer<typeof insertYardBoundarySchema>;
 export type YardBoundaryPoint = typeof yardBoundaryPoints.$inferSelect;
 export type InsertYardBoundaryPoint = z.infer<typeof insertYardBoundaryPointSchema>;
 
-// Detailed types for frontend
+// Detailed types for frontend. ProjectWithLines is what the fence editor
+// needs: the project's own fields (type/name/status) PLUS its parent
+// property's fields (address, in particular — geocoding/the map need it)
+// PLUS its fence lines. PropertyWithProjects is the lighter-weight shape
+// for the property overview page — every project under a property, but
+// without each one's full fenceLines/coordinates detail.
 export type ProjectWithLines = Project & {
+  property: Property;
   fenceLines: (FenceLine & { coordinates: Coordinate[] })[];
 };
+
+export type PropertyWithProjects = Property & {
+  projects: Project[];
+};
+
+export type CreatePropertyRequest = InsertProperty;
+export type UpdatePropertyRequest = Partial<InsertProperty>;
 
 export type CreateProjectRequest = InsertProject;
 export type UpdateProjectRequest = Partial<InsertProject>;

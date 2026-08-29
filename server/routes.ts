@@ -20,16 +20,16 @@ export async function registerRoutes(
   app: Express,
   storage: IStorage
 ): Promise<Server> {
-  
+
   app.get(api.projects.getEstimates.path, async (req, res) => {
     try {
       const projectId = Number(req.params.id);
       const project = await storage.getProject(projectId, (req.user as any)?.id);
-  
+
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
-  
+
       const totalLength = project.fenceLines.reduce((acc, line) => acc + (line.length || 0), 0);
 
       if (totalLength === 0) {
@@ -71,16 +71,102 @@ export async function registerRoutes(
     }
   });
 
-  app.get(api.projects.list.path, isAuthenticated, async (req, res) => {
+  // === PROPERTIES ===
+
+  app.get(api.properties.list.path, isAuthenticated, async (req, res) => {
     try {
       const user = req.user as any;
-      const projects = await storage.getProjects(user.id);
-      res.json(projects);
+      const props = await storage.getProperties(user.id);
+      res.json(props);
     } catch (err) {
-      console.error('Failed to list projects', err);
-      res.status(500).json({ message: 'Failed to list projects' });
+      console.error('Failed to list properties', err);
+      res.status(500).json({ message: 'Failed to list properties' });
     }
   });
+
+  app.get(api.properties.get.path, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const propertyId = Number(req.params.id);
+      let property;
+
+      if (req.isAuthenticated()) {
+        property = await storage.getProperty(propertyId, user.id);
+      } else {
+        // For guests, only allow if the guest flag is present — a basic
+        // security measure to prevent open access to all guest properties.
+        if (req.query.guest === 'true') {
+          property = await storage.getProperty(propertyId);
+        }
+      }
+
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      res.json(property);
+    } catch (err) {
+      console.error('Failed to get property', err);
+      res.status(500).json({ message: 'Failed to get property' });
+    }
+  });
+
+  app.post(api.properties.create.path, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const input = api.properties.create.input.parse(req.body);
+      const userId = req.isAuthenticated() && user ? user.id : null;
+      const property = await storage.createProperty({ ...input, userId });
+      logEvent("property_created", { propertyId: property.id, userId: userId || undefined });
+
+      // Auto-create the property's first project (type: fence) so
+      // creating a property still feels exactly like creating a project
+      // did before this restructure — zero added friction for the only
+      // vertical that's actually live. A second/third project (another
+      // fence plan, or eventually lawn care) is opt-in via the property
+      // page's own "+ Add Project" action, not forced here.
+      const project = await storage.createProject({
+        propertyId: property.id,
+        type: "fence",
+        name: property.address ? `New Fence at ${property.address}` : "New Fence Line",
+        status: "planning",
+      });
+      logEvent("project_created", { propertyId: property.id, projectId: project.id, userId: userId || undefined });
+
+      res.status(201).json({ ...property, projects: [project] });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+        });
+      }
+      console.error('Failed to create property', err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put(api.properties.update.path, isAuthenticated, async (req, res) => {
+    try {
+      const input = api.properties.update.input.parse(req.body);
+      const property = await storage.updateProperty(Number(req.params.id), input);
+      res.json(property);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+        });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete(api.properties.delete.path, isAuthenticated, async (req, res) => {
+    await storage.deleteProperty(Number(req.params.id));
+    res.status(204).end();
+  });
+
+  // === PROJECTS ===
 
   app.get(api.projects.get.path, async (req, res) => {
     try {
@@ -91,10 +177,8 @@ export async function registerRoutes(
       if (req.isAuthenticated()) {
         project = await storage.getProject(projectId, user.id);
       } else {
-        // For guests, only allow if the guest flag is present
-        // This is a basic security measure to prevent open access to all guest projects
-        if (req.query.guest === 'true') { 
-            project = await storage.getProject(projectId);
+        if (req.query.guest === 'true') {
+          project = await storage.getProject(projectId);
         }
       }
 
@@ -108,13 +192,12 @@ export async function registerRoutes(
     }
   });
 
-  app.post(api.projects.create.path, async (req, res) => {
+  app.post(api.projects.create.path, isAuthenticated, async (req, res) => {
     try {
-      const user = req.user as any;
       const input = api.projects.create.input.parse(req.body);
-      const userId = req.isAuthenticated() && user ? user.id : null;
-      const project = await storage.createProject({ ...input, userId });
-      logEvent("project_created", { projectId: project.id, userId: userId || undefined });
+      const propertyId = Number(req.params.propertyId);
+      const project = await storage.createProject({ ...input, propertyId });
+      logEvent("project_created", { propertyId, projectId: project.id, userId: (req.user as any)?.id });
       res.status(201).json(project);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -148,6 +231,8 @@ export async function registerRoutes(
     await storage.deleteProject(Number(req.params.id));
     res.status(204).end();
   });
+
+  // === FENCE LINES ===
 
   app.post(api.fenceLines.create.path, isAuthenticated, async (req, res) => {
     try {

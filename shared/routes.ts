@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { insertProjectSchema, insertFenceLineSchema } from './schema';
+import { insertPropertySchema, insertProjectSchema, insertFenceLineSchema } from './schema';
 
 export const errorSchemas = {
   validation: z.object({
@@ -15,14 +15,57 @@ export const errorSchemas = {
 };
 
 export const api = {
-  projects: {
+  // A property is just an address — name/address/description, no type,
+  // no status. See CLAUDE.md's "Property / Project restructure" section.
+  properties: {
     list: {
       method: 'GET' as const,
-      path: '/api/projects',
+      path: '/api/properties',
       responses: {
-        200: z.array(z.any()), // ProjectWithLines would be better but keeping it simple for contract
+        200: z.array(z.any()), // PropertyWithProjects would be better but keeping it simple for contract
       },
     },
+    get: {
+      method: 'GET' as const,
+      path: '/api/properties/:id',
+      responses: {
+        200: z.any(),
+        404: errorSchemas.notFound,
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/properties',
+      // omit userId from the client payload; server sets it from the session
+      input: insertPropertySchema.omit({ userId: true }),
+      responses: {
+        201: z.any(),
+        400: errorSchemas.validation,
+      },
+    },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/properties/:id',
+      input: insertPropertySchema.partial(),
+      responses: {
+        200: z.any(),
+        400: errorSchemas.validation,
+        404: errorSchemas.notFound,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/properties/:id',
+      responses: {
+        204: z.void(),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
+  // A project is a typed, named, statused unit of work under a property
+  // — "Backyard Privacy Fence" (type: fence). This is what the fence
+  // editor is actually keyed on.
+  projects: {
     get: {
       method: 'GET' as const,
       path: '/api/projects/:id',
@@ -33,9 +76,9 @@ export const api = {
     },
     create: {
       method: 'POST' as const,
-      path: '/api/projects',
-      // omit userId from the client payload; server sets it from the session
-      input: insertProjectSchema.omit({ userId: true }),
+      path: '/api/properties/:propertyId/projects',
+      // omit propertyId from the client payload; comes from the URL param
+      input: insertProjectSchema.omit({ propertyId: true }),
       responses: {
         201: z.any(),
         400: errorSchemas.validation,
@@ -44,7 +87,7 @@ export const api = {
     update: {
       method: 'PUT' as const,
       path: '/api/projects/:id',
-      input: insertProjectSchema.partial(),
+      input: insertProjectSchema.omit({ propertyId: true }).partial(),
       responses: {
         200: z.any(),
         400: errorSchemas.validation,

@@ -38,7 +38,7 @@ function BeforeYouDigContent({ projectId, isGuest }: { projectId: number; isGues
   // engine, not guess at rules itself (same lesson as the parcel-data
   // work: don't fabricate what genuinely needs local research).
   const permitSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(
-    `fence permit requirements ${project.address || project.name}`
+    `fence permit requirements ${project.property.address || project.name}`
   )}`;
 
   return (
@@ -54,7 +54,7 @@ function BeforeYouDigContent({ projectId, isGuest }: { projectId: number; isGues
           </h1>
           <p className="text-muted-foreground text-sm">
             {project.name}
-            {project.address ? ` — ${project.address}` : ""}
+            {project.property.address ? ` — ${project.property.address}` : ""}
           </p>
         </div>
 

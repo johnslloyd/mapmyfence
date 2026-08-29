@@ -2,7 +2,7 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { Link, Redirect } from "wouter";
-import { CreateProjectDialog } from "@/components/CreateProjectDialog";
+import { AddPropertyDialog } from "@/components/AddPropertyDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useState } from "react";
@@ -37,9 +37,9 @@ function UnauthenticatedDashboard() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   const primaryCta = (
-    <CreateProjectDialog>
+    <AddPropertyDialog>
       <Button className="h-[52px] px-7 text-base font-semibold">Start planning — it's free</Button>
-    </CreateProjectDialog>
+    </AddPropertyDialog>
   );
 
   return (
@@ -165,14 +165,14 @@ function UnauthenticatedDashboard() {
 // Dashboard used to render its own "mini Projects page" for logged-in
 // users — 2 stat cards (one, "total footage," was hardcoded mock data
 // that was never wired to real fence lengths) plus the 3 most recent
-// projects, which was just a subset of what /projects already shows in
-// full with search. The only case where this page is genuinely
-// different from Projects is the LOGGED-OUT marketing landing page
-// below. So: authenticated visitors now redirect straight to /projects
+// projects, which was just a subset of what /properties already shows
+// in full with search. The only case where this page is genuinely
+// different from Properties is the LOGGED-OUT marketing landing page
+// below. So: authenticated visitors now redirect straight to /properties
 // instead of seeing a redundant, partly-fake summary of it. A real
-// stats dashboard (actual aggregate footage/cost across projects) would
-// need a real aggregation query that doesn't exist yet — worth building
-// later if there's a real need, not worth faking now.
+// stats dashboard (actual aggregate footage/cost across properties)
+// would need a real aggregation query that doesn't exist yet — worth
+// building later if there's a real need, not worth faking now.
 export default function Dashboard() {
   const { isAuthenticated, loading: authLoading } = useAuth();
 
@@ -194,7 +194,7 @@ export default function Dashboard() {
   }
 
   if (isAuthenticated) {
-    return <Redirect to="/projects" />;
+    return <Redirect to="/properties" />;
   }
 
   return <UnauthenticatedDashboard />;

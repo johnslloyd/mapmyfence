@@ -4,7 +4,7 @@ import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import { passport, toSafeUser } from "./auth";
 import { db } from "./db";
-import { users, projects } from "@shared/schema";
+import { users, properties } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { Scrypt, generateId } from "lucia";
@@ -54,15 +54,17 @@ authRouter.get("/api/user", (req, res) => {
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
-  // .nullable() as well as .optional(): Register.tsx reads projectId from
-  // a URLSearchParams.get(), which returns `null` (not `undefined`) when
-  // absent — i.e. every direct signup that didn't arrive via a guest
-  // project's "Sign Up" redirect. z.string().optional() alone accepts
-  // `undefined` but rejects `null`, so plain top-level registration (the
-  // homepage's own "Sign up" link) was failing Zod validation outright.
-  // Found live while testing the new forgot-password work, unrelated to
-  // it — a real, pre-existing bug on the main signup path.
-  projectId: z.string().nullable().optional(),
+  // .nullable() as well as .optional(): Register.tsx reads propertyId
+  // from a URLSearchParams.get(), which returns `null` (not `undefined`)
+  // when absent — i.e. every direct signup that didn't arrive via a
+  // guest property's "Sign Up" redirect. z.string().optional() alone
+  // accepts `undefined` but rejects `null`, so plain top-level
+  // registration (the homepage's own "Sign up" link) was failing Zod
+  // validation outright. Found live while testing the forgot-password
+  // work, unrelated to it — a real, pre-existing bug on the main signup
+  // path (this field was "projectId" then; renamed in the Property/
+  // Project restructure — ownership lives on properties now).
+  propertyId: z.string().nullable().optional(),
 });
 
 authRouter.post("/api/register", authLimiter, async (req, res, next) => {
@@ -74,7 +76,7 @@ authRouter.post("/api/register", authLimiter, async (req, res, next) => {
       return res.status(400).json({ message: errorMessage });
     }
 
-    const { email, password, projectId } = result.data;
+    const { email, password, propertyId } = result.data;
 
     // ensure email not already registered
     const [existing] = await db.select().from(users).where(eq(users.email, email));
@@ -92,11 +94,11 @@ authRouter.post("/api/register", authLimiter, async (req, res, next) => {
       hashedPassword,
     }).returning();
 
-    if (projectId) {
-      await db.update(projects).set({ userId }).where(eq(projects.id, parseInt(projectId)));
+    if (propertyId) {
+      await db.update(properties).set({ userId }).where(eq(properties.id, parseInt(propertyId)));
     }
 
-    logEvent("account_created", { userId, projectId: projectId ? parseInt(projectId) : undefined });
+    logEvent("account_created", { userId, propertyId: propertyId ? parseInt(propertyId) : undefined });
 
     req.login(user, (err) => {
       if (err) {

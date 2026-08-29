@@ -5,7 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
-import Projects from "@/pages/Projects";
+import Properties from "@/pages/Properties";
+import PropertyOverview from "@/pages/PropertyOverview";
 import Editor from "@/pages/Editor";
 import ShoppingList from "@/pages/ShoppingList";
 import BeforeYouDig from "@/pages/BeforeYouDig";
@@ -34,7 +35,8 @@ function Router() {
           editor's deliberate guest access, there's no guest-meaningful
           version of this page. */}
       <Route path="/account" component={Account} />
-      <ProtectedRoute path="/projects" component={Projects} />
+      <ProtectedRoute path="/properties" component={Properties} />
+      <ProtectedRoute path="/properties/:id" component={PropertyOverview} />
       {/* Redirect-like behavior for bare /editor */}
       <ProtectedRoute path="/editor" component={Editor} />
       <ProtectedRoute path="/editor/:id/shopping-list" component={ShoppingList} />

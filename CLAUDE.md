@@ -220,6 +220,116 @@ and a real error toast (geocoding an invalid address) side by side —
 green and red respectively, both clearly legible and visibly part of
 the same warm/muted palette rather than a bolted-on alert-library look.
 
+## Property / Project restructure (2026-08-28)
+
+**"Project" used to mean two different things at once, and that finally
+got fixed.** It was both "the physical yard" (an address, never changes)
+and "a unit of work on that yard" (has a status, a lifecycle) — fine
+while fencing was the only vertical, but the lawn-care vertical made the
+conflict concrete: does adding lawn care mean a NEW top-level project on
+the same address (duplicating the map/address work), or does the fence
+concept need to grow a type field? Neither was right. The actual fix,
+worked out with the user in conversation before any code changed:
+
+- **`properties`** (renamed from the old top-level `projects` table) is
+  now just an address — `name`, `address`, `description`, `userId`,
+  `createdAt`. No type, no status. One user can have many properties
+  (multiple yards) — this already worked before the rename and needed
+  no new capability, just the right name.
+- **`projects`** (new table) is a typed, named, statused unit of work
+  *under* a property — `propertyId`, `type` (`"fence" | "lawn_care"`),
+  `name`, `status` (`planning | quoting | in-progress | completed` —
+  this field moved here from the old top-level table; it always
+  described work-in-progress, never the property itself, so this was a
+  real correctness fix, not just a rename). A property can hold
+  multiple projects — a second fence plan (phased build: front yard
+  this year, backyard next), or eventually a lawn-care plan alongside
+  a fence one on the same yard.
+- **`fenceLines.projectId`** now points at the new `projects` table
+  (was the old top-level `projects`, i.e. what's now `properties`).
+- **`yardBoundaries`** moved from `projectId` to `propertyId` — the
+  physical yard boundary doesn't change between (say) a Spring and a
+  Fall lawn-care project on the same yard, so it's measured once per
+  property and reused, not duplicated per project.
+
+**UX decision, made explicit before building**: does "New Project"
+force a fence-vs-lawn-care choice up front? No — that would fragment
+one physical yard into disconnected records the moment someone wants
+both, directly undercutting the "One map. Every yard project." homepage
+positioning (a property has ONE map; the type choice belongs on the
+project you add under it, not on the property itself). Concretely:
+- **"Add a Property"** (`AddPropertyDialog.tsx`, was
+  `CreateProjectDialog.tsx`) stays exactly as low-friction as project
+  creation was before this restructure — name + address only, and the
+  server auto-creates that property's first project (`type: "fence"`,
+  named from the address the same way fence lines already were) in the
+  *same request*, landing the user straight in the fence editor. Zero
+  added friction for the only vertical that's actually live.
+- **`PropertyOverview.tsx`** (new page, `/properties/:id`) is where
+  "+ Add Project" and its type picker actually live — Fence enabled,
+  Lawn Care visibly present but disabled with a "Coming soon" badge
+  (matching the homepage's own available-now/coming-soon language).
+  This is genuinely optional, additive — most properties will show
+  exactly one project for a while, since every existing property got
+  exactly one auto-created fence project in the migration.
+
+**Migration**: a real rename-and-restructure, not the free additive-
+column kind documented earlier in this file. Hand-written raw SQL
+against `pool` inside one transaction (rollback on any failure) —
+NOT `drizzle-kit push` (would hit the documented `session`-table
+interactive prompt anyway). Backed up first (67 properties-to-be, 56
+fence lines, 319 coordinates, 0 yard_boundaries rows — written to
+`.backups/`, gitignored, not committed) as cheap insurance given this
+touches real user data (confirmed: the 22 accounts in the DB at
+migration time were the user and friends testing, not the public, per
+explicit user confirmation — "let's do it now and risk the data
+challenges" is what greenlit skipping a more elaborate zero-downtime
+migration approach). Verified post-migration with an integrity query:
+zero orphan fence_lines, zero orphan projects, zero properties without
+a project, spot-checked sample rows including real names ("Mimi's
+fence") — all correct. See "Database migrations" below for why a new
+*table* (not just a new column) still qualifies for the raw-SQL escape
+hatch.
+
+**Everywhere this touched** (for the next person's sanity, since this
+was a genuinely wide change): `shared/schema.ts` (both tables +
+relations + insert schemas + `ProjectWithLines` now nests `property`,
+new `PropertyWithProjects` type), `shared/routes.ts` (new
+`api.properties.*`, restructured `api.projects.*`), `server/storage.ts`
+and `server/routes.ts` (full rewrite — ownership on `getProject` now
+runs through the parent property, since a project has no `userId` of
+its own), `server/events.ts` (`propertyId` field added, new
+`property_created` event type), `client/src/hooks/use-projects.ts`
+(`useProperties`/`useProperty`/`useCreateProperty`/etc. alongside the
+narrower `useProject`/`useCreateProject`/etc.), `AddPropertyDialog.tsx`
++ `EditPropertyDialog.tsx` (renamed from the `*Project*` versions),
+`Properties.tsx` (renamed from `Projects.tsx`), `PropertyOverview.tsx`
+(new), `Editor.tsx` (every `project.address`/`.name`/`.description`
+read that meant the property became `project.property.*`; the "Project
+Details" tab became "Property Details" and shows property fields, with
+a small "This Project" line for the project's own name/status),
+`ShoppingList.tsx` / `BeforeYouDig.tsx` (same `project.property.address`
+fix), `SignUpToSaveModal.tsx` / `Register.tsx` / `server/authRoutes.ts`
+(the guest-claim-on-signup flow now threads a `propertyId` — where
+ownership actually lives — AND a `returnTo` path, since claiming the
+property alone doesn't say which project's editor to resume into for
+the pending-fence-line-save effect), `Dashboard.tsx` / `Layout.tsx` /
+`App.tsx` (nav/redirect/routing renamed to match). Also deleted while
+in there: `Editor.tsx.bak`, a stray uncommitted-to-history backup file
+that TypeScript never compiled (dead, not previously documented) —
+found only because a restructure this size meant grepping for every
+"project" reference in the client, which surfaced it.
+
+Verified live end-to-end after the code changes (not just the DB
+migration): guest creates a property → draws a fence line → signs up →
+property claimed AND the pending line saved onto the correct project →
+Property Details tab shows property fields correctly → Properties list
+shows a project-count badge instead of a single status once a property
+has more than one project → Property Overview's "+ Add Project" →
+Fence creates a genuine second, independent project on the same
+property, landing in its own empty editor → logged back in fresh and
+confirmed the same state persisted.
+
 ## Lawn-care vertical — architecture groundwork only
 
 Second product vertical, planned per the top of this file — fertilizer/
@@ -229,9 +339,9 @@ user-facing exists yet.** What was deliberately laid down now, while
 touching schema for the rename anyway, because it's additive and
 essentially free:
 
-- `shared/schema.ts`: `yardBoundaries` (one per project — `.unique()`
-  on `projectId`, since a property has one yard the same way it has one
-  address — holding a computed `areaSqFt`) and `yardBoundaryPoints`
+- `shared/schema.ts`: `yardBoundaries` (one per property — `.unique()`
+  on `propertyId`, since a property has one yard the same way it has
+  one address — holding a computed `areaSqFt`) and `yardBoundaryPoints`
   (ordered lat/lng points, same shape as the existing `fenceLines` /
   `coordinates` pair). Deliberately a **separate table pair from
   `fenceLines`**, not a reused one — a yard boundary is a closed

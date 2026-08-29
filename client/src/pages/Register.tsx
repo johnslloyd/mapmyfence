@@ -21,7 +21,14 @@ export default function Register() {
   const [error, setError] = useState<string | null>(null);
   const { login } = useAuth();
   const [location, setLocation] = useLocation();
-  const projectId = new URLSearchParams(window.location.search).get("projectId");
+  const searchParams = new URLSearchParams(window.location.search);
+  // propertyId: the guest-created property to claim (ownership lives on
+  // properties now, not projects — see CLAUDE.md's Property/Project
+  // restructure). returnTo: where to send them back — the editor path
+  // for the specific project they were working in, so Editor.tsx
+  // remounts there and its pending-fence-line-save effect can run.
+  const propertyId = searchParams.get("propertyId");
+  const returnTo = searchParams.get("returnTo");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,15 +49,15 @@ export default function Register() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email, password, projectId }),
+        body: JSON.stringify({ email, password, propertyId }),
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         login(data.user);
         toast({ title: "Account created", description: "You are now signed in.", variant: "success" });
-        if (projectId) {
-          setLocation(`/editor/${projectId}`);
+        if (returnTo) {
+          setLocation(returnTo);
         } else {
           setLocation("/");
         }

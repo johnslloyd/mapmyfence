@@ -225,7 +225,7 @@ export default function Editor() {
   const updateLineMutation = useUpdateFenceLine();
 
   const handleUpdateLine = async (line: any) => {
-    if (!line) return;
+    if (!line || !project) return;
     // Great-circle distance via Leaflet's LatLng.distanceTo (matches how
     // MapEditorComponent computes length while drawing) — NOT a flat
     // sqrt(dLat^2 + dLng^2) * metersPerDegree approximation. A degree of
@@ -247,7 +247,7 @@ export default function Editor() {
         projectId: project.id,
         coordinates: line.coordinates.map(({ id, fenceLineId, ...rest }: any, order: number) => ({ ...rest, order })),
         length: newLength,
-        name: line.name?.trim() || defaultLineName(project.address),
+        name: line.name?.trim() || defaultLineName(project.property.address),
         material: line.material,
         height: line.height,
       });
@@ -276,7 +276,7 @@ export default function Editor() {
           try {
             await createLineMutation.mutateAsync({
               projectId: pendingLine.projectId,
-              name: defaultLineName(project.address),
+              name: defaultLineName(project.property.address),
               material: pendingLine.material,
               height: pendingLine.height,
               length: pendingLine.length,
@@ -329,7 +329,7 @@ export default function Editor() {
     try {
       await createLineMutation.mutateAsync({
         projectId: project.id,
-        name: defaultLineName(project.address),
+        name: defaultLineName(project.property.address),
         material: 'wood_cedar',
         height: 6,
         length,
@@ -379,23 +379,23 @@ export default function Editor() {
             className="w-full mb-4 gap-2"
             onClick={() => setShowSignUpModal(true)}
           >
-            <Save className="w-4 h-4" /> Save Your Project (Login/Register)
+            <Save className="w-4 h-4" /> Save Your Property (Login/Register)
           </Button>
         ) : (
-          <Link href="/projects" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back to Projects
+          <Link href="/properties" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
+            <ArrowLeft className="w-4 h-4" /> Back to Properties
           </Link>
         )}
 
         <h1 className="text-xl font-display font-bold truncate">{project.name}</h1>
-        <p className="text-sm text-muted-foreground truncate">{project.address}</p>
+        <p className="text-sm text-muted-foreground truncate">{project.property.address}</p>
       </div>
       <ScrollArea className="flex-1">
         <Tabs defaultValue="lines">
           <div className="px-4 pt-4 sticky top-0 bg-panel z-10 border-b">
             <TabsList className="w-full grid grid-cols-2">
               <TabsTrigger value="lines">Fence Lines</TabsTrigger>
-              <TabsTrigger value="details">Project Details</TabsTrigger>
+              <TabsTrigger value="details">Property Details</TabsTrigger>
             </TabsList>
           </div>
           <TabsContent value="lines" className="mt-2">
@@ -461,16 +461,20 @@ export default function Editor() {
           <TabsContent value="details" className="p-4">
             <div className="space-y-4">
               <div>
-                <Label>Project Name</Label>
-                <div className="text-sm font-medium">{project.name}</div>
+                <Label>Property Name</Label>
+                <div className="text-sm font-medium">{project.property.name}</div>
               </div>
               <div>
                 <Label>Address</Label>
-                <div className="text-sm text-muted-foreground">{project.address || "No address provided"}</div>
+                <div className="text-sm text-muted-foreground">{project.property.address || "No address provided"}</div>
               </div>
               <div>
                 <Label>Description</Label>
-                <div className="text-sm text-muted-foreground">{project.description || "No notes"}</div>
+                <div className="text-sm text-muted-foreground">{project.property.description || "No notes"}</div>
+              </div>
+              <div>
+                <Label>This Project</Label>
+                <div className="text-sm text-muted-foreground">{project.name} — {project.status}</div>
               </div>
             </div>
           </TabsContent>
@@ -528,7 +532,7 @@ export default function Editor() {
         <div className="flex-1 relative h-full min-w-0 bg-secondary/20">
           <MapEditorComponent
             initialCenter={undefined}
-            initialAddress={project.address}
+            initialAddress={project.property.address ?? undefined}
             onSave={handleSaveLine}
             isSaving={createLineMutation.isPending}
             existingLines={project.fenceLines || []}
@@ -575,7 +579,8 @@ export default function Editor() {
       <SignUpToSaveModal
         open={showSignUpModal}
         onOpenChange={setShowSignUpModal}
-        projectId={project.id}
+        propertyId={project.property.id}
+        returnTo={`/editor/${project.id}`}
       />
     </Layout>
   );

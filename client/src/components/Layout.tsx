@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { LandPlot, FolderKanban, Menu, X, LogOut, User as UserIcon } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { CreateProjectDialog } from "./CreateProjectDialog";
+import { AddPropertyDialog } from "./AddPropertyDialog";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "./ui/button";
 import {
@@ -31,10 +31,10 @@ export function Layout({ children }: LayoutProps) {
 
   // "Dashboard" (-> "/") used to be a distinct authenticated view; now
   // that Dashboard.tsx just redirects logged-in users straight to
-  // /projects (see CLAUDE.md), a nav link to it was a pointless bounce.
+  // /properties (see CLAUDE.md), a nav link to it was a pointless bounce.
   // The logo already links home for guests, so nothing lost by dropping it.
   const navigation = [
-    { name: 'My Projects', href: '/projects', icon: FolderKanban },
+    { name: 'My Properties', href: '/properties', icon: FolderKanban },
   ];
 
   const isActive = (href: string) => {
@@ -76,8 +76,8 @@ export function Layout({ children }: LayoutProps) {
           </nav>
           
           <div className="flex flex-1 items-center justify-end gap-4">
-            {/* Create Project Button */}
-            <CreateProjectDialog />
+            {/* Add Property Button */}
+            <AddPropertyDialog />
             
             {/* User Menu / Login */}
             {isAuthenticated ? (
