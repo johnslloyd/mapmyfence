@@ -62,7 +62,7 @@ function BeforeYouDigContent({ projectId, isGuest }: { projectId: number; isGues
           <ShieldAlert className="h-4 w-4" />
           <AlertTitle>This is general information, not a clearance to build</AlertTitle>
           <AlertDescription>
-            Yard Stick can't confirm your utility lines have been marked or that your project is
+            MyYardManager can't confirm your utility lines have been marked or that your project is
             permitted — only your local 811 center and building department can. Use this page to find
             out what to do next; always get their confirmation before you dig or start construction.
           </AlertDescription>
@@ -103,7 +103,7 @@ function BeforeYouDigContent({ projectId, isGuest }: { projectId: number; isGues
           </h2>
           <p className="text-sm text-foreground/90">
             Whether a fence needs a permit — and what height, setback, and material rules apply —
-            varies by city and county, and sometimes by HOA. Yard Stick doesn't know your local
+            varies by city and county, and sometimes by HOA. MyYardManager doesn't know your local
             rules and can't tell you whether this project needs a permit. Contact your local
             building or zoning department directly, and check your HOA's covenants if you have one,
             before you build.

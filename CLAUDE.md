@@ -1,4 +1,4 @@
-# Yard Stick
+# MyYardManager
 
 DIY fence-planning tool: users map fence lines on a satellite view of their
 property and get material estimates. Longer-term direction is a full yard
@@ -9,15 +9,29 @@ planned second one — see "Lawn-care vertical — architecture groundwork
 only" below for what's actually been built toward it so far (schema
 only, nothing user-facing).
 
-**Formerly "MapMyFence."** Renamed to "Yard Stick" specifically because a
-second, non-fence vertical was coming — a yard-generic name fits a
-multi-vertical product where a fence-specific one didn't. The local
-directory (`/Users/johnlloyd/mapmyfence`) and the GitHub remote
-(`johnslloyd/mapmyfence`) still carry the old name — renaming either is a
-real, somewhat-disruptive infra action (breaks local shell muscle memory;
-a GitHub rename leaves redirects but still changes clone URLs) that
-wasn't part of this pass and should be a deliberate, separate call, not
-something done incidentally while renaming in-app strings.
+**Name history: "MapMyFence" → briefly "Yard Stick" → "MyYardManager,"
+both renames same day (2026-08-28).** The first rename (see the dated
+note under Brand below) swapped to "Yard Stick" because a second,
+non-fence vertical was coming — a yard-generic name fits a multi-vertical
+product where a fence-specific one didn't. That name didn't survive
+contact with actual competition research: a real brainstorming pass
+(many candidates — Molehill, Furlong, the "Knots" family, Yardbird,
+Yardvark, Plotypus, and others — each checked against live domains and
+existing products) surfaced that short, evocative words in this space are
+heavily occupied (Yardbird = an existing outdoor-furniture company,
+Yardvark = a direct competing lawn-care tracking app, Plotypus = an
+existing board game, Knoll = a famous furniture brand) — see the second
+dated Brand-section note for the full reasoning and what got explicitly
+ruled out. Landed on **"MyYardManager"** — longer and plainly
+descriptive on purpose, chosen specifically because it's actually
+available (domain unregistered, no competing app/company found), not for
+cleverness. The local directory (`/Users/johnlloyd/mapmyfence`) and the
+GitHub remote (`johnslloyd/mapmyfence`) still carry the original name —
+renaming either is a real, somewhat-disruptive infra action (breaks
+local shell muscle memory; a GitHub rename leaves redirects but still
+changes clone URLs) that wasn't part of either pass and should be its
+own deliberate call, not something done incidentally while renaming
+in-app strings.
 
 ## Brand: "Package" — warm light, deep green
 
@@ -39,9 +53,14 @@ again") without knowing this was a deliberate, reviewed choice; if it's
 time for another rebrand, that's a real decision to have explicitly, the
 same way this one was.
 
-**That next rebrand decision, made explicitly (2026-08-28): renamed
-"MapMyFence" → "Yard Stick," visual identity deliberately kept
-unchanged.** Prompted by the lawn-care vertical being planned (see the
+**That next rebrand decision, made explicitly (2026-08-28), part 1:
+renamed "MapMyFence" → "Yard Stick," visual identity deliberately kept
+unchanged.** (Superseded by "Yard Stick" → "MyYardManager" a few hours
+later the same day — see the follow-up note right after this one for
+why and what changed the second time. Keeping this note as-is: the
+asset work it describes — the ruler icon, the favicon, the palette
+decision — is still exactly what's live today, only the name string
+itself moved again.) Prompted by the lawn-care vertical being planned (see the
 top of this file) — a yard-generic name fits a multi-vertical product,
 a fence-specific one didn't. Two options were considered for the visual
 side specifically: keep the current warm-cream/deep-green "Package"
@@ -74,12 +93,49 @@ just a placeholder, still nothing receives mail there (see the MVP
 launch-blockers note elsewhere in this file) — only the domain string
 changed to stay consistent with the new name.
 
-What deliberately did NOT change, and is a separate decision for later:
-the local directory name, the GitHub remote/repo name, `package.json`'s
-`"name"` field (was already the generic leftover `"rest-express"`,
-now `"yard-stick"` — a real fix, but package names aren't user-facing
-so this was low-stakes to just do), and the `.claude/launch.json` dev
-server config name.
+What deliberately did NOT change, and is still a separate decision for
+later: the local directory name and the GitHub remote/repo name.
+`package.json`'s `"name"` field (was already the generic leftover
+`"rest-express"`, never actually branded) did get updated both times —
+`"yard-stick"` then, `"my-yard-manager"` now — since package names
+aren't user-facing, low-stakes either way; same for `.claude/
+launch.json`'s dev server config name.
+
+**Part 2, same day: "Yard Stick" → "MyYardManager."** "Yard Stick" was
+picked fast and didn't survive a real competition check. A proper
+brainstorming pass followed — many candidates tried (old land-
+measurement words like Furlong/Perch/Rod, yard critters like Molehill/
+Groundhog, a "Knots" family including Knothole/Knotworks, animal
+blends like Plotypus, and more), each actually checked against live
+domains and existing products rather than assumed available. Real
+collisions turned up repeatedly: **Yardbird** is a real outdoor-
+furniture company; **Yardvark** is a *direct* competing lawn-care
+tracking app (same category as this app's planned lawn-care vertical,
+not just an adjacent one); **Knoll** is a famous furniture brand;
+**Plotypus** is an existing board game; **Knotworks** is contested by
+several small crafts businesses plus the large "Knot Worldwide" wedding
+brand. Landed on **MyYardManager** — deliberately long and plainly
+descriptive rather than clever, chosen because it actually checked out
+clean (domain unregistered, no competing app/company found), after
+"clever and short" kept turning out to be exactly the territory
+everyone else wants too. Known, accepted tradeoff: "yard manager" as a
+phrase already means something in B2B software — warehouse/trucking
+"Yard Management Systems" are an established enterprise category — so
+there's real SEO noise to fight, not a name collision, just a
+crowded-search-term cost that was weighed and accepted rather than
+missed.
+
+Visual identity: unchanged again, still the same call as part 1 — same
+palette, same `Ruler` nav icon (still fits: "yard manager" is still a
+measuring/planning tool, nothing about the icon was ever tied to the
+literal words "yard stick"), same favicon. Every user-facing "Yard
+Stick" string from part 1 got the same treatment "MapMyFence" did:
+swapped to "MyYardManager" across `index.html`'s `<title>`, the nav
+logo text, transactional email subject/body/sender, the Before You Dig
+disclaimer, the Privacy Policy, and the Account page's delete-account
+mailto subject — and the placeholder support address moved again,
+`support@yardstick.app` → `support@myyardmanager.app`, still nothing
+receiving mail there (see MVP launch-blockers).
 
 `client/src/index.css`'s old `.dark` class block was deleted — it was
 dead code (`next-themes` is a dependency but was never wired to a

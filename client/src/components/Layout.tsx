@@ -56,7 +56,7 @@ export function Layout({ children }: LayoutProps) {
             <div className="bg-primary text-primary-foreground p-2 rounded-lg">
               <Ruler className="w-6 h-6" />
             </div>
-            <span className="font-display font-bold text-xl hidden sm:inline-block">Yard Stick</span>
+            <span className="font-display font-bold text-xl hidden sm:inline-block">MyYardManager</span>
           </Link>
 
           {/* Desktop Navigation */}

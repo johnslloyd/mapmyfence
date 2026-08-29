@@ -56,8 +56,8 @@ export const coordinates = pgTable("coordinates", {
 // property has one yard, the same way it has one address) — enforced
 // via .unique() on projectId. No drawing UI, no area-based product
 // recommendations, and no timing/scheduling logic exist yet — see
-// "Yard Stick rebrand & lawn-care groundwork" in CLAUDE.md for what
-// this is (and isn't) meant to unblock.
+// "Lawn-care vertical — architecture groundwork only" in CLAUDE.md for
+// what this is (and isn't) meant to unblock.
 export const yardBoundaries = pgTable("yard_boundaries", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull().unique(),
