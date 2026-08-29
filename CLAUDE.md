@@ -254,6 +254,26 @@ governed the Mississippi-only parcel data and the Before You Dig
 content — explicitly flagged as the highest-risk, do-this-last part of
 this vertical when it's actually greenlit.
 
+**Homepage copy updated to match (2026-08-28), same honesty discipline
+as the rest of this section.** The guest landing page (`Dashboard.tsx`'s
+`UnauthenticatedDashboard`) used to read as a fence-only tool throughout
+— hero, value props, and the three-step walkthrough all said "fence
+line" specifically. Rewritten to position the product as a general
+yard-project platform without overclaiming what's actually built: the
+hero and value props are now vertical-agnostic, and a new "One map.
+Every yard project." section explicitly labels **Fencing** "Available
+now" and **Lawn care** "Coming soon" as two real, distinctly-badged
+cards, with a plain-text line below (deliberately lighter visual
+weight than the cards — not real cards, no badges) for "sprinkler
+systems, landscaping layouts, and more." The three-step "how it works"
+walkthrough still describes fencing specifically (that's the only
+vertical that's actually true today) — kept as-is but now under a
+`FENCING · HOW IT WORKS` eyebrow tag so it reads as "here's the fencing
+flow" rather than implying it's the only flow that will ever exist.
+Never claims lawn care is usable today — same posture as the
+Before You Dig page: describe real status, don't get ahead of what's
+built.
+
 ## Project history — read before assuming anything
 
 This repo was built across several different tools/environments before

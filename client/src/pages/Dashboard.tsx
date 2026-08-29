@@ -53,10 +53,10 @@ function UnauthenticatedDashboard() {
               &gt; FREE_TO_START · NO_ACCOUNT_REQUIRED
             </div>
             <h1 className="font-display font-semibold text-4xl md:text-5xl leading-tight tracking-tight mb-6 text-primary">
-              Measure your yard like a pro, before you touch a shovel.
+              Plan your yard like a pro — one project at a time.
             </h1>
             <p className="text-lg text-muted-foreground max-w-xl mx-auto lg:mx-0 mb-9 leading-relaxed">
-              Trace your fence line on real satellite imagery down to the foot, and get an exact material count and cost — pulled from real retailer pricing.
+              Map your property once on real satellite imagery, then plan what you're building on top of it — fencing today, with lawn care and more yard projects on the way — all with exact costs pulled from real retailer pricing.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
               {primaryCta}
@@ -91,7 +91,7 @@ function UnauthenticatedDashboard() {
           <div className="bg-secondary/40 p-9 flex flex-col gap-3.5">
             <span className="font-mono text-xs text-primary">02</span>
             <h3 className="font-display font-semibold text-lg">Real material pricing</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">Costs pulled from actual hardware store listings, down to the post and bag of concrete.</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">Costs pulled from real hardware store listings — exact products, exact prices, whatever you're planning.</p>
           </div>
           <div className="bg-secondary/40 p-9 flex flex-col gap-3.5">
             <span className="font-mono text-xs text-primary">03</span>
@@ -100,9 +100,37 @@ function UnauthenticatedDashboard() {
           </div>
         </div>
 
+        {/* VERTICALS */}
+        <div className="px-6 md:px-12 py-24 border-t border-border">
+          <div className="text-center mb-14">
+            <h2 className="font-display font-semibold text-3xl tracking-tight mb-3">One map. Every yard project.</h2>
+            <p className="text-muted-foreground max-w-xl mx-auto">Start with the projects that are ready today — more get added as the platform grows.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto mb-10">
+            <div className="bg-card border border-border rounded-2xl p-8">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className="font-display font-semibold text-xl">Fencing</h3>
+                <span className="text-xs font-mono font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full whitespace-nowrap">Available now</span>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">Draw your line on real satellite imagery and get an exact material list and cost, sourced from real retailer pricing.</p>
+            </div>
+            <div className="bg-card border border-border rounded-2xl p-8">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className="font-display font-semibold text-xl">Lawn care</h3>
+                <span className="text-xs font-mono font-medium text-muted-foreground bg-secondary px-2.5 py-1 rounded-full whitespace-nowrap">Coming soon</span>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">Fertilizer, pre-emergent, and treatment timing planned around your yard's size and your local season.</p>
+            </div>
+          </div>
+          <p className="text-center text-sm text-muted-foreground">On the roadmap: sprinkler systems, landscaping layouts, and more.</p>
+        </div>
+
         {/* HOW IT WORKS */}
-        <div className="px-6 md:px-12 py-24">
-          <h2 className="font-display font-semibold text-3xl text-center tracking-tight mb-16">Three steps. No spreadsheet.</h2>
+        <div className="px-6 md:px-12 py-24 border-t border-border">
+          <div className="text-center mb-16">
+            <div className="font-mono text-xs text-primary mb-3 tracking-wide">FENCING · HOW IT WORKS</div>
+            <h2 className="font-display font-semibold text-3xl tracking-tight">Three steps. No spreadsheet.</h2>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-border border border-border max-w-4xl mx-auto">
             <div className="bg-background p-8 flex flex-col gap-4">
               <div className="font-mono text-xs text-primary">STEP_01</div>
