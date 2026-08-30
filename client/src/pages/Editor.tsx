@@ -1,7 +1,7 @@
 import { Layout } from "@/components/Layout";
 import { LatLng } from "leaflet";
 import { useRoute, useLocation } from "wouter";
-import { useProject, useCreateFenceLine, useDeleteFenceLine, useUpdateFenceLine, useEstimates } from "@/hooks/use-projects";
+import { useProject, useCreateFenceLine, useDeleteFenceLine, useUpdateFenceLine, useEstimates, useCreateGate, useDeleteGate } from "@/hooks/use-projects";
 import { MapEditorComponent } from "@/components/MapEditorComponent";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -179,6 +179,7 @@ export default function Editor() {
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
   const [editingLine, setEditingLine] = useState<any | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [placingGateType, setPlacingGateType] = useState<'single' | 'double' | null>(null);
 
   // On mobile the fence-line list lives in a full-screen sheet over the map.
   // Once the user starts drawing or editing a line, close it so the map
@@ -204,7 +205,7 @@ export default function Editor() {
   useEffect(() => {
     if (selectedLineId && project?.fenceLines) {
       const line = project.fenceLines.find((l: any) => l.id === selectedLineId);
-      setEditingLine(line ? { ...line, coordinates: [...line.coordinates] } : null);
+      setEditingLine(line ? { ...line, coordinates: [...line.coordinates], gates: line?.gates ? [...line.gates] : [] } : null);
       setUiState("EDITING");
     } else {
       setEditingLine(null);
@@ -212,6 +213,7 @@ export default function Editor() {
         setUiState('SIDEBAR');
       }
     }
+    setPlacingGateType(null);
   }, [selectedLineId, project?.fenceLines]);
 
   const handleStartDrawing = () => {
@@ -223,6 +225,79 @@ export default function Editor() {
   const createLineMutation = useCreateFenceLine();
   const deleteLineMutation = useDeleteFenceLine();
   const updateLineMutation = useUpdateFenceLine();
+  const createGateMutation = useCreateGate();
+  const deleteGateMutation = useDeleteGate();
+
+  const handleGatePlaced = async (segmentIndex: number, position: number) => {
+    if (!editingLine || !project || !placingGateType) return;
+    try {
+      await createGateMutation.mutateAsync({
+        fenceLineId: editingLine.id,
+        projectId: project.id,
+        type: placingGateType,
+        segmentIndex,
+        position,
+      });
+    } catch (error: any) {
+      console.error("Failed to add gate", error);
+      toast({ title: 'Error', description: error?.message || 'Failed to add gate', variant: 'destructive' });
+    } finally {
+      setPlacingGateType(null);
+    }
+  };
+
+  const handleDeleteGate = async (gateId: number) => {
+    if (!project) return;
+    try {
+      await deleteGateMutation.mutateAsync({ id: gateId, projectId: project.id });
+    } catch (error: any) {
+      console.error("Failed to remove gate", error);
+      toast({ title: 'Error', description: error?.message || 'Failed to remove gate', variant: 'destructive' });
+    }
+  };
+
+  // Removing point `idx` merges the two segments touching it (idx-1 and
+  // idx) into one, and shifts every later segment's index down by one.
+  // A gate sitting exactly on one of the two merged segments has no
+  // sane new position (its segment no longer exists in that form), so
+  // that's blocked rather than guessed at — the user removes the gate
+  // first, same as you'd unhook a gate before moving its posts in real
+  // life. A gate on a LATER segment just needs its segmentIndex shifted
+  // down by one to stay pointing at the same physical spot; there's no
+  // gate-update endpoint (never needed one before this), so that's done
+  // as delete-then-recreate with the same type/position — the gate
+  // itself doesn't change, only which segment index it's attached to.
+  const handleDeletePoint = async (idx: number) => {
+    if (!editingLine || !project) return;
+    const gatesOnLine: any[] = editingLine.gates || [];
+    const orphaned = gatesOnLine.some((g) => g.segmentIndex === idx - 1 || g.segmentIndex === idx);
+    if (orphaned) {
+      toast({
+        title: "Can't delete this point",
+        description: "A gate is placed on this point's segment — remove the gate first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const gatesToShift = gatesOnLine.filter((g) => g.segmentIndex > idx);
+      for (const g of gatesToShift) {
+        await deleteGateMutation.mutateAsync({ id: g.id, projectId: project.id });
+        await createGateMutation.mutateAsync({
+          fenceLineId: editingLine.id,
+          projectId: project.id,
+          type: g.type,
+          segmentIndex: g.segmentIndex - 1,
+          position: g.position,
+        });
+      }
+      const newCoords = editingLine.coordinates.filter((_: any, i: number) => i !== idx);
+      await handleUpdateLine({ ...editingLine, coordinates: newCoords });
+    } catch (error: any) {
+      console.error("Failed to delete point", error);
+      toast({ title: 'Error', description: error?.message || 'Failed to delete point', variant: 'destructive' });
+    }
+  };
 
   const handleUpdateLine = async (line: any) => {
     if (!line || !project) return;
@@ -316,7 +391,7 @@ export default function Editor() {
   }
 
   if (!project) {
-    return <NotFound />;
+    return <Layout><NotFound /></Layout>;
   }
 
   const handleSaveLine = async (points: any[], length: number) => {
@@ -506,6 +581,11 @@ export default function Editor() {
                       updateLineMutation={updateLineMutation}
                       setSelectedLineId={setSelectedLineId}
                       refetchProject={refetchProject}
+                      placingGateType={placingGateType}
+                      onStartPlacingGate={setPlacingGateType}
+                      onCancelPlacingGate={() => setPlacingGateType(null)}
+                      onDeleteGate={handleDeleteGate}
+                      deleteGateMutation={deleteGateMutation}
                   />
               ) : null;
           default:
@@ -544,6 +624,9 @@ export default function Editor() {
             isDrawing={isDrawing}
             onCancelDrawing={cancelDrawing}
             controlsPosition="right"
+            placingGateType={placingGateType}
+            onGatePlaced={handleGatePlaced}
+            onDeletePoint={handleDeletePoint}
           />
 
           {/* Mobile Menu Trigger */}

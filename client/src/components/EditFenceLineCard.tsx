@@ -4,6 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { DoorOpen, X, Trash2 } from "lucide-react";
+
+const GATE_LABEL: Record<string, string> = { single: "Single Gate", double: "Double Gate" };
 
 export function EditFenceLineCard({
   editingLine,
@@ -13,6 +16,11 @@ export function EditFenceLineCard({
   setSelectedLineId,
   refetchProject,
   className,
+  placingGateType = null,
+  onStartPlacingGate = () => {},
+  onCancelPlacingGate = () => {},
+  onDeleteGate = () => {},
+  deleteGateMutation,
 }: {
   editingLine: any;
   setEditingLine: any;
@@ -21,7 +29,13 @@ export function EditFenceLineCard({
   setSelectedLineId: any;
   refetchProject: any;
   className?: string;
+  placingGateType?: 'single' | 'double' | null;
+  onStartPlacingGate?: (type: 'single' | 'double') => void;
+  onCancelPlacingGate?: () => void;
+  onDeleteGate?: (gateId: number) => void;
+  deleteGateMutation?: any;
 }) {
+  const gates: any[] = editingLine.gates || [];
   return (
     <Card className={cn("z-10 w-full max-w-md rounded-lg bg-panel text-panel-foreground", className)}>
       <CardHeader>
@@ -73,6 +87,47 @@ export function EditFenceLineCard({
           </div>
         </div>
         <p className="text-sm text-muted-foreground">Drag the points on the map to adjust the line.</p>
+
+        <div className="space-y-2 pt-2 border-t">
+          <Label className="text-xs flex items-center gap-1.5"><DoorOpen className="w-3.5 h-3.5" /> Gates</Label>
+          {gates.length > 0 && (
+            <div className="space-y-1.5">
+              {gates.map((gate) => (
+                <div key={gate.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5 text-sm">
+                  <span>{GATE_LABEL[gate.type] || "Gate"}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                    onClick={() => onDeleteGate(gate.id)}
+                    disabled={deleteGateMutation?.isPending}
+                    aria-label={`Remove ${GATE_LABEL[gate.type] || "gate"}`}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          {placingGateType ? (
+            <div className="flex items-center justify-between gap-2 rounded-md bg-primary/10 text-primary px-2.5 py-1.5 text-xs font-medium">
+              <span>Click the highlighted line to place the {placingGateType} gate</span>
+              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onCancelPlacingGate} aria-label="Cancel placing gate">
+                <X className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => onStartPlacingGate('single')}>
+                + Single Gate
+              </Button>
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => onStartPlacingGate('double')}>
+                + Double Gate
+              </Button>
+            </div>
+          )}
+        </div>
+
         <div className="flex gap-2">
           <Button
             onClick={() => handleUpdateLine(editingLine)}

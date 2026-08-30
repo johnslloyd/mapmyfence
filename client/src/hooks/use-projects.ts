@@ -408,3 +408,103 @@ export function useUpdateFenceLine() {
     }
   });
 }
+
+// ============================================
+// GATES — placed on a fence line, not user-drawn (see
+// MapEditorComponent's gate-placement mode and shared/schema.ts's
+// `gates` table comment).
+// ============================================
+
+type GatePosition = { type: "single" | "double"; segmentIndex: number; position: number };
+
+export function useCreateGate() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ fenceLineId, projectId, ...data }: { fenceLineId: number; projectId: number } & GatePosition) => {
+      const validated = api.gates.create.input.parse(data);
+      const url = buildUrl(api.gates.create.path, { fenceLineId });
+
+      const res = await fetch(url, {
+        method: api.gates.create.method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validated),
+        credentials: "include",
+      });
+
+      if (!res.ok) throw new Error('Failed to add gate');
+      return api.gates.create.responses[201].parse(await res.json());
+    },
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: [api.projects.get.path, projectId] });
+      // Same refetchType: 'all' reasoning as the fence-line mutations
+      // above — MaterialEstimates can be unmounted (right panel showing
+      // the editing card, not the sidebar) when a gate is added, and a
+      // gate directly changes the estimate (new hardware line item).
+      queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId], refetchType: 'all' });
+      toast({ title: "Success", description: "Gate added", variant: "success" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
+}
+
+export function useDeleteGate() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, projectId }: { id: number; projectId: number }) => {
+      const url = buildUrl(api.gates.delete.path, { id });
+      const res = await fetch(url, {
+        method: api.gates.delete.method,
+        credentials: "include"
+      });
+
+      if (!res.ok) throw new Error('Failed to remove gate');
+    },
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: [api.projects.get.path, projectId] });
+      queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId], refetchType: 'all' });
+      toast({ title: "Deleted", description: "Gate removed", variant: "success" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
+}
+
+// ============================================
+// ACCOUNT — self-serve, free during beta (see FREE_PROPERTY_LIMIT and
+// api.account.upgrade in shared/routes.ts). Pulled out as a shared hook
+// so the Account page's Plan card and AddPropertyDialog's at-the-limit
+// prompt don't each hand-roll the same fetch.
+// ============================================
+
+export function useUpgradeToPro() {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(api.account.upgrade.path, { method: api.account.upgrade.method, credentials: "include" });
+      if (!res.ok) throw new Error("Failed to upgrade");
+      return api.account.upgrade.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      toast({ title: "You're on Pro", description: "Unlimited properties, free during beta.", variant: "success" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Couldn't upgrade right now. Try again in a moment.", variant: "destructive" });
+    },
+  });
+}

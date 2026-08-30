@@ -1,6 +1,7 @@
 
 import { createContext, useContext, useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 
 type User = any;
 
@@ -19,6 +20,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -48,6 +50,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       await fetch("/api/logout", { method: "POST", credentials: "include" });
       setUser(null);
+      // Every property/project/estimate query fetched while logged in is
+      // still sitting in the cache under the SAME query keys (they don't
+      // include a userId) — without clearing it, navigating back to a
+      // page like PropertyOverview after logout, or just having it still
+      // mounted, kept showing that stale authenticated data (a query's
+      // last-successful `data` survives a failed background refetch by
+      // default) instead of reflecting that the session is gone.
+      queryClient.clear();
       setLocation('/');
     } catch (error) {
       console.error("Failed to logout", error);

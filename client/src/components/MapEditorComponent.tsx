@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, Fragment } from "react";
-import { MapContainer, TileLayer, Marker, Polyline, GeoJSON, useMapEvents, Tooltip, CircleMarker } from "react-leaflet";
-import { LatLng, Icon } from "leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, GeoJSON, useMapEvents, useMap, Tooltip, CircleMarker } from "react-leaflet";
+import { LatLng, LatLngBounds, Icon, DivIcon } from "leaflet";
 import { Button } from "@/components/ui/button";
 import { Undo2, Save, Trash2, Ruler, Search, Loader2, MapPinned, AlertTriangle, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -61,6 +61,18 @@ const editIcon = new Icon({
   className: 'leaflet-edit-marker'
 });
 
+// Hover-only delete affordance for a line point while editing — a
+// small red × badge, anchored so it sits up-and-right of the point's
+// own pin rather than on top of it. Desktop-only by design (hover has
+// no touch equivalent); this was an explicit, deliberate tradeoff, not
+// an oversight — see the pin marker's own eventHandlers below.
+const deletePointIcon = new DivIcon({
+  className: "",
+  html: `<div style="background:#ef4444;color:white;border-radius:9999px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;font-weight:700;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);cursor:pointer;">×</div>`,
+  iconSize: [18, 18],
+  iconAnchor: [-4, 30],
+});
+
 const postIcon = {
   path: "M-1,-1 L1,-1 L1,1 L-1,1 Z",
   fillColor: "white",
@@ -92,7 +104,75 @@ function getIntermediatePoints(p1: LatLng, p2: LatLng): LatLng[] {
   return intermediatePoints;
 }
 
-function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineClick, onEndpointClick }: { points: any[], color: string, weight: number, isEditing?: boolean, onPointDragEnd?: (index: number, newLatLng: LatLng) => void, onLineClick?: () => void, onEndpointClick?: (index: number) => void }) {
+// Projects a click point onto the straight segment p1->p2 and returns
+// how far along it (0 = at p1, 1 = at p2), clamped to the segment. Flat
+// lat/lng math, not a great-circle calc — fine here since this only
+// decides where a gate MARKER snaps to on screen, unlike the real
+// length/distance calculations elsewhere in this app (which correctly
+// use LatLng.distanceTo()) that actually feed into pricing.
+function projectFraction(p1: LatLng, p2: LatLng, click: LatLng): number {
+  const dx = p2.lng - p1.lng;
+  const dy = p2.lat - p1.lat;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return 0.5;
+  const t = ((click.lng - p1.lng) * dx + (click.lat - p1.lat) * dy) / lenSq;
+  return Math.min(1, Math.max(0, t));
+}
+
+const GATE_LABEL: Record<string, string> = { single: "Single Gate", double: "Double Gate" };
+// Real-world opening widths, not arbitrary pixel sizes — a single gate
+// is a standard 3-4ft walk-through opening, a double gate (two hinged
+// leaves) is roughly double that. Used to size the gate's visual span
+// as an actual fraction of the segment's real length (via
+// LatLng.distanceTo(), same as every other real distance in this app),
+// so it reads as genuinely wider on the map, not just a bigger icon.
+const GATE_WIDTH_FEET: Record<string, number> = { single: 4, double: 8 };
+
+function GateMarker({ gate, points }: { gate: { type: string; segmentIndex: number; position: number }, points: any[] }) {
+  const p1 = points[gate.segmentIndex];
+  const p2 = points[gate.segmentIndex + 1];
+  // Defensive only — segmentIndex should always resolve against the
+  // line's current points, but a line with fewer points than when the
+  // gate was placed (shouldn't happen in the current UI, which has no
+  // point-delete) would otherwise crash the map render.
+  if (!p1 || !p2) return null;
+  const centerLat = p1.lat + (p2.lat - p1.lat) * gate.position;
+  const centerLng = p1.lng + (p2.lng - p1.lng) * gate.position;
+  const segLengthFeet = new LatLng(p1.lat, p1.lng).distanceTo(new LatLng(p2.lat, p2.lng)) * FEET_PER_METER;
+  const isDouble = gate.type === "double";
+  const widthFeet = GATE_WIDTH_FEET[gate.type] ?? GATE_WIDTH_FEET.single;
+  // Half-width as a fraction of the segment, capped at 45% each side so
+  // a short segment never renders a span past its own endpoints.
+  const halfFraction = segLengthFeet > 0 ? Math.min(0.45, widthFeet / 2 / segLengthFeet) : 0.05;
+  const dLat = (p2.lat - p1.lat) * halfFraction;
+  const dLng = (p2.lng - p1.lng) * halfFraction;
+  const endA: [number, number] = [centerLat - dLat, centerLng - dLng];
+  const endB: [number, number] = [centerLat + dLat, centerLng + dLng];
+  return (
+    <>
+      {/* react-leaflet's <Tooltip> binds to whatever Layer it's nested
+          INSIDE (context.overlayContainer) — a standalone sibling
+          Tooltip with just a `position` silently never attaches to the
+          map at all (context.overlayContainer is null, so react-leaflet's
+          own binding effect no-ops). Nesting it inside this Polyline
+          fixes that; the explicit `position` prop still overrides where
+          it actually shows, same as it would standalone. */}
+      <Polyline positions={[endA, endB]} pathOptions={{ color: "#f59e0b", weight: isDouble ? 6 : 4, dashArray: "5 4" }}>
+        <Tooltip position={[centerLat, centerLng]} direction="top" offset={[0, -10]} permanent className="bg-transparent border-none shadow-none">
+          <span className="font-bold text-xs" style={{ color: "#f59e0b", textShadow: "0 0 3px black" }}>{GATE_LABEL[gate.type] || "Gate"}</span>
+        </Tooltip>
+      </Polyline>
+      <CircleMarker center={endA} radius={5} color="white" weight={2} fillColor="#f59e0b" fillOpacity={1} />
+      <CircleMarker center={endB} radius={5} color="white" weight={2} fillColor="#f59e0b" fillOpacity={1} />
+    </>
+  );
+}
+
+function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineClick, onEndpointClick, onDeletePoint, gates = [], placingGate, onSegmentClick }: { points: any[], color: string, weight: number, isEditing?: boolean, onPointDragEnd?: (index: number, newLatLng: LatLng) => void, onLineClick?: () => void, onEndpointClick?: (index: number) => void, onDeletePoint?: (index: number) => void, gates?: { type: string; segmentIndex: number; position: number }[], placingGate?: boolean, onSegmentClick?: (segmentIndex: number, latlng: LatLng) => void }) {
+  // Hover-only delete-point affordance (desktop only — see
+  // deletePointIcon's own comment). Tracked here, not per-Marker state,
+  // since only one point can be hovered at a time.
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const segments = [];
   for (let i = 0; i < points.length - 1; i++) {
     const p1 = new LatLng(points[i].lat, points[i].lng);
@@ -103,13 +183,30 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
 
     segments.push(
       <Fragment key={`segment-${i}`}>
-        <Polyline positions={[p1, p2]} pathOptions={{ color, weight }} eventHandlers={{ click: onLineClick }} />
+        {/* react-leaflet's <Tooltip> binds to whatever Layer it's nested
+            INSIDE (context.overlayContainer) — as a standalone sibling
+            (the previous shape here) it silently never attaches to the
+            map at all, so this "run" length badge had never actually
+            been rendering. Nesting it inside this Polyline fixes that;
+            the explicit `position` prop still overrides where it shows,
+            same as it would standalone. Styled like the homepage hero
+            illustration (accent fill, primary border/text, mono font)
+            rather than plain white shadowed text, so a "run" reads as a
+            deliberate, named piece of the fence, not a generic label. */}
+        <Polyline
+          positions={[p1, p2]}
+          pathOptions={placingGate ? { color: "#f59e0b", weight: weight + 2, dashArray: "8 6" } : { color, weight }}
+          eventHandlers={placingGate && onSegmentClick ? { click: (e: any) => onSegmentClick(i, e.latlng) } : { click: onLineClick }}
+        >
+          <Tooltip position={midPoint} permanent direction="center" className="bg-transparent border-none shadow-none">
+            <span className="inline-block rounded px-2 py-0.5 font-mono text-xs font-semibold bg-accent/95 text-primary border border-primary shadow-sm">
+              {segmentLength.toFixed(1)} ft
+            </span>
+          </Tooltip>
+        </Polyline>
         {intermediate.map((post, postIdx) => (
           <CircleMarker key={`post-${i}-${postIdx}`} center={post} radius={3} color="white" weight={1} fillColor="black" />
         ))}
-        <Tooltip position={midPoint} permanent direction="center" className="bg-transparent border-none shadow-none">
-          <span className="text-white font-bold text-sm" style={{ textShadow: "0 0 3px black" }}>{segmentLength.toFixed(1)} ft</span>
-        </Tooltip>
       </Fragment>
     );
   }
@@ -117,36 +214,110 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
   return (
     <>
       {segments}
+      {gates.map((gate, idx) => (
+        <GateMarker key={`gate-${idx}`} gate={gate} points={points} />
+      ))}
       {points.map((p, idx) => (
-        <Marker
-          key={p.id || `marker-${idx}`}
-          position={[p.lat, p.lng]}
-          icon={isEditing ? editIcon : defaultIcon}
-          draggable={isEditing}
-          eventHandlers={{
-            dragend: (e) => {
-              if (isEditing && onPointDragEnd) {
-                onPointDragEnd(idx, e.target.getLatLng());
-              }
-            },
-            click: () => {
-              if (isEditing && onEndpointClick && (idx === 0 || idx === points.length - 1)) {
-                onEndpointClick(idx);
-              } else if (onLineClick && !isEditing) {
-                onLineClick();
-              }
-            }
-          }}
-        >
-          <Tooltip permanent direction="top" offset={[0, -20]} className="bg-transparent border-none shadow-none font-bold text-primary">
-            {idx + 1}
-          </Tooltip>
-        </Marker>
+        <Fragment key={p.id || `marker-${idx}`}>
+          <Marker
+            position={[p.lat, p.lng]}
+            icon={isEditing ? editIcon : defaultIcon}
+            draggable={isEditing}
+            eventHandlers={{
+              dragend: (e) => {
+                if (isEditing && onPointDragEnd) {
+                  onPointDragEnd(idx, e.target.getLatLng());
+                }
+              },
+              click: () => {
+                if (isEditing && onEndpointClick && (idx === 0 || idx === points.length - 1)) {
+                  onEndpointClick(idx);
+                } else if (onLineClick && !isEditing) {
+                  onLineClick();
+                }
+              },
+              mouseover: () => isEditing && setHoveredIdx(idx),
+              mouseout: () => setHoveredIdx((current) => (current === idx ? null : current)),
+            }}
+          >
+            <Tooltip permanent direction="top" offset={[0, -20]} className="bg-transparent border-none shadow-none font-bold text-primary">
+              {idx + 1}
+            </Tooltip>
+          </Marker>
+          {/* Delete-this-point affordance — only while editing, only on
+              hover, and only when the line would still have >= 2 points
+              left afterward (a line can't be shorter than that; removing
+              the whole thing is the sidebar's trash-icon job instead). */}
+          {isEditing && onDeletePoint && hoveredIdx === idx && points.length > 2 && (
+            <Marker
+              position={[p.lat, p.lng]}
+              icon={deletePointIcon}
+              interactive={true}
+              eventHandlers={{
+                click: () => onDeletePoint(idx),
+                mouseover: () => setHoveredIdx(idx),
+                mouseout: () => setHoveredIdx((current) => (current === idx ? null : current)),
+              }}
+            />
+          )}
+        </Fragment>
       ))}
     </>
   );
 }
 
+
+// Centers/fits the map on the project's own fence line(s) once, on
+// load — not on the geocoded address point, which is often imprecise
+// and (previously) just centered the whole browser window rather than
+// the actually-visible left portion of it. Rendered as a MapContainer
+// CHILD specifically so `useMap()` hands back an already-fully-ready
+// Leaflet map instance — react-leaflet only renders MapContainer's
+// children once its internal map instance exists (see MapContainer's
+// own source), which sidesteps a real timing gap the parent's own
+// `mapRef` ref has: react-leaflet populates that ref via a state update
+// that lags a render behind the map's actual creation, so a plain
+// parent-level effect reading `mapRef.current` right after mount can
+// still see `null` — confirmed by logging it before landing on this
+// fix. The right-hand panel is DOCKED (a real flex sibling that shrinks
+// the map, not a floating overlay) whenever there's at least one line
+// to show — see Editor.tsx's `isPanelDocked` — so bias the fit padding
+// heavily to the right on desktop: fitBounds keeps the whole bounds
+// inside the given margins, so a bigger right-side margin pushes the
+// fence's visual center left, into the space that's actually visible
+// once the panel eats the right ~480–560px. On mobile the panel is a
+// full-screen sheet, not a width-eating column, so no bias is needed.
+// Only fires once — guarded by the ref — so it doesn't fight a user's
+// own pan/zoom on every later edit, just on initial load (and,
+// incidentally, the moment a brand-new project's first line is saved).
+function FitBoundsOnLoad({ existingLines, isMobile }: { existingLines: ExistingLine[]; isMobile?: boolean }) {
+  const map = useMap();
+  const hasFitRef = useRef(false);
+  useEffect(() => {
+    if (hasFitRef.current) return;
+    const allPoints = existingLines.flatMap((l) => l.coordinates);
+    if (allPoints.length === 0) return;
+    hasFitRef.current = true;
+    // Leaflet computes fitBounds' zoom from the container's CURRENT
+    // measured size — right at mount that can still be 0x0 (layout
+    // hasn't settled yet), which makes it "fit" by zooming out to
+    // nearly the whole world instead of the fence line. invalidateSize()
+    // forces a fresh measurement, and requestAnimationFrame pushes this
+    // past the browser's first layout/paint pass so that measurement is
+    // actually correct.
+    requestAnimationFrame(() => {
+      map.invalidateSize();
+      const bounds = new LatLngBounds(allPoints.map((p) => [p.lat, p.lng] as [number, number]));
+      const rightPadding = isMobile ? 40 : 520;
+      map.fitBounds(bounds, {
+        paddingTopLeft: [40, 40],
+        paddingBottomRight: [rightPadding, 40],
+        maxZoom: TILE_NATIVE_ZOOM,
+      });
+    });
+  }, [existingLines, isMobile, map]);
+  return null;
+}
 
 function MapEvents({ onMapClick }: { onMapClick: (e: any) => void }) {
   useMapEvents({ click: onMapClick });
@@ -165,7 +336,8 @@ function AddressSearchInput({ value, onValueChange, onSearch, isSearching, autoF
 }
 
 interface Point { lat: number; lng: number; id: number; }
-interface ExistingLine { id: number; coordinates: { lat: number, lng: number }[]; }
+interface GateInfo { type: string; segmentIndex: number; position: number; }
+interface ExistingLine { id: number; coordinates: { lat: number, lng: number }[]; gates?: GateInfo[]; }
 interface MapEditorProps {
   initialCenter?: [number, number];
   initialAddress?: string;
@@ -180,9 +352,22 @@ interface MapEditorProps {
   isDrawing?: boolean;
   onCancelDrawing?: () => void;
   controlsPosition?: 'left' | 'right';
+  // Gate placement — see EditFenceLineCard's Gates section. Active only
+  // while editingLine is set: 'single' | 'double' puts the editing
+  // line's segments into a clickable, highlighted "place it here" mode;
+  // null means normal editing (drag points / extend).
+  placingGateType?: 'single' | 'double' | null;
+  onGatePlaced?: (segmentIndex: number, position: number) => void;
+  // Deletes a single point from the line currently being edited — see
+  // FenceLine's hover-only delete-point affordance. The actual
+  // coordinate-splicing (and any gate-segmentIndex fallout) happens in
+  // Editor.tsx, which owns editingLine and the gate mutations; this
+  // component just forwards the raw "user clicked delete on point N"
+  // event, the same shape as onGatePlaced above.
+  onDeletePoint?: (index: number) => void;
 }
 
-export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSaving, existingLines = [], isMobile, selectedLineId = null, onLineSelect = () => {}, editingLine = null, onLineUpdate = () => {}, isDrawing = false, onCancelDrawing = () => {}, controlsPosition = 'left' }: MapEditorProps) {
+export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSaving, existingLines = [], isMobile, selectedLineId = null, onLineSelect = () => {}, editingLine = null, onLineUpdate = () => {}, isDrawing = false, onCancelDrawing = () => {}, controlsPosition = 'left', placingGateType = null, onGatePlaced = () => {}, onDeletePoint = () => {} }: MapEditorProps) {
   const [points, setPoints] = useState<Point[]>([]);
   const [totalDistance, setTotalDistance] = useState(0);
   const mapRef = useRef<any>(null);
@@ -226,11 +411,19 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   }, []);
 
   useEffect(() => {
-    if (initialAddress) {
+    // Only geocode-and-center from the address when there are no fence
+    // lines yet (a brand new project has no better data to center on).
+    // Once real lines exist, the effect below fits the map to THEM
+    // instead — real drawn points are strictly better than a geocoded
+    // address point, and running both would just have this one's
+    // setView race against (and sometimes win over) the bounds fit.
+    if (initialAddress && existingLines.length === 0) {
       setAddress(initialAddress);
       handleSearch(initialAddress, false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialAddress]);
+
 
   useEffect(() => {
     if (!editingLine) {
@@ -351,6 +544,14 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
     onLineUpdate({ ...editingLine, coordinates: newCoords });
   };
 
+  const handleGateSegmentClick = (segmentIndex: number, latlng: LatLng) => {
+    if (!editingLine) return;
+    const p1 = new LatLng(editingLine.coordinates[segmentIndex].lat, editingLine.coordinates[segmentIndex].lng);
+    const p2 = new LatLng(editingLine.coordinates[segmentIndex + 1].lat, editingLine.coordinates[segmentIndex + 1].lng);
+    const position = projectFraction(p1, p2, latlng);
+    onGatePlaced(segmentIndex, position);
+  };
+
   const handleEndpointClick = (index: number) => {
     if (!editingLine) return;
     if (index === 0) {
@@ -414,6 +615,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
         />
         <style>{`.leaflet-edit-marker { filter: hue-rotate(120deg); }`}</style>
         {(isDrawing || isExtending) && <MapEvents onMapClick={handleMapClick} />}
+        <FitBoundsOnLoad existingLines={existingLines} isMobile={isMobile} />
 
         {parcel && parcel.geometry && (
           // key forces a remount on a new lookup — react-leaflet's GeoJSON
@@ -431,23 +633,28 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
         )}
         
         {existingLines.map(line => (
-          <FenceLine 
+          <FenceLine
             key={line.id}
             points={line.coordinates}
             color={selectedLineId === line.id && !editingLine ? 'red' : 'blue'}
             weight={selectedLineId === line.id && !editingLine ? 5 : 3}
             onLineClick={() => onLineSelect(line.id)}
+            gates={line.id === editingLine?.id ? [] : (line.gates || [])}
           />
         ))}
 
         {editingLine && (
-           <FenceLine 
+           <FenceLine
              points={editingLine.coordinates}
              color="orange"
              weight={5}
              isEditing={true}
              onPointDragEnd={handlePointDragEnd}
              onEndpointClick={handleEndpointClick}
+             onDeletePoint={onDeletePoint}
+             gates={editingLine.gates || []}
+             placingGate={!!placingGateType}
+             onSegmentClick={handleGateSegmentClick}
            />
         )}
         
@@ -507,7 +714,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
       )}
 
       <div className="absolute bottom-4 left-4 z-40 bg-background/80 backdrop-blur px-3 py-1.5 rounded-full text-xs font-medium border shadow-sm">
-        {isExtending ? "Click on the map to extend the line" : editingLine ? "Drag points to edit the line or click an endpoint to extend" : isDrawing ? "Click on map to place fence posts" : "Select a line to edit or create a new one"}
+        {placingGateType ? `Click on the highlighted line to place the ${placingGateType} gate` : isExtending ? "Click on the map to extend the line" : editingLine ? "Drag points to edit the line or click an endpoint to extend" : isDrawing ? "Click on map to place fence posts" : "Select a line to edit or create a new one"}
       </div>
 
       <div className="absolute bottom-4 right-4 z-40 flex gap-2">
