@@ -10,6 +10,7 @@ import { z } from "zod";
 import { Scrypt, generateId } from "lucia";
 import { logEvent } from "./events";
 import { sendEmail } from "./email";
+import { api } from "@shared/routes";
 
 export const authRouter = Router();
 
@@ -273,6 +274,23 @@ authRouter.post("/api/account/change-password", authLimiter, async (req, res, ne
     await db.update(users).set({ hashedPassword }).where(eq(users.id, user.id));
 
     res.json({ message: "Password updated." });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Self-serve, free during beta — no payment, just flips the flag. See
+// this table's `plan` column comment in shared/schema.ts for why this
+// was chosen over a manual-grant-only flow.
+authRouter.post(api.account.upgrade.path, async (req, res, next) => {
+  try {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "You must be logged in to do that." });
+    }
+    const sessionUser = req.user as typeof users.$inferSelect;
+    await db.update(users).set({ plan: "pro" }).where(eq(users.id, sessionUser.id));
+    logEvent("account_upgraded", { userId: sessionUser.id });
+    res.json({ plan: "pro" });
   } catch (error) {
     next(error);
   }

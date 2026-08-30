@@ -1,13 +1,24 @@
 import {
-  properties, projects, fenceLines, coordinates,
+  properties, projects, fenceLines, coordinates, gates, users, events,
   type InsertProperty, type PropertyWithProjects,
   type InsertProject, type ProjectWithLines,
   type FenceLine, type InsertFenceLine,
   type Coordinate, type InsertCoordinate,
+  type Gate, type InsertGate,
 } from "@shared/schema";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, desc, inArray } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "@shared/schema";
+
+// Same strip-list server/auth.ts's toSafeUser uses (hashedPassword,
+// resetTokenHash, resetTokenExpiresAt never leave the server) — kept
+// separate rather than imported to avoid a storage.ts <-> auth.ts
+// circular import; the two lists are duplicated in exactly this one
+// shape, easy to keep in sync since both are short and rarely touched.
+function stripSensitiveUserFields<T extends { hashedPassword: string; resetTokenHash: string | null; resetTokenExpiresAt: Date | null }>(user: T) {
+  const { hashedPassword, resetTokenHash, resetTokenExpiresAt, ...safe } = user;
+  return safe;
+}
 
 export interface IStorage {
   getProperties(userId: string): Promise<PropertyWithProjects[]>;
@@ -28,6 +39,16 @@ export interface IStorage {
   createFenceLine(projectId: number, fenceLine: InsertFenceLine, coords: Omit<InsertCoordinate, "fenceLineId">[]): Promise<FenceLine & { coordinates: Coordinate[] }>;
   deleteFenceLine(id: number): Promise<void>;
   updateFenceLine(id: number, updates: Partial<InsertFenceLine & { coordinates: Omit<InsertCoordinate, "fenceLineId">[] }>): Promise<FenceLine & { coordinates: Coordinate[] }>;
+
+  createGate(fenceLineId: number, gate: Omit<InsertGate, "fenceLineId">): Promise<Gate>;
+  deleteGate(id: number): Promise<void>;
+
+  // Admin panel (server/adminRoutes.ts) — every caller here has already
+  // passed the isAdmin check; these intentionally have no per-user
+  // ownership scoping the way everything else in this file does.
+  getUserById(id: string): Promise<any | undefined>;
+  getAllUsersWithCounts(): Promise<any[]>;
+  getRecentEvents(limit: number): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -87,7 +108,8 @@ export class DatabaseStorage implements IStorage {
     const linesWithCoords = [] as any[];
     for (const l of lines) {
       const coords = await this.db.select().from(coordinates).where(eq(coordinates.fenceLineId, l.id));
-      linesWithCoords.push({ ...l, coordinates: coords });
+      const lineGates = await this.db.select().from(gates).where(eq(gates.fenceLineId, l.id));
+      linesWithCoords.push({ ...l, coordinates: coords, gates: lineGates });
     }
     return { ...p, property: propResult[0], fenceLines: linesWithCoords };
   }
@@ -135,7 +157,9 @@ export class DatabaseStorage implements IStorage {
     const lineWithCoords = await this.db.select().from(fenceLines).where(eq(fenceLines.id, newLine.id)).limit(1);
     const l = lineWithCoords[0];
     const fetchedCoords = await this.db.select().from(coordinates).where(eq(coordinates.fenceLineId, l.id));
-    return { ...l, coordinates: fetchedCoords } as FenceLine & { coordinates: Coordinate[] };
+    // A brand-new line has no gates yet — but the field still needs to be
+    // present so the shape matches ProjectWithLines.fenceLines everywhere.
+    return { ...l, coordinates: fetchedCoords, gates: [] } as FenceLine & { coordinates: Coordinate[]; gates: Gate[] };
   }
 
   async deleteFenceLine(id: number): Promise<void> {
@@ -161,6 +185,71 @@ export class DatabaseStorage implements IStorage {
     const lineWithCoords = await this.db.select().from(fenceLines).where(eq(fenceLines.id, id)).limit(1);
     const l = lineWithCoords[0];
     const fetchedCoords = await this.db.select().from(coordinates).where(eq(coordinates.fenceLineId, l.id));
-    return { ...l, coordinates: fetchedCoords } as FenceLine & { coordinates: Coordinate[] };
+    const fetchedGates = await this.db.select().from(gates).where(eq(gates.fenceLineId, l.id));
+    return { ...l, coordinates: fetchedCoords, gates: fetchedGates } as FenceLine & { coordinates: Coordinate[]; gates: Gate[] };
+  }
+
+  async createGate(fenceLineId: number, gate: Omit<InsertGate, "fenceLineId">): Promise<Gate> {
+    const [newGate] = await this.db.insert(gates).values({ ...gate, fenceLineId }).returning();
+    return newGate;
+  }
+
+  async deleteGate(id: number): Promise<void> {
+    await this.db.delete(gates).where(eq(gates.id, id));
+  }
+
+  async getUserById(id: string): Promise<any | undefined> {
+    const result = await this.db.select().from(users).where(eq(users.id, id)).limit(1);
+    if (!result || result.length === 0) return undefined;
+    return stripSensitiveUserFields(result[0]);
+  }
+
+  // Three flat queries instead of one per user (or a SQL-level join) —
+  // simple and fast enough at this app's actual scale (a few dozen
+  // accounts today); revisit with a real aggregate query if the admin
+  // panel ever needs to scale past that.
+  async getAllUsersWithCounts(): Promise<any[]> {
+    const allUsers = await this.db.select().from(users);
+    const allProperties = await this.db.select().from(properties);
+    const allProjects = await this.db.select().from(projects);
+
+    const propertyIdsByUser = new Map<string, number[]>();
+    for (const p of allProperties) {
+      if (!p.userId) continue;
+      const arr = propertyIdsByUser.get(p.userId) ?? [];
+      arr.push(p.id);
+      propertyIdsByUser.set(p.userId, arr);
+    }
+    const projectCountByProperty = new Map<number, number>();
+    for (const pr of allProjects) {
+      projectCountByProperty.set(pr.propertyId, (projectCountByProperty.get(pr.propertyId) ?? 0) + 1);
+    }
+
+    return allUsers
+      .map((u) => {
+        const propertyIds = propertyIdsByUser.get(u.id) ?? [];
+        const projectCount = propertyIds.reduce((sum, pid) => sum + (projectCountByProperty.get(pid) ?? 0), 0);
+        return { ...stripSensitiveUserFields(u), propertyCount: propertyIds.length, projectCount };
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async getRecentEvents(limit: number): Promise<any[]> {
+    const recentEvents = await this.db.select().from(events).orderBy(desc(events.createdAt)).limit(limit);
+    const userIds = new Set<string>();
+    for (const e of recentEvents) {
+      if (e.userId) userIds.add(e.userId);
+      if (e.targetUserId) userIds.add(e.targetUserId);
+    }
+    const relevantUsers = userIds.size > 0
+      ? await this.db.select().from(users).where(inArray(users.id, Array.from(userIds)))
+      : [];
+    const emailById = new Map(relevantUsers.map((u) => [u.id, u.email]));
+
+    return recentEvents.map((e) => ({
+      ...e,
+      userEmail: e.userId ? emailById.get(e.userId) ?? null : null,
+      targetUserEmail: e.targetUserId ? emailById.get(e.targetUserId) ?? null : null,
+    }));
   }
 }

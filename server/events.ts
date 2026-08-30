@@ -10,10 +10,10 @@ type EventType = typeof events.$inferInsert["type"];
  */
 export function logEvent(
   type: EventType,
-  fields: { propertyId?: number; projectId?: number; userId?: string } = {},
+  fields: { propertyId?: number; projectId?: number; userId?: string; targetUserId?: string } = {},
 ): void {
   db.insert(events)
-    .values({ type, propertyId: fields.propertyId, projectId: fields.projectId, userId: fields.userId })
+    .values({ type, propertyId: fields.propertyId, projectId: fields.projectId, userId: fields.userId, targetUserId: fields.targetUserId })
     .catch((err) => {
       console.error(`[events] Failed to log '${type}':`, err);
     });

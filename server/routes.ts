@@ -2,7 +2,7 @@ import { calculateEstimate } from "./estimates";
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { IStorage } from "./storage";
-import { api } from "@shared/routes";
+import { api, FREE_PROPERTY_LIMIT } from "@shared/routes";
 import { z } from "zod";
 import { logEvent } from "./events";
 import { lookupParcel } from "./parcels";
@@ -14,6 +14,26 @@ const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
   }
   next();
 };
+
+// Gates every /api/admin/* route. Deliberately checked here — server
+// side, on every request — rather than only hiding the /admin nav link
+// client-side; a hidden link is not access control. 403, not 404: an
+// authenticated non-admin gets a clear "not allowed" rather than a
+// deceptive "doesn't exist" (this app has no reason to hide that admin
+// routes exist at all, only to enforce who can use them).
+const isAdmin = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.isAuthenticated() || !(req.user as any)?.isAdmin) {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  next();
+};
+
+// FREE_PROPERTY_LIMIT (shared/routes.ts): Pro (users.plan === "pro",
+// self-serve and free during beta — see POST /api/account/upgrade in
+// authRoutes.ts) is unlimited. Only enforced for AUTHENTICATED property
+// creation — a guest's flow always ends in claiming exactly one property
+// at signup, so there's no meaningful "free tier" concept before that
+// point.
 
 export async function registerRoutes(
   httpServer: Server,
@@ -40,8 +60,12 @@ export async function registerRoutes(
       // mix pine/cedar and 6ft/8ft lines, and calculateEstimate prices
       // each (species, height) combination separately rather than
       // assuming the whole project is one material at one height.
+      // Gates are flattened across every line in the project — the BOM
+      // only cares how many single vs. double gates exist in total, not
+      // which line each one sits on.
       const estimate = await calculateEstimate(
         project.fenceLines.map((line) => ({ length: line.length || 0, material: line.material, height: line.height })),
+        project.fenceLines.flatMap((line) => (line.gates || []).map((g) => ({ type: g.type }))),
       );
 
       logEvent("estimate_viewed", { projectId, userId: (req.user as any)?.id });
@@ -115,6 +139,16 @@ export async function registerRoutes(
       const user = req.user as any;
       const input = api.properties.create.input.parse(req.body);
       const userId = req.isAuthenticated() && user ? user.id : null;
+
+      if (userId && user.plan !== "pro") {
+        const existing = await storage.getProperties(userId);
+        if (existing.length >= FREE_PROPERTY_LIMIT) {
+          return res.status(400).json({
+            message: `Free accounts are limited to ${FREE_PROPERTY_LIMIT} properties. Upgrade to Pro (free during beta) on your Account page for unlimited properties.`,
+          });
+        }
+      }
+
       const property = await storage.createProperty({ ...input, userId });
       logEvent("property_created", { propertyId: property.id, userId: userId || undefined });
 
@@ -269,6 +303,86 @@ export async function registerRoutes(
         });
       }
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // === GATES ===
+  // Same auth model as fence lines: gate placement only happens once a
+  // line is saved and being edited (see MapEditorComponent), and a
+  // guest never reaches this endpoint directly — their pending line
+  // (and any gates they'd add) isn't POSTed to the server until signup,
+  // same as fence line creation.
+
+  app.post(api.gates.create.path, isAuthenticated, async (req, res) => {
+    try {
+      const input = api.gates.create.input.parse(req.body);
+      const gate = await storage.createGate(Number(req.params.fenceLineId), input);
+      res.status(201).json(gate);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+        });
+      }
+      console.error('Failed to create gate', err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete(api.gates.delete.path, isAuthenticated, async (req, res) => {
+    await storage.deleteGate(Number(req.params.id));
+    res.status(204).end();
+  });
+
+  // === ADMIN ===
+  // Read-only (see CLAUDE.md's "Admin panel" section for why) and
+  // audit-logged — every view here fires its own `admin_*` event
+  // (server/events.ts), the same funnel-logging mechanism as everything
+  // else, so "who looked at what, and when" is never a separate system
+  // to maintain.
+
+  app.get(api.admin.listUsers.path, isAdmin, async (req, res) => {
+    try {
+      const adminId = (req.user as any).id;
+      const usersList = await storage.getAllUsersWithCounts();
+      logEvent("admin_viewed_users", { userId: adminId });
+      res.json(usersList);
+    } catch (err) {
+      console.error('Failed to list users', err);
+      res.status(500).json({ message: 'Failed to list users' });
+    }
+  });
+
+  app.get(api.admin.getUser.path, isAdmin, async (req, res) => {
+    try {
+      const adminId = (req.user as any).id;
+      const targetId = req.params.id;
+      const targetUser = await storage.getUserById(targetId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      // Same shape a user sees on their own /properties — just fetched
+      // for someone else's id instead of the requester's own.
+      const userProperties = await storage.getProperties(targetId);
+      logEvent("admin_viewed_user", { userId: adminId, targetUserId: targetId });
+      res.json({ user: targetUser, properties: userProperties });
+    } catch (err) {
+      console.error('Failed to get user', err);
+      res.status(500).json({ message: 'Failed to get user' });
+    }
+  });
+
+  app.get(api.admin.listEvents.path, isAdmin, async (req, res) => {
+    try {
+      const recentEvents = await storage.getRecentEvents(200);
+      // Deliberately NOT logged as its own audit event — the events
+      // feed IS the audit trail; logging every glance at it would just
+      // fill it with itself.
+      res.json(recentEvents);
+    } catch (err) {
+      console.error('Failed to list events', err);
+      res.status(500).json({ message: 'Failed to list events' });
     }
   });
 

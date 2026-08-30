@@ -165,14 +165,42 @@ async function main() {
       url: "https://www.lowes.com/pd/Sakrete-50-lb-Fast-Setting-Concrete-Mix/3338802",
       sku: "3338802",
     },
+    // The old row here ("YARDLINK ... No Dig Fence Gate") was a
+    // standalone pre-fab steel gate — wrong fit for a wood privacy
+    // fence's BOM (breaks the species-consistency work above) and,
+    // worse, was never actually wired into calculateEstimate at all
+    // (type: "gate" existed in the schema but nothing read it). Replaced
+    // with real gate HARDWARE (hinges/latch, and a cane bolt for double
+    // gates) that attaches to a gate panel built from the fence's own
+    // rail/picket lumber — see server/estimates.ts's comment above
+    // calculateEstimate for why that's the right split. Both verified
+    // live at Lowe's (Memphis, TN store context); Home Depot blocked
+    // this session's browser tool on every gate-hardware search
+    // attempted (same inconsistent bot-protection documented elsewhere
+    // in this file) — so gate hardware is Lowe's-only for now. That's
+    // honest, not silently guessed: a project with a gate simply won't
+    // offer Home Depot as a store option until HD gate data is sourced
+    // (same "only offer what a store can fully price" rule already
+    // governs the cedar+8ft-post case above).
     {
-      name: "YARDLINK 4-ft H x 3-ft W Black Powder-Coated Steel No Dig Fence Gate",
+      name: "National Hardware 8-in Black Gate Hardware Kit",
       type: "gate",
       store: "lowes" as const,
-      price: 58.98,
-      unit: "per gate",
-      url: "https://www.lowes.com/pd/No-Dig-Common-4-3-ft-x-1-63-ft-Actual-4-3-ft-x-1-63-ft-Black-Powder-Coated-Steel-Decorative-Metal-Fence-Gate/4744229",
-      sku: "4744229",
+      price: 29.98,
+      unit: "per gate leaf",
+      url: "https://www.lowes.com/pd/National-Hardware-8-11-20-in-Gate-Hardware-Kit/50414160",
+      sku: "674922",
+      gateComponent: "hardware_kit" as const,
+    },
+    {
+      name: "National Hardware 18-in Black Gate Cane Bolt",
+      type: "gate",
+      store: "lowes" as const,
+      price: 19.48,
+      unit: "per double gate",
+      url: "https://www.lowes.com/pd/National-Hardware-N166-019-Cane-Bolt-in-Black-1-2-in-x-8-in/5005330913",
+      sku: "4103316",
+      gateComponent: "cane_bolt" as const,
     },
 
     // ---- Home Depot ----

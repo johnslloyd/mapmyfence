@@ -1,6 +1,16 @@
 import { z } from 'zod';
 import { insertPropertySchema, insertProjectSchema, insertFenceLineSchema } from './schema';
 
+// A gate's position on its fence line: which segment (the straight run
+// between two consecutive drawn points) it sits on, and how far along
+// that segment (0 = at the first point, 1 = at the second). Set once,
+// from wherever the user clicked on the line — see MapEditorComponent.
+const gatePositionSchema = z.object({
+  type: z.enum(['single', 'double']),
+  segmentIndex: z.number().int().min(0),
+  position: z.number().min(0).max(1),
+});
+
 export const errorSchemas = {
   validation: z.object({
     message: z.string(),
@@ -14,7 +24,59 @@ export const errorSchemas = {
   }),
 };
 
+// Free accounts are capped at this many properties; Pro is unlimited.
+// Shared so client and server (server/routes.ts's enforcement,
+// Account.tsx's/AddPropertyDialog's copy) can't drift out of sync with
+// each other the way the same number used to be hand-duplicated in both
+// places. See CLAUDE.md's "Account tiers" section.
+export const FREE_PROPERTY_LIMIT = 3;
+
 export const api = {
+  // No billing exists yet — self-serve, free during beta. See
+  // CLAUDE.md's "Account tiers" section and FREE_PROPERTY_LIMIT above
+  // for how `plan` actually gates property creation.
+  account: {
+    upgrade: {
+      method: 'POST' as const,
+      path: '/api/account/upgrade',
+      responses: {
+        200: z.object({ plan: z.enum(['free', 'pro']) }),
+      },
+    },
+  },
+  // Read-only, server-side gated on users.isAdmin (never just hidden
+  // client-side — see server/adminRoutes.ts). Response shapes kept loose
+  // (z.any()) the same way api.properties/api.projects already do for
+  // nested detail — see the API convention note on that pattern. Every
+  // GET here logs its own audit event (admin_viewed_users/
+  // admin_viewed_user) — see CLAUDE.md's "Admin panel" section.
+  admin: {
+    listUsers: {
+      method: 'GET' as const,
+      path: '/api/admin/users',
+      responses: {
+        200: z.array(z.any()),
+        403: errorSchemas.notFound,
+      },
+    },
+    getUser: {
+      method: 'GET' as const,
+      path: '/api/admin/users/:id',
+      responses: {
+        200: z.any(),
+        403: errorSchemas.notFound,
+        404: errorSchemas.notFound,
+      },
+    },
+    listEvents: {
+      method: 'GET' as const,
+      path: '/api/admin/events',
+      responses: {
+        200: z.array(z.any()),
+        403: errorSchemas.notFound,
+      },
+    },
+  },
   // A property is just an address — name/address/description, no type,
   // no status. See CLAUDE.md's "Property / Project restructure" section.
   properties: {
@@ -205,7 +267,30 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
-  }
+  },
+  // A gate sits on a specific fence line — not user-drawn, just a
+  // single/double choice snapped to a click on the already-drawn line.
+  // See shared/schema.ts's `gates` table comment and
+  // MapEditorComponent's gate-placement mode for the interaction.
+  gates: {
+    create: {
+      method: 'POST' as const,
+      path: '/api/fence-lines/:fenceLineId/gates',
+      input: gatePositionSchema,
+      responses: {
+        201: z.any(),
+        400: errorSchemas.validation,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/gates/:id',
+      responses: {
+        204: z.void(),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
 };
 
 export function buildUrl(path: string, params?: Record<string, string | number>): string {

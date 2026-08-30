@@ -1,4 +1,4 @@
-import { pgTable, text, serial, doublePrecision, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, doublePrecision, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -16,6 +16,25 @@ export const users = pgTable("users", {
   // the incoming request that redeems it.
   resetTokenHash: text("reset_token_hash"),
   resetTokenExpiresAt: timestamp("reset_token_expires_at"),
+  // Free accounts are capped at FREE_PROPERTY_LIMIT properties (see
+  // server/routes.ts); Pro is unlimited. No billing exists yet — Pro is
+  // self-serve and free during beta (Account page's "Upgrade" button,
+  // POST /api/account/upgrade), a deliberate, explicit choice over a
+  // manual-grant-only flow: it's low-friction AND doubles as a real
+  // signal of who wants more, before any billing work is ever built.
+  plan: text("plan", { enum: ["free", "pro"] }).default("free").notNull(),
+  // Gates /admin and the api.admin.* routes — checked server-side on
+  // every admin route (server/adminRoutes.ts), never just hidden client-
+  // side. False for everyone by default; there's no self-serve way to
+  // become an admin (that would defeat the point) — granted by hand
+  // against the DB, same spirit as the account-deletion flow being
+  // deliberately not self-serve yet.
+  isAdmin: boolean("is_admin").default(false).notNull(),
+  // Added retroactively (2026-08-30, alongside the admin panel) —
+  // existing rows backfill to the migration's run time, NOT their real
+  // signup date, since that was never captured before now. Real for
+  // every account created from this point forward.
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 // A property is just an address — no type, no status. One user can have
@@ -71,6 +90,30 @@ export const coordinates = pgTable("coordinates", {
   lng: doublePrecision("lng").notNull(),
 });
 
+// A gate placed on a fence line. Deliberately NOT user-drawn — the user
+// picks "single" or "double" and clicks a spot on the already-drawn
+// line; the gate snaps to that click's position on whichever segment it
+// landed on. Storing (segmentIndex, position) rather than a raw lat/lng
+// is what makes that survive later edits: MapEditorComponent already
+// lets a fence line's points be dragged after the fact, and a
+// segment-relative position is re-derived by interpolating between
+// coordinates[segmentIndex] and coordinates[segmentIndex+1] at render
+// time, so the gate stays put relative to the line even if an endpoint
+// moves — the same "derive, don't duplicate" spirit as recomputing
+// length from coordinates instead of trusting a stored value.
+export const gates = pgTable("gates", {
+  id: serial("id").primaryKey(),
+  fenceLineId: integer("fence_line_id").references(() => fenceLines.id, { onDelete: 'cascade' }).notNull(),
+  type: text("type", { enum: ["single", "double"] }).notNull(),
+  // The gate sits on the segment between coordinates[segmentIndex] and
+  // coordinates[segmentIndex+1] (coordinates ordered by `order`).
+  segmentIndex: integer("segment_index").notNull(),
+  // 0..1 fraction along that segment where the gate is centered —
+  // wherever the user actually clicked, projected onto the segment.
+  position: doublePrecision("position").notNull().default(0.5),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Yard-care vertical groundwork — schema only, nothing else built yet.
 // A yard boundary is the enclosed polygon for a property, distinct from
 // fenceLines (open polylines with a length): fertilizer/pre-emergent/
@@ -110,12 +153,24 @@ export const events = pgTable("events", {
   // that property's first project, so a property_created event is always
   // paired with a project_created one today). "project_created" now means
   // a typed project specifically, not the old top-level entity.
+  // "admin_viewed_users"/"admin_viewed_user" (2026-08-30) are the admin
+  // panel's own audit trail — see targetUserId below and
+  // server/adminRoutes.ts. Deliberately logged the same way every other
+  // funnel event is, not a separate audit system, so "who looked at
+  // what, and when" lives in one place.
   type: text("type", {
-    enum: ["property_created", "project_created", "fence_line_created", "estimate_viewed", "account_created"],
+    enum: ["property_created", "project_created", "fence_line_created", "estimate_viewed", "account_created", "account_upgraded", "admin_viewed_users", "admin_viewed_user"],
   }).notNull(),
   propertyId: integer("property_id"),
   projectId: integer("project_id"),
+  // For every event type EXCEPT the admin_* ones, this is who the event
+  // is ABOUT (the new account, the property's owner, etc.). For
+  // admin_viewed_users/admin_viewed_user, this is the ADMIN who took the
+  // action instead — targetUserId (admin_viewed_user only) is who they
+  // looked at. Reusing `userId` for "the admin" rather than adding a
+  // third id column keeps every other event type's meaning unchanged.
   userId: text("user_id"),
+  targetUserId: text("target_user_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -151,6 +206,17 @@ export const products = pgTable("products", {
   // section changes for taller fences (see RAILS_PER_SECTION in
   // server/estimates.ts). concrete/fasteners/gate stay untagged/null.
   forHeight: integer("for_height"),
+  // Meaningful only for type="gate" — which role this hardware plays in
+  // a gate's BOM. A "single" gate needs one hardware_kit (hinges +
+  // latch); a "double" gate needs two (one per leaf) PLUS one
+  // cane_bolt to anchor the inactive leaf into the ground — modeled as
+  // two real, separately-bought hardware products rather than one
+  // fabricated "double gate kit" SKU, because no single-SKU double-gate
+  // kit was found to actually exist at either retailer (see
+  // server/estimates.ts). Gate hardware is species-agnostic (steel),
+  // so `material`/`forHeight` stay null here the same as concrete and
+  // fasteners.
+  gateComponent: text("gate_component", { enum: ["hardware_kit", "cane_bolt"] }),
 });
 
 // === RELATIONS ===
@@ -185,6 +251,14 @@ export const fenceLinesRelations = relations(fenceLines, ({ one, many }) => ({
     references: [projects.id],
   }),
   coordinates: many(coordinates),
+  gates: many(gates),
+}));
+
+export const gatesRelations = relations(gates, ({ one }) => ({
+  fenceLine: one(fenceLines, {
+    fields: [gates.fenceLineId],
+    references: [fenceLines.id],
+  }),
 }));
 
 export const yardBoundariesRelations = relations(yardBoundaries, ({ one, many }) => ({
@@ -215,6 +289,7 @@ export const insertPropertySchema = createInsertSchema(properties).omit({ id: tr
 export const insertProjectSchema = createInsertSchema(projects).omit({ id: true, createdAt: true });
 export const insertFenceLineSchema = createInsertSchema(fenceLines).omit({ id: true, createdAt: true });
 export const insertCoordinateSchema = createInsertSchema(coordinates).omit({ id: true });
+export const insertGateSchema = createInsertSchema(gates).omit({ id: true, createdAt: true });
 export const insertYardBoundarySchema = createInsertSchema(yardBoundaries).omit({ id: true, createdAt: true });
 export const insertYardBoundaryPointSchema = createInsertSchema(yardBoundaryPoints).omit({ id: true });
 
@@ -228,6 +303,8 @@ export type FenceLine = typeof fenceLines.$inferSelect;
 export type InsertFenceLine = z.infer<typeof insertFenceLineSchema>;
 export type Coordinate = typeof coordinates.$inferSelect;
 export type InsertCoordinate = z.infer<typeof insertCoordinateSchema>;
+export type Gate = typeof gates.$inferSelect;
+export type InsertGate = z.infer<typeof insertGateSchema>;
 export type Product = typeof products.$inferSelect;
 export type YardBoundary = typeof yardBoundaries.$inferSelect;
 export type InsertYardBoundary = z.infer<typeof insertYardBoundarySchema>;
@@ -242,7 +319,7 @@ export type InsertYardBoundaryPoint = z.infer<typeof insertYardBoundaryPointSche
 // without each one's full fenceLines/coordinates detail.
 export type ProjectWithLines = Project & {
   property: Property;
-  fenceLines: (FenceLine & { coordinates: Coordinate[] })[];
+  fenceLines: (FenceLine & { coordinates: Coordinate[]; gates: Gate[] })[];
 };
 
 export type PropertyWithProjects = Property & {

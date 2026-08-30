@@ -70,8 +70,29 @@ function materialLine(product: Product, quantity: number) {
 // can price EVERY group's post/picket, the rail for every species used,
 // and both shared types — missing any one of those means it can't
 // fulfill the full list. Sorted cheapest-total-first.
+// Gates deliberately do NOT shrink the picket/rail/post linear-footage
+// math above — that math sums each line's total length and has no
+// concept of "this segment has a 4ft/8ft gap in it," and teaching it
+// that is real, error-prone work (post-spacing near a gate opening
+// isn't just "subtract the width") for a feature the user explicitly
+// asked to start simple. The safe direction to be wrong in is over-
+// counting, not under-counting: treating the gate's span as if it were
+// solid fence means the picket/rail total already includes enough
+// lumber to build a matching gate panel, so the ONLY thing actually
+// missing is the hardware to hang it. That's what gets added below —
+// nothing is subtracted.
+//
+// No single-SKU "double gate kit" was found to actually exist at
+// either retailer (checked live) — a double gate is modeled as what it
+// really is: two independently-hinged leaves (2x the single-gate
+// hardware kit) plus one cane bolt to anchor the inactive leaf into
+// the ground, using two real, separately verified products rather than
+// one fabricated one.
+type GateType = "single" | "double";
+
 export async function calculateEstimate(
   lines: { length: number; material: string | null; height: number | null }[],
+  gates: { type: GateType }[] = [],
 ) {
   type Group = { species: Species; height: HeightCategory; length: number };
   const groups = new Map<string, Group>();
@@ -90,10 +111,15 @@ export async function calculateEstimate(
   }
   const groupList = Array.from(groups.values());
 
+  const singleGateCount = gates.filter((g) => g.type === "single").length;
+  const doubleGateCount = gates.filter((g) => g.type === "double").length;
+  const needsHardwareKit = singleGateCount + doubleGateCount > 0;
+  const needsCaneBolt = doubleGateCount > 0;
+
   const allProducts = await db
     .select()
     .from(products)
-    .where(inArray(products.type, ["post", "rail", "picket", "concrete", "fasteners"]));
+    .where(inArray(products.type, ["post", "rail", "picket", "concrete", "fasteners", "gate"]));
 
   const byStore = new Map<string, Product[]>();
   for (const product of allProducts) {
@@ -110,6 +136,18 @@ export async function calculateEstimate(
       const concrete = cheapest(storeProducts.filter((p) => p.type === "concrete"));
       const fasteners = cheapest(storeProducts.filter((p) => p.type === "fasteners"));
       if (!concrete || !fasteners) return null;
+
+      // Gate hardware — only required if this project actually has
+      // gates, same "only require what's needed" rule as species/height
+      // groups below. Species/height-agnostic (steel hardware).
+      const hardwareKit = needsHardwareKit
+        ? cheapest(storeProducts.filter((p) => p.type === "gate" && p.gateComponent === "hardware_kit"))
+        : null;
+      if (needsHardwareKit && !hardwareKit) return null;
+      const caneBolt = needsCaneBolt
+        ? cheapest(storeProducts.filter((p) => p.type === "gate" && p.gateComponent === "cane_bolt"))
+        : null;
+      if (needsCaneBolt && !caneBolt) return null;
 
       // Rail — species-specific, one per species actually used.
       const railBySpecies = new Map<Species, Product>();
@@ -158,6 +196,16 @@ export async function calculateEstimate(
       materials.push(materialLine(concrete, totalConcreteQty));
       materials.push(materialLine(fasteners, Math.ceil(totalFastenerSections / 3)));
 
+      // One hardware kit per leaf: 1 for a single gate, 2 for a double
+      // (each leaf hangs and latches independently). One cane bolt per
+      // double gate, to anchor its inactive leaf.
+      if (hardwareKit) {
+        materials.push(materialLine(hardwareKit, singleGateCount + doubleGateCount * 2));
+      }
+      if (caneBolt) {
+        materials.push(materialLine(caneBolt, doubleGateCount));
+      }
+
       const totalCost = toCents(materials.reduce((sum, m) => sum + m.totalCost, 0));
 
       return { store, materials, totalCost };
@@ -167,8 +215,11 @@ export async function calculateEstimate(
 
   if (options.length === 0) {
     const combos = groupList.map((g) => `${g.species} picket/post at ${g.height}ft`).join(", ");
+    const gateNote = needsHardwareKit
+      ? `, gate hardware kit${needsCaneBolt ? " + cane bolt" : ""}`
+      : "";
     throw new Error(
-      `No store has product data for every required combination (${combos}, plus rail per species and shared concrete/fasteners). Run 'npm run db:seed' or add products for these.`,
+      `No store has product data for every required combination (${combos}, plus rail per species and shared concrete/fasteners${gateNote}). Run 'npm run db:seed' or add products for these.`,
     );
   }
 
