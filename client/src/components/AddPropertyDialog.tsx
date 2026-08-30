@@ -2,7 +2,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertPropertySchema, type InsertProperty } from "@shared/schema";
-import { useCreateProperty } from "@/hooks/use-projects";
+import { FREE_PROPERTY_LIMIT } from "@shared/routes";
+import { useCreateProperty, useProperties, useUpgradeToPro } from "@/hooks/use-projects";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Plus } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 
 // Renamed from CreateProjectDialog in the Property/Project restructure
@@ -46,10 +48,32 @@ export function AddPropertyDialog({
   const [, setLocation] = useLocation();
   const { mutateAsync, isPending } = useCreateProperty();
   const { toast } = useToast();
+  const { isAuthenticated, user, login } = useAuth();
+  // Guests never hit this — the limit is only meaningful once a
+  // property is actually tied to an account (see FREE_PROPERTY_LIMIT's
+  // own comment). Only fetches when authenticated, same reasoning as
+  // Layout.tsx's nav.
+  const { data: properties } = useProperties({ enabled: isAuthenticated });
+  const upgrade = useUpgradeToPro();
+  const isAtLimit = isAuthenticated && user?.plan !== "pro" && (properties?.length ?? 0) >= FREE_PROPERTY_LIMIT;
 
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = isControlled ? controlledOnOpenChange! : setInternalOpen;
+
+  const handleUpgrade = async () => {
+    try {
+      const data = await upgrade.mutateAsync();
+      login({ ...user, plan: data.plan });
+      // Deliberately stay open — isAtLimit flips false on the next
+      // render (user.plan is now "pro"), so the dialog just turns into
+      // the normal create-property form in place. No reason to make
+      // them reopen it after they just cleared the reason it was
+      // blocked.
+    } catch {
+      // useUpgradeToPro already toasts the error.
+    }
+  };
 
   const form = useForm<InsertProperty>({
     resolver: zodResolver(
@@ -107,6 +131,28 @@ export function AddPropertyDialog({
         )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] rounded-2xl border-none shadow-2xl">
+        {isAtLimit ? (
+          // Checked BEFORE the create form ever renders, not after a
+          // submission gets rejected — the old flow let someone fill
+          // out the whole form and only found out it was pointless on
+          // submit. See CLAUDE.md's "Account tiers" section.
+          <>
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-display flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary" /> You're at the free limit
+              </DialogTitle>
+              <DialogDescription>
+                Free accounts can have up to {FREE_PROPERTY_LIMIT} properties. Upgrade to Pro for unlimited — no payment info needed, it's free while MyYardManager is in beta.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end pt-4">
+              <Button onClick={handleUpgrade} disabled={upgrade.isPending} className="rounded-xl w-full sm:w-auto gap-2">
+                <Sparkles className="w-4 h-4" /> {upgrade.isPending ? "Upgrading..." : "Upgrade to Pro — free during beta"}
+              </Button>
+            </div>
+          </>
+        ) : (
+        <>
         <DialogHeader>
           <DialogTitle className="text-2xl font-display">Add a Property</DialogTitle>
           <DialogDescription>
@@ -180,6 +226,8 @@ export function AddPropertyDialog({
             </div>
           </form>
         </Form>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -1,14 +1,77 @@
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useProperties, useUpgradeToPro } from "@/hooks/use-projects";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { KeyRound, Trash2 } from "lucide-react";
+import { KeyRound, Trash2, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { FREE_PROPERTY_LIMIT } from "@shared/routes";
+
+function PlanCard() {
+  const { user, login } = useAuth();
+  const { data: properties } = useProperties();
+  const upgrade = useUpgradeToPro();
+  const isPro = user?.plan === "pro";
+  const propertyCount = properties?.length ?? 0;
+
+  const handleUpgrade = async () => {
+    try {
+      const data = await upgrade.mutateAsync();
+      // No dedicated "refresh the current user" call in useAuth — just
+      // merge the one field that actually changed, same shape the
+      // server itself just returned.
+      login({ ...user, plan: data.plan });
+    } catch {
+      // useUpgradeToPro already toasts the error.
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-primary" /> Plan
+          <Badge variant={isPro ? "default" : "secondary"} className="ml-1 capitalize">{user?.plan || "free"}</Badge>
+        </CardTitle>
+        <CardDescription>
+          {isPro
+            ? "Unlimited properties. Thanks for trying Pro early — it's free during beta."
+            : `Free accounts can have up to ${FREE_PROPERTY_LIMIT} properties.`}
+        </CardDescription>
+      </CardHeader>
+      {!isPro && (
+        <CardContent>
+          {/* A quiet usage meter, not just text — visible before the
+              limit is ever hit, not just at the moment of rejection. */}
+          <div className="mb-4 max-w-xs">
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
+              <span>Properties</span>
+              <span className="font-mono">{propertyCount} / {FREE_PROPERTY_LIMIT}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${propertyCount >= FREE_PROPERTY_LIMIT ? "bg-destructive" : "bg-primary"}`}
+                style={{ width: `${Math.min(100, (propertyCount / FREE_PROPERTY_LIMIT) * 100)}%` }}
+              />
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground max-w-md mb-4">
+            Upgrade to Pro for unlimited properties — no payment info needed, it's free while MyYardManager is in beta.
+          </p>
+          <Button onClick={handleUpgrade} disabled={upgrade.isPending} className="gap-2">
+            <Sparkles className="w-4 h-4" /> {upgrade.isPending ? "Upgrading..." : "Upgrade to Pro — free during beta"}
+          </Button>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
 
 // The support address a "delete my account" request actually goes to.
 // Real deletion isn't self-serve/automated in this beta on purpose —
@@ -152,6 +215,7 @@ function AccountContent() {
         <h1 className="font-display text-2xl font-bold">Account</h1>
         <p className="text-muted-foreground text-sm mt-1">{user?.email}</p>
       </div>
+      <PlanCard />
       <ChangePasswordCard />
       <DeleteAccountCard />
     </div>
