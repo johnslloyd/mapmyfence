@@ -1,0 +1,38 @@
+name: Build and publish Docker image
+
+# Hostinger's Docker Manager can only pull an already-built, publicly
+# hosted image — it can't build one from source itself (a docker-
+# compose.yml with `build: .` gets rejected there). This workflow does
+# the building instead: every push to main, it builds the same
+# Dockerfile used locally and pushes the result to GitHub Container
+# Registry (ghcr.io) — free, tied to this repo, no separate Docker Hub
+# account needed. docker-compose.yml then just points at the finished
+# image.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}:latest

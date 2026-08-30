@@ -1,8 +1,17 @@
+# Points at a PRE-BUILT image on GitHub Container Registry, not a local
+# `build: .` — Hostinger's Docker Manager only pulls publicly hosted
+# images, it doesn't build from source itself (that's what triggered
+# their "Compose from URL" warning). The image is built and pushed
+# automatically by .github/workflows/docker-publish.yml on every push
+# to main — nobody needs to run `docker build` by hand.
+#
+# One-time setup after the first push: the ghcr.io package starts
+# PRIVATE by default. Go to github.com -> your profile -> Packages ->
+# mapmyfence -> Package settings -> change visibility to Public, or
+# Hostinger won't be able to pull it (it can't authenticate).
 services:
   app:
-    build:
-      context: .
-    image: myyardmanager:latest
+    image: ghcr.io/johnslloyd/mapmyfence:latest
     restart: unless-stopped
     ports:
       - "5051:5051"
