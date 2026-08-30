@@ -828,6 +828,230 @@ result surfaced to the user for confirmation before the map commits to
 it (e.g. "We found: {display_name} — is this right?"), which is a bigger
 UX change and was deliberately not built without asking first.
 
+## Gates on wooden fences — single/double, placed not drawn (2026-08-29)
+
+Real gap identified during a pre-VPS-push strategy review: the BOM had
+no concept of a gate at all — `products.type` included a `"gate"` value
+and `script/seed.ts` had one row for it (a standalone black powder-
+coated steel "no-dig" gate), but `server/estimates.ts`'s
+`calculateEstimate` never referenced `"gate"` anywhere. It was orphaned
+seed data, not a working feature, and the one product it named was the
+wrong fit for a wood privacy fence's BOM anyway (breaks the species-
+consistency work above).
+
+**Explicit user direction on scope**: "I don't trust them to draw one" —
+start with a simple, deterministic single/double gate placement, mark it
+clearly on the map, then solve materials. Confirmed via
+[[gate-placement-ux]] (or see this section if that memory doesn't
+exist): click directly on the already-drawn line to place it (not a
+sidebar-only picker, not freehand drawing) — the gate marker snaps to
+whichever segment was clicked.
+
+**Data model**: a new `gates` table (`shared/schema.ts`), one row per
+gate — `fenceLineId`, `type` (`single`/`double`), `segmentIndex`, and
+`position` (0..1 fraction along that segment). Deliberately stores a
+segment-relative position, not a raw lat/lng: `MapEditorComponent`
+already lets a fence line's points be dragged during an edit, and
+re-deriving the gate's marker position by interpolating between
+`coordinates[segmentIndex]` and `coordinates[segmentIndex+1]` at render
+time means the gate stays correctly placed on the line even after a
+point moves — the same "derive, don't duplicate" spirit as recomputing
+length from coordinates instead of trusting a stored value. Added via
+the established raw-SQL-via-`pool` migration escape hatch (a brand new,
+non-destructive table, same class as `yardBoundaries`) —
+`script/migrations/2026-08-29-gates.ts`. `products` also gained one new
+nullable column the same way: `gateComponent` (`hardware_kit` |
+`cane_bolt` — see Materials below).
+
+**Placement UX**: `EditFenceLineCard`'s new Gates section has "+ Single
+Gate" / "+ Double Gate" buttons. Clicking one puts the currently-edited
+line into a placing mode — `MapEditorComponent` highlights that line's
+segments (thicker, amber, dashed) and swaps their click handler from
+line-selection to a segment-click handler that projects the click point
+onto the clicked segment (flat-lat/lng closest-point projection, clamped
+0..1 — fine for snapping a marker, unlike the real distance calculations
+elsewhere in this app which correctly use `LatLng.distanceTo()`) and
+immediately POSTs the new gate. A placed gate renders as a distinct
+amber circle marker with a permanent "Single Gate"/"Double Gate" label,
+on both the line being edited and any other saved line. Existing gates
+list in the sidebar with a delete button. Scope deliberately limited to
+saved, authenticated fence lines being edited — a gate can't be placed
+on an in-progress guest draw or the not-yet-saved `pendingFenceLine`;
+gate mutations use the same `isAuthenticated`-gated routes as fence line
+mutations, so this needed no new auth model.
+
+**Materials — the actual "how do gates affect the estimate" answer**:
+`calculateEstimate` (`server/estimates.ts`) deliberately does NOT shrink
+the picket/rail/post linear-footage math for a gate's width — that math
+sums each line's total length with no concept of a gap partway through,
+and teaching it that correctly (post-spacing near a gate opening isn't
+just "subtract the width") is real, error-prone work for a feature
+explicitly asked to start simple. The safe direction to be wrong in is
+over-counting, not under-counting: treating the gate's span as if it
+were solid fence means the picket/rail total already includes enough
+lumber to build a matching gate panel, so the only thing actually
+missing — and the only thing added — is the hardware to hang it.
+
+No single-SKU "double gate kit" was found to exist at either retailer
+(checked live, several search phrasings) — modeled as what a double
+gate really is: two independently-hinged leaves (2x a single-gate
+hardware kit) plus one cane bolt to anchor the inactive leaf into the
+ground, both real, separately verified Lowe's products rather than one
+fabricated SKU:
+- **National Hardware 8-in Black Gate Hardware Kit** (hinges + latch),
+  Item #674922 / Model N343-467, $29.98 — one per gate leaf (1 for
+  single, 2 for double).
+- **National Hardware 18-in Black Gate Cane Bolt**, Item #4103316 /
+  Model N166-019, $19.48 — one per double gate.
+
+Both verified live (Memphis, TN store context, this project's usual
+test region) the same way every other seed row has been. **Home Depot
+gate hardware is not seeded** — HD's search blocked this session's
+browser tool on every attempt (the same inconsistent bot-protection
+documented under Seed data below; Lowe's let the tool through every
+time this session). This is handled correctly, not silently: the
+existing "only offer a store if it can price everything a project
+needs" rule means a project with a gate simply won't offer Home Depot
+as an option until HD gate data is sourced — same mechanism that
+already excludes Lowe's for cedar+8ft-post projects. A real gap to
+close, not a data quality risk in the meantime.
+
+Verified live end-to-end: placed a single gate on one segment and a
+double gate on another of the same line, watched the sidebar estimate
+jump by exactly $109.42 (3 hardware kits + 1 cane bolt) with Home Depot
+correctly dropping out as a store option, confirmed the Shopping List
+groups both under a "GATES" section with working Lowe's product links
+(`gate` was already in `MATERIAL_TYPE_LABELS`/`MATERIAL_TYPE_ORDER` in
+`client/src/lib/estimates.ts` — anticipated but never populated until
+now), deleted the double gate and confirmed the estimate dropped back
+to exactly one hardware kit with the cane bolt gone.
+
+## Map editor polish + a real latent Tooltip bug (2026-08-29)
+
+Four separate pieces of direct user feedback after trying the gate
+feature above, all in `client/src/components/MapEditorComponent.tsx`
+unless noted:
+
+**1. Map centering on load.** Reopening a project used to leave the map
+centered on the whole browser window (often not even zoomed to the
+actual fence line) rather than the fence itself. Real fix needed TWO
+separate react-leaflet/Leaflet timing gotchas, not just padding math:
+- `fitBounds()` measures the container's size at CALL time — called too
+  early (right at mount, before layout settles), it measures a 0×0
+  container and "fits" by zooming out to nearly the whole world.
+  `map.invalidateSize()` immediately before `fitBounds()`, deferred one
+  `requestAnimationFrame` past the browser's first paint, fixes this.
+- `mapRef.current` (the ref passed to `<MapContainer ref={mapRef}>`) is
+  **not populated synchronously at mount** the way a normal DOM ref
+  would be — react-leaflet's `MapContainer` only exposes the real map
+  instance via `useImperativeHandle` after an internal `setContext`
+  state update propagates, which lags a render behind actual map
+  creation. Confirmed by logging: on a fresh load, a plain
+  `useEffect(() => {...}, [])` in the SAME component saw
+  `mapRef.current === null`. Fixed by moving the fit-on-load logic into
+  a `FitBoundsOnLoad` component rendered as a CHILD of `MapContainer`,
+  using react-leaflet's `useMap()` hook instead — children are only
+  rendered once the real context/map already exists, so this has no
+  such gap (the same reason `MapEvents`/`useMapEvents` elsewhere in this
+  file already worked reliably).
+- Padding is right-biased on desktop (`paddingBottomRight: [520, 40]`)
+  to account for the docked right panel eating real map width whenever
+  there's a line to show — see "Editor panel layout" below — so the
+  fence centers in the space that's actually visible, not the space the
+  panel covers. No bias on mobile, where the panel is a sheet overlay,
+  not a width-eating column. Fires once per mount (ref-guarded) so it
+  doesn't fight a user's own later pan/zoom.
+
+**2. A real, previously-unknown bug: the per-segment "XXX ft" length
+label had never actually rendered, ever, on any line.** Found while
+restyling it (see #3) — before touching anything, a DOM check turned up
+zero rendered tooltips for it. Root cause: react-leaflet's `<Tooltip>`
+binds to `context.overlayContainer`, which only exists when the
+Tooltip is rendered as a CHILD of a Layer component (Marker/Polyline/
+etc.) — used as a bare sibling in a `<Fragment>` (its previous shape
+here), `context.overlayContainer` is `null` and the tooltip's own
+binding effect silently no-ops, forever. The point-number tooltips
+("1", "2", "3") worked all along specifically because they're nested
+INSIDE their `<Marker>`, not siblings of it — that contrast is what
+surfaced the bug. Fixed by nesting the length Tooltip inside its
+segment's `<Polyline>...</Polyline>` instead of self-closing it; the
+same fix was needed for the new gate label (#4) too, since it was
+written the same (broken) way from the start.
+
+**3. Run length badges — restyled to match the homepage hero
+illustration** (`bg-accent/95 text-primary border border-primary
+font-mono`, rounded pill) instead of plain white shadowed text, per
+direct feedback: "explore the idea of 'runs'... like the illustration
+you created on the homepage." A "run" is just the existing per-segment
+straight stretch between two consecutive points — no new data model,
+purely a rendering treatment change (entangled with the #2 fix above,
+since it had never actually been visible before regardless of style).
+
+**4. Gate marker — a real span, not a dot.** Was a single `CircleMarker`
+regardless of gate type; per feedback ("show a line between two dots...
+a small one for single, slightly longer for double"), now renders two
+dots connected by a line, sized as an ACTUAL fraction of the segment's
+real length (single ≈4ft, double ≈8ft opening, via `LatLng.
+distanceTo()` — same real-math discipline as every other distance in
+this app) rather than a fixed pixel size, so it reads as genuinely
+wider on the map at any zoom level, not just a bigger icon.
+
+**5. Delete a single point while editing a line.** Didn't exist before
+— only whole-line delete did (the sidebar's per-line trash icon, which
+was already there and is unrelated to this). User picked the
+interaction explicitly (asked, not assumed): hovering any point while
+editing reveals a small red × button; click it to remove that point.
+Desktop-only by design (hover has no touch equivalent) — a known,
+accepted tradeoff from the option's own description, not an oversight.
+The delete button only appears when the line has more than 2 points
+(verified live: hovering a point on a 2-point line shows no delete
+button at all), since a line can't be shorter than that — dropping to 1
+point isn't a valid line; deleting the whole thing is the sidebar
+trash icon's job instead.
+
+Deleting a point that has a gate on either of its two adjacent segments
+is blocked with a toast ("remove the gate first") rather than guessed
+at — there's no sane new segment for that gate to land on. A gate on a
+LATER segment has its `segmentIndex` shifted down by one to stay
+attached to the same physical spot (removing a point merges two
+segments into one, so every later segment's index moves down by one).
+There's no gate-UPDATE endpoint (never needed one before this) — done
+instead as delete-then-recreate with the same type/position via the
+existing create/delete gate mutations, in `Editor.tsx`'s
+`handleDeletePoint`. Reuses the same auto-save-on-edit plumbing
+dragging a point already used (`onLineUpdate` → `handleUpdateLine`),
+so a point deletion saves immediately, consistent with existing drag
+behavior — no separate "Save Changes" click needed.
+
+Verified live end-to-end (fresh browser tab — see the tooling note
+below): deleted the endpoint of a 3-point/431ft line with a gate on its
+FIRST segment; the deletion succeeded (that gate's segment was
+untouched), the line correctly became 2 points/221ft, the sidebar
+estimate recalculated ($10734.75 → $5628.49), the gate survived, and
+the delete-point button correctly stopped appearing once only 2 points
+remained.
+
+**Logout used to leave stale data visible.** `client/src/hooks/use-
+auth.tsx`'s `logout()` cleared the auth state and redirected home, but
+never touched TanStack Query's cache — every property/project/estimate
+query fetched while logged in (none of their query keys include a
+userId) kept its last-successful data sitting in the cache, so
+navigating back to a page like `PropertyOverview` after logging out
+(or just having it still mounted) could keep showing the previous
+session's data. Fixed with one `queryClient.clear()` call before the
+redirect.
+
+**Tooling note, for the next session**: mid-debugging, this app's dev
+tab hit a state where `console.log`/`read_console_messages` kept
+replaying the exact same stale error (`fitToExistingLines is not
+defined`, from an already-fixed intermediate version of this work) on
+every reload, even after the on-disk source was confirmed clean and
+`node_modules/.vite` was deleted and the dev server restarted. A
+brand-new browser tab immediately worked correctly with zero errors.
+If a dev tab's console output ever seems "stuck" repeating an error
+that doesn't match the current source, don't trust it — open a fresh
+tab before concluding the code is still broken.
+
 ## Shopping list — the first slice of "give execution its own focused state"
 
 PM-roadmap item 2 (per the user: after tightening plan→execution — item
@@ -993,6 +1217,555 @@ search URL, `call811.com`/`tel:811` links resolved to the correct
 destinations, and the disclaimer banner renders before any actionable
 content on the page.
 
+## Account tiers — the first real piece of the "Pro tool set" roadmap item (2026-08-30)
+
+Prompted by a UX complaint: "My Properties" (a searchable tile grid) is
+overkill for the common case — most users have exactly one property and
+never need to search/switch. Two things came out of that conversation
+together, deliberately: a property-count-aware nav (below), and — since
+"how many properties can a free account have" is a real business
+question the nav change surfaced — actual free/Pro account tiers. This
+is genuinely the first concrete piece of roadmap item 3 ("Pro tool
+set"), not a one-off gate; see [[product-roadmap]] memory.
+
+**`users.plan`** (`'free' | 'pro'`, default `'free'`) — added via the
+usual additive-nullable-with-default-column escape hatch
+(`script/migrations/2026-08-30-user-plan.ts`). Free accounts are capped
+at `FREE_PROPERTY_LIMIT = 3` properties (`server/routes.ts`); Pro is
+unlimited. Enforced only for AUTHENTICATED property creation — a
+guest's flow always ends in claiming exactly one property at signup, so
+"free tier" has no meaning before that point.
+
+**No billing exists, so "Pro" is self-serve and free during beta** —
+`POST /api/account/upgrade` just flips the flag, no payment info
+collected. This was a real, explicit choice (asked, not assumed)
+between three options: self-serve free upgrade, manual-grant-only (a
+"contact us" wall), or shipping the schema/limit without turning on
+enforcement at all yet. Self-serve won on two grounds: lowest friction,
+and it doubles as real signal for who actually wants more, before any
+billing work is ever built. Live on the Account page's new "Plan" card
+(`client/src/pages/Account.tsx`) — shows the current plan as a badge,
+and an "Upgrade to Pro — free during beta" button when on free.
+Verified live end-to-end: created 3 properties on a fresh account (hit
+the cap), a 4th was correctly rejected with a clear message pointing at
+the Account page, clicked Upgrade, badge flipped to Pro instantly, and
+a 4th property then succeeded.
+
+**Property-count-aware nav** (`client/src/components/Layout.tsx`,
+`client/src/pages/Dashboard.tsx`) — the single nav slot that used to
+always say "My Properties" → `/properties` now adapts: 0 properties
+shows nothing there (they'd use "Add a Property," already prominent in
+the header); exactly 1 property shows THAT property's own name, linking
+straight to it; 2+ properties shows "My Properties" → the searchable
+grid, same as before — it only earns a dedicated page once there's
+actually something to search or switch between. `Dashboard.tsx`'s
+post-login redirect got the same treatment: 1 property skips the list
+and lands straight on `/properties/:id`. Deliberately did NOT move
+property management under the Account page, despite that being one of
+the options raised — property switching ("which yard am I working on")
+and account settings ("change my password") are different concerns,
+and folding one into the other would trade one confusion for another.
+Verified live: an account with 1 property shows the property's name in
+nav and redirects straight to it; the same account after creating a
+2nd/3rd property switches back to "My Properties" on both the nav and
+the post-login redirect.
+
+**Property page redesign: built.** `PropertyOverview.tsx` was flagged
+in the same conversation as "very basic, a centered list" — mocked up
+as a static artifact first (dashboard layout, real app tokens), then
+built for real the same day once reviewed. Same routes, same data
+hooks, same "+ Add Project" flow as before — the actual change is
+presentation and, in a few places, real new data:
+
+- **Full-width dashboard layout** (`max-w-6xl`, not the old `max-w-3xl`
+  centered column) — a header band (property icon/name/address + an
+  "Edit Property" button, the first real trigger for
+  `EditPropertyDialog`, previously unwired — see "Known dead files")
+  above a two-column body: a wider project-card grid on the left, a
+  narrower property-summary column on the right.
+- **Project cards show real stats, not just a name and status** — for a
+  fence project: total fence length and gate count (from a `useProject`
+  fetch of that project's own `fenceLines`/`gates`), and estimated cost
+  (from `useEstimates`). One extra fetch pair per visible project card;
+  fine at today's scale (every property has ~1 project) — see the
+  "N+1" note below if that changes. "+ Add Project" is an in-grid
+  dashed tile, a grid member alongside the real cards, not a button
+  below the fold.
+- ~~A plan-preview diagram drawn from REAL coordinates, shown once in a
+  property-level sidebar, mirroring the primary (first) fence
+  project's shape and gates only~~ — **superseded**, see "Property page
+  redesign, round two" below: the illustration now renders per-project,
+  not once per-property, and the sidebar/"At a glance" stats block it
+  lived in no longer exists in this layout.
+- **A real, easy-to-miss CSS bug caught and fixed while building**: a
+  Tailwind grid with ONLY a breakpoint-prefixed column count
+  (`sm:grid-cols-2` or `lg:grid-cols-[1fr_340px]`, no unprefixed base)
+  does NOT fall back to a real single-column layout below that
+  breakpoint the way it looks like it should — with no explicit
+  `grid-template-columns` at all, a CSS grid defaults to sizing its one
+  implicit column to its content's natural width, not the container's
+  available width. On mobile this silently rendered ~490px wide inside
+  a 375px viewport; `document.body.scrollWidth` still read a clean 375
+  because `Layout.tsx`'s own outer wrapper has `overflow-hidden` (for
+  the docked-editor-panel machinery elsewhere in the app), so the
+  overflow was invisibly CLIPPED, not scrollable — text just vanished
+  off the right edge with no scrollbar as a hint anything was wrong.
+  Fixed by always giving a grid an explicit unprefixed `grid-cols-1`
+  base and layering breakpoints on top of that, every time — a bare
+  `grid-cols-2`/`grid-cols-[...]` on its own, prefixed or not, is a
+  latent version of this same bug. Verified live at a real 375px
+  viewport (`window.innerWidth`/`body.scrollWidth`/`main.scrollWidth`
+  all equal, confirming zero overflow) both before (bug reproduced) and
+  after the fix.
+
+**Upgrade prompts, placed before the wall rather than only at it
+(2026-08-30).** Follow-up product conversation: where else should the
+app mention account types or prompt an upgrade? Landed on two concrete,
+low-risk pieces (homepage copy and a dedicated plan-comparison page
+were explicitly deferred — open product/design decisions, not this
+pass):
+
+- **`AddPropertyDialog` now checks the limit BEFORE showing the create
+  form**, not after a submission gets rejected. Previously a free user
+  at the cap could fill out the whole name/address/notes form and only
+  find out it was pointless on submit. Now `isAtLimit` (authenticated +
+  `plan !== "pro"` + at `FREE_PROPERTY_LIMIT`) swaps the entire dialog
+  body for a one-click upgrade prompt instead of the form — and
+  upgrading transforms the SAME open dialog into the real create-property
+  form in place (no close/reopen), since `isAtLimit` just flips false on
+  the next render once `user.plan` updates. Guests never see this at
+  all — the limit is only meaningful once a property is tied to an
+  account, same reasoning as the property-count-aware nav above.
+- **A quiet usage meter** — "N / 3 properties," not just text — added
+  in two places for free accounts: a small pill next to the page title
+  on `Properties.tsx` (links to Account, doesn't duplicate the upgrade
+  pitch itself), and a proper progress bar on the Account page's Plan
+  card. Both ordinary ambient awareness, not a second sales pitch —
+  the actual upgrade CTA still lives in exactly two places (Account,
+  and the dialog once you're actually blocked).
+- **De-duplicated the upgrade call itself**: it was hand-rolled once in
+  `Account.tsx`; pulled into a shared `useUpgradeToPro()` hook
+  (`client/src/hooks/use-projects.ts`) used by both Account's Plan card
+  and the new dialog prompt, so the fetch/toast logic can't drift
+  between the two call sites the way `FREE_PROPERTY_LIMIT` almost did
+  (also moved that constant to `shared/routes.ts`, one definition
+  instead of hand-duplicated in `server/routes.ts` and `Account.tsx`).
+
+Verified live end-to-end on a fresh test account: created 3 properties
+via direct API calls (to skip the UI round-trip), confirmed the
+Properties page showed "3 / 3 properties (Free)", clicked "Add a
+Property" and got the upgrade prompt instead of a form, clicked
+upgrade, watched the SAME dialog turn into the real create form with no
+reopen, and confirmed a fresh 1-property account's Account page showed
+a correctly-proportioned "1 / 3" progress bar.
+
+**A Pro badge, and the header-width fix caught its own gap
+(2026-08-30).** Two follow-ups from actually using the upgrade flow:
+
+- **Pro badge on the nav avatar** — upgrading was otherwise invisible
+  outside the Account page. A small badge now sits on the avatar's
+  corner whenever `user.plan === "pro"`, plus a matching "Pro" `Badge`
+  next to "My Account" inside the dropdown itself. Verified live on a
+  Pro test account: badge visible on the avatar, and `[role="menu"]`'s
+  text content confirmed literally reads "My Account Pro...". **The
+  avatar-corner badge's glyph changed again the same day**, per direct
+  feedback ("don't love the pro icon, can we switch to just a P") — a
+  plain bold "P" character now, not a `Sparkles` icon. Scoped narrowly:
+  only the avatar-corner badge changed, since it's the one place a
+  Sparkles icon stood ALONE for "Pro" with no adjacent text; the
+  dropdown's own "Pro" `Badge` keeps its `Sparkles` + the literal word
+  "Pro" right next to it (swapping that one to "P" too would have read
+  as "P Pro," redundant rather than clearer), and the Sparkles icons on
+  Account.tsx's Plan card / "Upgrade to Pro" buttons elsewhere are also
+  unchanged for the same reason — icon+text, not a standalone glyph.
+  Verified live: upgraded a test account, confirmed via the badge
+  element's own `textContent` that it renders literally `"P"`, and that
+  the dropdown's separate "Pro" badge still renders its icon+text
+  unchanged.
+- **The header-width fix from the consistency pass had already
+  drifted** — caught by direct user report ("still bounces around on
+  account, sign in, sign up, and home page"), not by re-testing
+  proactively, worth being honest about. Root cause: `AuthLayout.tsx`
+  hand-copied Layout.tsx's header markup when it was built, and the
+  later `max-w-6xl` cap fix only touched `Layout.tsx` — nothing forced
+  the two to stay in sync, so Login/Register/ForgotPassword/
+  ResetPassword quietly went back to an uncapped header while every
+  other page had a capped one. Separately, `Dashboard.tsx`'s guest
+  landing hero used its own THIRD width (`max-w-[1280px]`, a value that
+  was never part of any standard) which, once the header itself got
+  capped at 1152px, was now wider than the header above it — a new,
+  different misalignment than the one already fixed. Real fix, not a
+  patch: extracted `client/src/components/PageHeader.tsx` as the ONE
+  place the header shell (border/blur/height/the `max-w-6xl mx-auto
+  px-4 md:px-8` cap) is defined — `Layout.tsx` and `AuthLayout.tsx`
+  both render it now instead of each authoring their own `<header>`,
+  so this specific drift can't recur (a `below` prop handles
+  Layout.tsx's mobile nav dropdown, which needs to live inside the
+  header band but outside the capped/fixed-height content row).
+  Dashboard's hero and its own loading-skeleton wrapper both moved to
+  the real `max-w-6xl` standard. Verified live via
+  `getBoundingClientRect()` on Login, Register, and the guest
+  homepage — header and page content report byte-identical left/right
+  edges (1152px) on all three, not just the pages checked in the
+  original pass.
+
+## Property page redesign, round two — "Property Dossier" (2026-08-30)
+
+The round-one redesign above (card grid + sidebar) got a follow-up
+pass, prompted by direct feedback wanting "more info, maybe geo
+location... more visual interest and a stronger page structure." Six
+lightly-sketched directions were explored in a design-canvas artifact
+(Map-First Hero, Property Dossier, Timeline, Bento Grid, Story Scroll,
+Split Workspace — the last one flagged up front as impossible to show
+faithfully in a static mockup, since its whole pitch is live
+interactivity), two built out in full for comparison (Map-First Hero,
+using a real fetched Esri satellite tile for the property's actual
+coordinates; Property Dossier, using this app's existing abstract
+illustration style instead). User narrowed to two finalists (Dossier,
+Bento — both built in full in the same artifact), then picked
+**Dossier** as the final direction, with one explicit amendment: **keep
+the existing abstract dashed-line SVG illustration** (`buildPlanPreview`
+et al., unchanged) rather than adopting the mockup's satellite-tile
+treatment, **and move it from once-per-property to once-per-project** —
+correctly identified as a data-model fix, not just a style choice: a
+property can hold multiple projects, each with its own fence lines, so
+a single property-level illustration was already showing the wrong
+thing (only the "primary" project's shape, silently ignoring any
+others) even before this redesign.
+
+**What changed in `PropertyOverview.tsx`**: the round-one two-column
+"project-card grid + property sidebar" layout is replaced by a fixed
+two-column DOSSIER shell — a `288px` left rail (property IDENTITY and
+facts only: name, Edit Property button, address/notes/added-date, a
+single project-count stat) beside a flexible main column listing every
+project as a dense row, not a grid tile. No property-level "At a
+glance" stats and no property-level plan preview exist anymore — both
+were the wrong level of the data model (see above) and are gone, not
+just relocated.
+
+- **Each project row now fetches and renders its OWN
+  `buildPlanPreview` illustration** — `PlanThumbnail`, a small
+  (160×116 viewBox) version of the same dashed-path/dot-vertex/gate-dot
+  SVG rendering, inline in a `112×80` frame to the left of that
+  project's name/status/stats. A `fence` project with no lines yet
+  renders a real "Nothing drawn" placeholder in the same frame (the
+  function already handled the empty case; this is the first UI to
+  actually render that path, previously invisible since the property-
+  level illustration always had at least the primary project's data).
+- **`lawn_care` project rows** get a plain dashed-border placeholder
+  with a Sprout icon instead of the illustration — there's no fence
+  line to draw and no lawn-care drawing UI exists yet.
+- Same underlying data/hooks as round one: each `FenceProjectRow` still
+  does its own `useProject` + `useEstimates` fetch (unchanged N+1-at-
+  small-scale tradeoff, see round one's note) — the illustration is
+  free once that fetch already exists, since `buildPlanPreview` only
+  needs the same `fenceLines`/`coordinates`/`gates` the stats already
+  read.
+- Grid-collapse care from round one's CSS bug applied here too:
+  `grid-cols-1 lg:grid-cols-[288px_1fr]`, explicit unprefixed base,
+  rail stacks above the project list on mobile.
+
+Verified live: the real "Gate Test Yard" test property (one fence
+project, a real drawn line + gate) renders the rail correctly and the
+project row shows the actual dashed line with its gate marker,
+matching the real 221 ft / $5,628 / 1 gate stats; three other real test
+properties with an empty auto-created fence project each correctly
+show the "Nothing drawn" placeholder alongside `—`/`—`/`0` stats and
+"No address provided"/"No notes added" fallbacks in the rail; checked
+375px mobile width directly (`body.scrollWidth === clientWidth ===
+375`, no clipped overflow) on both a populated and an empty property.
+
+**Follow-up, same day: bigger project rows, and a real satellite image
+in the rail.** Direct feedback after using the Dossier layout above —
+two changes, same file:
+
+- **Project-row thumbnails are 3x** (112×80 → 336×240 on sm+, full-width
+  with the same aspect on mobile) and the whole row grew to match
+  (larger name/status/stat type sizes, more vertical padding, `flex-col`
+  on mobile so a 336px-wide frame doesn't fight a 375px viewport for
+  room). `PlanThumbnail`'s SVG itself didn't need any changes — it
+  already fills its container via `viewBox` + `w-full h-full`, so
+  resizing the frame was purely a container-class change.
+- **A real satellite image, in the rail, above "Edit Property."** Not
+  the mockup's approach (a pre-fetched, base64-embedded tile — an
+  Artifact-only constraint) — the real app already allows
+  `server.arcgisonline.com` in `server/index.ts`'s CSP `img-src` (for
+  `MapEditorComponent`'s tile layer), so `PropertySatelliteImage`
+  geocodes the property's own address client-side (Nominatim, the same
+  `countrycodes=us`-scoped call `MapEditorComponent.handleSearch` already
+  uses, for the same US-fuzzy-match reason documented above) and points
+  a plain `<img>` at Esri's World_Imagery `MapServer/export` REST
+  operation — a single static image for a lat/lng bounding box, no key,
+  no Leaflet/tile-grid needed for a non-interactive thumbnail. Correctly
+  applies the same `cos(latitude)` longitude correction this app's real
+  distance math already uses elsewhere, so the image isn't stretched
+  east-west.
+  - **A real, non-obvious limit found and fixed while wiring this up**:
+    Esri's `export` endpoint 500s with an opaque "Error: bytes" response
+    on a bounding box tighter than roughly 100m in its shorter
+    dimension — confirmed live with a real curl span-sweep against a
+    real address (0.0005° failed, 0.001° succeeded), not assumed from
+    docs. An initial ~80m-wide attempt hit this and silently rendered a
+    broken image (`naturalWidth: 0`) with no console error, no failed
+    network entry visible to the usual checks — only caught by directly
+    probing `img.complete`/`naturalWidth` and then curling the exact
+    failing URL by hand. Fixed by widening the shown span to 200m real-
+    world width, comfortably clearing the floor.
+  - Deliberately independent of any project's fence-line coordinates —
+    geocodes the PROPERTY's own address, so it renders even before any
+    project has a drawn line, and isn't tied to whichever project
+    happens to be "primary."
+  - Handles all three real states: loading (`Skeleton`), no address
+    ("Add an address to see a satellite view"), geocode failure
+    ("Couldn't locate this address") — same category of honest,
+    non-silent failure handling as `MapEditorComponent`'s own
+    `geocodeIssue` banner.
+
+Verified live: "Gate Test Yard"'s real address rendered a real,
+correctly-framed satellite image of that address; a no-address test
+property correctly showed the "Add an address" placeholder instead of
+a broken image; confirmed the enlarged thumbnail's actual rendered box
+is genuinely 336×240 (not just visually similar at a scaled-down
+screenshot size) via `getBoundingClientRect()`; checked 375px mobile
+width on both the satellite image and an enlarged row — rail image and
+row both reflow to full width with zero horizontal overflow
+(`body.scrollWidth === clientWidth === 375`).
+
+**Second follow-up, same day: thumbnails 25% smaller, fence lines
+zoomed out within them.** Direct feedback right after the 3x-size pass
+above — the bigger frame was right, but the fence line itself still
+filled it edge-to-edge (`buildPlanPreview` always normalized a line's
+own bounding box to the full padded inset, so the shape touched the
+frame no matter how big the frame was). Two independent changes:
+- **Frame size**: 336×240 → 252×180 (a 25% cut), same `sm:`/mobile
+  responsive pattern as before.
+- **Zoom**: `buildPlanPreview`'s `project()` now shrinks the normalized
+  0..1 coordinate toward the frame's center (`0.5 + (frac - 0.5) *
+  ZOOM`, `ZOOM = 0.6`) before mapping to pixels, so the fence's own
+  bounding box only spans 60% of the padded inset instead of 100% —
+  real empty margin around the shape, reading as "a shape on a map"
+  rather than "a shape stretched to fill a card." Independent of frame
+  size — either can change later without touching the other.
+
+Verified live: the real "Gate Test Yard" line now renders with visible
+margin inside the grid image instead of touching its edges, an empty
+"Nothing drawn" placeholder still centers correctly at the new size,
+and the thumbnail's actual rendered box measures 252×180 via
+`getBoundingClientRect()` — confirming the frame really shrank and
+wasn't just visually smaller from an unrelated layout shift.
+
+**Third follow-up, same day: rail/main surface tones flipped.** Direct
+feedback: "the left rail is slightly lighter than the right section,
+I'd like to flip that." The rail was `bg-panel` (the app's lighter
+surface token, `--panel` L98%) inside an outer wrapper that was
+`bg-card` (`--card` L96%, slightly darker) — main inherited that
+`bg-card` since it never set its own background. Flipped by swapping
+which token each side uses rather than inventing a new one: the outer
+wrapper is now `bg-panel` (so main, still unset, inherits the lighter
+tone) and the rail explicitly overrides to `bg-card text-card-foreground`
+(darker). The two thumbnail-frame backgrounds inside each project row
+(`FenceProjectRow`, `LawnCareProjectRow`) also moved `bg-panel` →
+`bg-card` — they need to contrast against whatever's now behind them
+(the lighter `bg-panel` main column), not the old one; left as `bg-panel`
+they'd have gone flat/invisible against the new main background. The
+satellite image's own frame (`PropertySatelliteImage`) deliberately
+stayed `bg-panel` — it sits in the rail, which is now the darker
+`bg-card`, so `bg-panel` still reads as a lighter inset frame there,
+same visual relationship as before, just now on the other side.
+
+Verified live via computed `backgroundColor`, not just eyeballing (the
+two tokens are only 2 lightness points apart, easy to misjudge from a
+screenshot alone): rail resolved to `rgb(249,246,241)`, main/outer to
+`rgb(251,250,248)` — main is now the lighter of the two, confirming the
+flip actually took effect; also confirmed a project thumbnail's frame
+picked up the same `rgb(249,246,241)` as the rail, so it still contrasts
+against the lighter main background. Checked 375px mobile — no
+regressions, still stacks with zero horizontal overflow.
+
+**Fourth follow-up, same day: "Add a project" moved out of the toolbar,
+into the list itself.** Was a small `text-primary` text link in the
+main column's top-right header row — direct feedback wanted it below
+the last project row instead, "more like an empty project you can
+click on than a small button." `AddProjectDialog` renamed
+`AddProjectRow` and restyled from an inline text link to a full-width
+dashed tile (`border-2 border-dashed`, centered `Plus` icon + "Add a
+project" label, `hover:border-primary/50 hover:bg-primary/5`) sized
+with the same vertical rhythm as a real project row so it reads as the
+next item in the list, not a toolbar action bolted above it. The
+header row above the list now just shows the "Projects (N)" label,
+nothing trailing. The old `property.projects.length === 0` branch (a
+separate "No projects yet — add one to get started" placeholder box)
+is gone — `AddProjectRow` always renders after whatever project rows
+exist (zero or more), and its own dashed empty-tile styling already
+communicates "nothing here yet, click to add" without a second message
+saying the same thing. Same dialog/mutation logic underneath,
+untouched — only the trigger and its position moved.
+
+Verified live: the tile renders correctly below the one existing
+project row on a populated property, and as the sole element (no
+separate empty-state box above it) on a property with no address/no
+lines yet; clicked it and confirmed the same "What are you planning?"
+Fence/Lawn Care dialog still opens. (Console briefly showed a stale
+`AddProjectDialog is not defined` error after the rename, from an
+already-loaded HMR module referencing the old name — the documented
+"stale dev-tab console" gotcha elsewhere in this file; a fresh tab
+loaded with zero errors, confirming the rename itself was clean.)
+
+## Properties.tsx ("My Properties" grid) — real content for a blank card (2026-08-30)
+
+Prompted directly: think through a brand-new user's first property with
+nothing drawn yet, and bring content over from the Dossier page to fix
+it. Worth being explicit about which page this actually is — asked the
+user directly rather than guessing, since the described scenario (a
+brand-new, one-property user landing on "a blank property page") could
+plausibly mean either `PropertyOverview.tsx` (the single-property
+Dossier, which the property-count-aware nav/redirect sends a 1-property
+user straight to) or `Properties.tsx` (the literal "My Properties" grid,
+normally skipped by that same redirect for a 1-property user — but
+still reachable any time via the Dossier page's own "← Back to
+Properties" link, which is unconditional). The user picked
+`Properties.tsx`: a real card there, for a property with no address
+geocoded and no fence line drawn, used to render almost nothing —  a
+generic `MapPin` icon, a name, an address (or "No address provided"),
+a bare "planning" badge, and a "Created {date} / View Details →"
+footer. No visual context, no guidance.
+
+**Shared two pieces out of `PropertyOverview.tsx` first**, since both
+pages now need them — one source of truth, same reasoning as pulling
+`STORE_LABELS`/`consolidateMaterials` into `lib/estimates.ts`:
+- `client/src/lib/planPreview.tsx` — `buildPlanPreview()` +
+  `PlanThumbnail` (the abstract dashed-line illustration).
+- `client/src/components/PropertySatelliteImage.tsx` — the real Esri
+  satellite-image component (geocode + `MapServer/export` URL builder).
+  Gained a new `flush?: boolean` prop: the Dossier rail shows it inset
+  (its own rounded corners + border, sitting inside the rail's padding);
+  a property CARD wants it flush against the card's own top edge, where
+  the card's own `overflow-hidden rounded-2xl` already handles rounding
+  — a second inner border/radius right at that edge would have looked
+  like a nested double-frame. `flush` drops the image's own
+  rounding/border for that usage; every other behavior (geocode, states,
+  URL) is identical.
+
+`PropertyOverview.tsx` now imports both instead of defining them
+locally — verified live afterward that the Dossier page still renders
+byte-identical to before the extraction (same satellite image, same
+per-project illustrations, zero console errors).
+
+**What actually changed on the grid page**: each card became its own
+`PropertyCard` component (previously the grid just mapped inline, no
+per-item hooks) so it can do its own `useProject`/`useEstimates` fetch
+for a single-fence-project property — same N+1-at-small-scale pattern
+already accepted on the Dossier page for the identical reason.
+- **Real satellite image at the top of every card** (`flush`), not a
+  generic `MapPin` icon — this is the actual fix for "very little
+  context": even a property with nothing drawn yet now shows a real
+  photo of the actual yard, since the image is geocoded from the
+  property's OWN address and has nothing to do with whether a fence
+  line exists. The status/project-count badge and the delete control
+  moved to float over the image with their own translucent backdrop
+  (`bg-*-100/90 backdrop-blur-sm`) so they stay legible over a photo
+  instead of a flat card background.
+- **Real per-project stats** (length / est. cost / gates) when a
+  single fence project has something drawn — identical numbers to what
+  the Dossier page shows for that same project, not a re-derived
+  approximation.
+- **Honest guidance text in place of stats when nothing's drawn yet**:
+  "Nothing drawn yet — click to start mapping your fence." instead of
+  three dashes or blank space — this is the actual "content that makes
+  the page usable with no content" the request asked for, not just a
+  bigger image.
+- **Context-aware footer CTA**: "Start drawing →" replaces the generic
+  "View Details →" specifically when a single fence project has zero
+  length — a small nudge toward the actual next action instead of a
+  neutral label.
+- Multi-project and lawn-care properties are deliberately left alone
+  (no stats-fetch, generic "View Details →") — there's no single
+  project's numbers to show, same reasoning `FenceProjectRow` vs.
+  `LawnCareProjectRow` already draws on the Dossier page.
+
+Verified live: the real "Gate Test Yard" card shows its real satellite
+photo and real 221 ft / $5,628 / 1 gate stats with "View Details →";
+two real test properties with no address and no lines each correctly
+show the "Add an address to see a satellite view" placeholder, the
+"Nothing drawn yet" guidance line, and "Start drawing →"; confirmed via
+`getBoundingClientRect()` that the badge and delete-button overlays
+don't collide (12px gap between them) now that they float over the
+image instead of a plain card background; checked 375px mobile width —
+single-column stack, zero horizontal overflow; re-checked
+`PropertyOverview.tsx` after the extraction — identical render, zero
+console errors in a fresh tab.
+
+**Follow-up, same day: the TRUE zero-properties state was still
+broken.** The redesign above fixed a near-empty CARD; a real screenshot
+from the user caught a worse, more fundamental gap one level up — a
+brand-new account with *zero* properties at all rendered "No properties
+found / Try adjusting your search or add a new property to get
+started," the exact same copy the page shows when a search just happens
+to match nothing. Wrong message for a fresh signup: they never
+searched anything, they have nothing yet. Worth being clear this
+scenario is real and common, not an edge case — `Dashboard.tsx` redirects
+an authenticated user to `/properties` (this page) whenever their
+property count isn't exactly 1, and it's exactly 0 for every brand-new
+account, so this broken message was the literal first screen a new
+signup could land on.
+
+Fixed by actually splitting the two cases, which the code had silently
+conflated into one `filteredProperties.length === 0` branch:
+`hasAnyProperties = propertyCount > 0` now gates a completely different
+render — a real `FirstPropertyOnboarding` component instead of the
+generic "no results" box, only for a genuinely empty account. The
+search-input itself is hidden entirely in that state too (nothing to
+search yet), and the standalone "Add a Property" button that normally
+sits below the grid is suppressed there as well, since the onboarding
+block already carries its own prominent CTA — three separate
+"add a property" affordances stacked on one empty page would have been
+worse, not better.
+
+`FirstPropertyOnboarding` (`Properties.tsx`): a `LandPlot` icon in the
+same rounded-square/primary-color badge treatment as the nav logo, "Let's
+map your first yard," a plain-language sentence about what happens next,
+one large `Add Your First Property` button (the existing
+`AddPropertyDialog`, triggered via its `children`-as-trigger prop, same
+pattern `EditPropertyDialog`/`AddProjectRow` already use), and a
+three-column `STEP_01`/`STEP_02`/`STEP_03` strip reusing the exact
+`FENCING · HOW IT WORKS` mono-label language from the guest homepage's
+own three-step section (`Dashboard.tsx`) — same voice, not new copy
+invented for this one page.
+
+Verified live end-to-end: registered a genuinely fresh test account
+(`emptytest+1@example.com`) — landed on this exact broken state
+reproducing the user's screenshot first, then on the fix confirmed the
+real onboarding block renders instead, the search bar is gone, clicking
+"Add Your First Property" opens the real `AddPropertyDialog` (not a
+dead button), and checked 375px mobile (steps stack to one column, zero
+overflow). Separately confirmed the OTHER case — an account with a real
+property, searched for text matching nothing — still shows the original
+"No properties found / Try adjusting your search" box with the search
+input present and the standalone "Add a Property" button back below the
+grid, proving the split didn't regress the actual search-empty case.
+
+**Search removed, same day, right after the fix above shipped.**
+Direct instruction: "let's remove search for now." Pulled the whole
+filter UI (`Search` icon input, `search`/`setSearch` state,
+`filteredProperties`) rather than just hiding it — a dead input with no
+way to trigger it isn't a real feature to keep half-wired. That also
+made the "no results match your search" empty-state branch genuinely
+unreachable (nothing sets `search` anymore), so it was deleted too, not
+left as dead code; `hasAnyProperties` alone now decides grid vs.
+`FirstPropertyOnboarding`, with a comment on the removal explaining how
+to restore the two-way split (search-matched-nothing vs. genuinely-
+zero-properties) if search comes back later, so a future re-add doesn't
+re-introduce the original conflated-copy bug by accident. `Search` and
+`Input` imports dropped along with it since nothing else in the file
+used them.
+
+Verified live: a fresh zero-property account still renders the exact
+same onboarding block (search was never present there to begin with);
+created a real property via a direct API call and confirmed the grid
+renders it with no search box above it and the standalone "Add a
+Property" button back below the grid, matching pre-search behavior;
+`npm run check` clean, zero console errors.
+
 ## Dashboard — collapsed into Projects for logged-in users
 
 `Dashboard.tsx` used to render two completely different things depending
@@ -1046,6 +1819,84 @@ consent under GDPR/ePrivacy or CCPA. No analytics/ad/tracking scripts
 exist anywhere in the codebase to require one for. If that ever changes
 (a real analytics tool gets added later), revisit this — a consent
 banner would become genuinely necessary at that point, not before.
+
+## Page width/padding consistency pass (2026-08-30)
+
+Prompted by direct feedback that every page's total width/padding felt
+inconsistent — true, and worse in one dimension than "inconsistent
+numbers": four pages had **no header at all**. Two separate fixes:
+
+**Every "content page" now uses one of exactly two width/padding
+combinations**, not whatever each page happened to pick:
+- **Wide** (`max-w-6xl mx-auto p-4 md:p-8`) — browsing/dashboard pages
+  with a real grid: `Properties.tsx` (was `max-w-7xl p-6 md:p-8` — a
+  genuinely different width AND a different mobile padding value than
+  every other page) and `PropertyOverview.tsx` (already this value —
+  the standard was set to match it rather than the other way, less
+  churn).
+- **Narrow** (`max-w-2xl mx-auto p-4 md:p-8`) — reading/form/checklist
+  pages: `Account.tsx`, `Privacy.tsx`, `BeforeYouDig.tsx`,
+  `ShoppingList.tsx`. These were already identical to each other —
+  confirmed live (same computed `className` on all four), not assumed.
+- **Deliberately NOT forced into this mold**: `Editor.tsx` (full-bleed
+  map + docked panel — a real, reviewed different layout, see "Editor
+  panel layout" below) and `Dashboard.tsx`'s guest landing page
+  (a marketing page with its own intentional per-section rhythm — hero,
+  value props, verticals, steps, CTA — forcing one width across
+  sections built to different visual weights would hurt it, not help).
+
+**Login/Register/ForgotPassword/ResetPassword had literally no
+header** — each was its own bare `flex items-center justify-center
+min-h-screen` with a centered Card and nothing else: no logo, no way
+back to `/` except the browser's own back button. Every other page
+goes through `Layout.tsx` and gets the real header; these were a
+silent, easy-to-not-notice exception (nothing crashes, it just quietly
+never had one). Full `Layout` doesn't actually fit here though — its
+nav (Add a Property, a Login button that would open ANOTHER login
+form, the account menu) is either redundant or nonsensical mid-auth-
+flow. New `client/src/components/AuthLayout.tsx` reuses Layout's exact
+header markup/classes (logo mark, wordmark, height, border, blur) with
+the nav/action content stripped, so switching between "logged out on
+an auth page" and "logged out on any other page" reads as the same
+app. All four pages now wrap in it.
+
+**`not-found.tsx` got the same treatment, but needed more care** — it's
+used TWO different ways across the app: as `App.tsx`'s catch-all route
+(rendered completely bare, no Layout anywhere in the tree above it) and
+as the "resource not found" branch inside several pages' own `*Content`
+components (`PropertyOverviewContent`, `ShoppingListContent`,
+`BeforeYouDigContent`, `Editor`'s own body), which are ALREADY nested
+inside that page's own `<Layout>`. Making `NotFound` wrap its own
+`<Layout>` would have fixed the first case and DOUBLE-HEADERED the
+second — caught by actually grepping every `<NotFound />` call site
+before changing anything, not assumed. Fixed the right way instead:
+`NotFound` stays a lean, unwrapped component, and the handful of call
+sites that truly had no `Layout` above them at all — `App.tsx`'s
+catch-all route, and each page's OTHER early return for an invalid
+route param (checked before that page's own `<Layout>` even renders) —
+each add `<Layout>` at that specific call site. Verified live: a bad
+URL and a valid-route/nonexistent-resource URL (`/properties/999999`)
+both render exactly one header, not zero or two.
+
+**Follow-up, same day: the header itself wasn't part of the column.**
+The pass above standardized every PAGE's own content width, but missed
+`Layout.tsx`'s header — its inner content row was `w-full` with no cap
+at all, so on any screen wider than 1152px the logo/nav sat further out
+than the "wide" content column below it, and their edges never lined
+up (a real, visible misalignment on a normal desktop window, not an
+edge case). Fixed by capping the header's inner row at the same
+`max-w-6xl mx-auto` as the wide-page standard, with the same
+`px-4 md:px-8` horizontal padding (was its own three-step `px-4 md:px-6
+lg:px-8`, now two steps matching every page). The header's own
+`border-b` still spans the full browser width on purpose — only the
+content ROW is capped, same as a divider should. Narrow pages (the
+`max-w-2xl` standard) now read as a centered, deliberately narrower
+column INSET within that same header-defined column, rather than an
+unrelated width — both share one `mx-auto` center line. Verified live
+at 1600px: header and main content row report byte-identical
+`getBoundingClientRect()` left/right/width (1152px, same edges) on a
+wide page; a narrow page's content visibly nests inside the header's
+column instead of just looking arbitrarily narrower.
 
 ## Editor panel layout — docked vs. floating
 
@@ -1241,6 +2092,17 @@ npm run db:seed   # tsx script/seed.ts — seeds the products table with real Lo
 npm run build     # production build (see Deployment)
 npm run start     # run production build
 ```
+
+**`npm run dev` does NOT watch/auto-restart** — plain `tsx server/index.ts`,
+no `--watch` flag, no nodemon. Vite's dev middleware hot-reloads CLIENT
+changes on its own, but any edit to `server/**` or `shared/**` needs the
+dev process manually stopped and restarted before it takes effect — found
+the hard way while building gates (2026-08-29): new routes/schema/storage
+code typechecked clean but a live request against them just fell through
+to Vite's SPA `index.html` fallback, because the running process was still
+serving the pre-edit server code. If a server-side change isn't taking
+effect and there's no obvious reason why, restart the dev server before
+debugging further.
 
 No test suite or CI currently exists. There's no `npm test` — don't assume
 one and don't invent test infra unasked; flag it if it becomes a blocker.
