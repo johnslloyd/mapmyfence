@@ -5,6 +5,7 @@ import { Link, Redirect } from "wouter";
 import { AddPropertyDialog } from "@/components/AddPropertyDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
+import { useProperties } from "@/hooks/use-projects";
 import { useState } from "react";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { LoginModal } from "@/components/LoginModal";
@@ -44,7 +45,12 @@ function UnauthenticatedDashboard() {
 
   return (
     <Layout>
-      <div className="max-w-[1280px] mx-auto">
+      {/* max-w-6xl (1152px) — matches the header's own cap and every
+          other wide page (see CLAUDE.md's "Page width/padding
+          consistency pass"). Was max-w-[1280px], a third, wider value
+          that no longer lined up with the header once IT got capped at
+          1152 — the opposite misalignment from before that pass. */}
+      <div className="max-w-6xl mx-auto">
 
         {/* HERO */}
         <div className="flex flex-col lg:flex-row items-center gap-14 px-6 md:px-12 py-20 md:py-24">
@@ -175,11 +181,15 @@ function UnauthenticatedDashboard() {
 // building later if there's a real need, not worth faking now.
 export default function Dashboard() {
   const { isAuthenticated, loading: authLoading } = useAuth();
+  // Skip the property list entirely for the common one-property case —
+  // land straight in that property instead of a grid with one tile in
+  // it. See Layout.tsx's nav for the same property-count-aware idea.
+  const { data: properties, isLoading: propertiesLoading } = useProperties({ enabled: isAuthenticated });
 
-  if (authLoading) {
+  if (authLoading || (isAuthenticated && propertiesLoading)) {
     return (
       <Layout>
-        <div className="p-8 max-w-7xl mx-auto space-y-8">
+        <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8">
           <div className="space-y-4">
             <Skeleton className="h-12 w-48" />
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -194,7 +204,7 @@ export default function Dashboard() {
   }
 
   if (isAuthenticated) {
-    return <Redirect to="/properties" />;
+    return <Redirect to={properties?.length === 1 ? `/properties/${properties[0].id}` : "/properties"} />;
   }
 
   return <UnauthenticatedDashboard />;

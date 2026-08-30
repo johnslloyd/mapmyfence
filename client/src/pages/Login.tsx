@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AuthLayout } from "@/components/AuthLayout";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -45,7 +46,7 @@ export default function Login() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
+    <AuthLayout>
       <Card className="mx-auto max-w-sm">
         <CardHeader>
           <CardTitle className="text-2xl">Login</CardTitle>
@@ -100,6 +101,6 @@ export default function Login() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </AuthLayout>
   );
 }

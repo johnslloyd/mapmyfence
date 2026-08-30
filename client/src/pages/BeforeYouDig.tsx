@@ -132,7 +132,7 @@ export default function BeforeYouDig() {
   const searchParams = new URLSearchParams(window.location.search);
   const isGuest = searchParams.get("guest") === "true" && !isAuthenticated;
 
-  if (!projectId || isNaN(projectId)) return <NotFound />;
+  if (!projectId || isNaN(projectId)) return <Layout><NotFound /></Layout>;
 
   return (
     <Layout>

@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { AuthLayout } from "@/components/AuthLayout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function Register() {
@@ -77,7 +78,7 @@ export default function Register() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
+    <AuthLayout>
       <Card className="mx-auto max-w-sm">
         <CardHeader>
           <CardTitle className="text-2xl">Sign Up</CardTitle>
@@ -134,6 +135,6 @@ export default function Register() {
           </p>
         </CardContent>
       </Card>
-    </div>
+    </AuthLayout>
   );
 }
