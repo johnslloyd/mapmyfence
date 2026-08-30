@@ -16,8 +16,11 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Account from "./pages/Account";
+import Admin from "./pages/Admin";
+import AdminUserDetail from "./pages/AdminUserDetail";
 import Privacy from "./pages/Privacy";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { Layout } from "./components/Layout";
 
 function Router() {
   return (
@@ -35,6 +38,13 @@ function Router() {
           editor's deliberate guest access, there's no guest-meaningful
           version of this page. */}
       <Route path="/account" component={Account} />
+      {/* Same self-enforced pattern as /account, not ProtectedRoute —
+          Admin.tsx/AdminUserDetail.tsx redirect non-admins themselves.
+          The real gate is server-side (server/routes.ts's `isAdmin`
+          middleware on every /api/admin/* route) — see CLAUDE.md's
+          "Admin panel" section. */}
+      <Route path="/admin" component={Admin} />
+      <Route path="/admin/users/:id" component={AdminUserDetail} />
       <ProtectedRoute path="/properties" component={Properties} />
       <ProtectedRoute path="/properties/:id" component={PropertyOverview} />
       {/* Redirect-like behavior for bare /editor */}
@@ -42,7 +52,10 @@ function Router() {
       <ProtectedRoute path="/editor/:id/shopping-list" component={ShoppingList} />
       <ProtectedRoute path="/editor/:id/before-you-dig" component={BeforeYouDig} />
       <ProtectedRoute path="/editor/:id" component={Editor} />
-      <Route component={NotFound} />
+      {/* NotFound doesn't wrap its own Layout (most call sites already
+          sit inside one) — the catch-all route is the one place that's
+          never true, so it adds one here. */}
+      <Route><Layout><NotFound /></Layout></Route>
     </Switch>
   );
 }
