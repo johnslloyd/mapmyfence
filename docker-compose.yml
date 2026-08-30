@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: .
+    image: myyardmanager:latest
+    restart: unless-stopped
+    ports:
+      - "5051:5051"
+    environment:
+      - NODE_ENV=production
+      - PORT=5051
+    # Real secrets (DATABASE_URL, SESSION_SECRET, RESEND_API_KEY,
+    # EMAIL_FROM) live in a .env file ON THE VPS, next to this compose
+    # file — never committed (see .gitignore) and never baked into the
+    # image. Create it once on the server: same variables as the
+    # non-Docker deployment already documented in CLAUDE.md's
+    # "Environment" section, this just points compose at the same file.
+    env_file:
+      - .env
