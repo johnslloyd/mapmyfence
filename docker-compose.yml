@@ -26,3 +26,23 @@ services:
     # "Environment" section, this just points compose at the same file.
     env_file:
       - .env
+    # Traefik routing for the temporary sharing/testing subdomain
+    # (myyardmanager.johnlloyd.cloud), so it doesn't hit Traefik's
+    # default self-signed cert + 404 fallback. entrypoint `websecure`
+    # and certresolver `letsencrypt` confirmed correct by Hostinger
+    # support for Docker Manager's Traefik setup. Router/service name
+    # is `mapmyfence`, matching Hostinger's own example and the actual
+    # Docker Manager PROJECT name for this app (still "MapMyFence"
+    # there — the in-app rename never touched Hostinger's project
+    # naming) rather than this repo's current "myyardmanager" image
+    # name, in case Docker Manager expects the two to line up. If
+    # nothing changes after redeploying, the next thing to ask
+    # Hostinger about is whether this container needs to explicitly
+    # join whatever Docker network Traefik itself watches.
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mapmyfence.rule=Host(`myyardmanager.johnlloyd.cloud`)"
+      - "traefik.http.routers.mapmyfence.entrypoints=websecure"
+      - "traefik.http.routers.mapmyfence.tls=true"
+      - "traefik.http.routers.mapmyfence.tls.certresolver=letsencrypt"
+      - "traefik.http.services.mapmyfence.loadbalancer.server.port=5051"

@@ -529,6 +529,27 @@ validation outright with "Expected string, received null." Pre-existing,
 unrelated to this pass, caught live while testing the new forgot-
 password work. Fixed with `.nullable().optional()`.
 
+**Show/hide password toggle: added (2026-08-30).** Every password field
+in the app (`LoginModal.tsx`, `Login.tsx`, `Register.tsx`,
+`ResetPassword.tsx`'s two fields, `Account.tsx`'s change-password form's
+three fields — 8 total) was a plain `<Input type="password">` with no
+way to check what you'd typed. `client/src/components/ui/password-
+input.tsx` is a single shared `PasswordInput` component (wraps the
+existing `Input`, toggles `type` between `password`/`text`, an eye/
+eye-off icon button positioned inside the field) — all 8 usages swapped
+to it rather than wiring the same toggle by hand in each place.
+`className` on `PasswordInput` deliberately lands on the outer wrapper
+`<div>`, not the inner `<input>` — caught live: `LoginModal.tsx` passes
+`className="col-span-3"` for its grid layout, and an earlier version of
+this component forwarded `className` straight to the inner input,
+which silently broke that grid span (the wrapper div, the actual grid
+item, never got the class). Fixed, then verified via
+`getBoundingClientRect()` that the password field's wrapper is
+pixel-identical in width/alignment to the email field above it. Each
+instance's show/hide state is fully independent — verified live on
+Account's three-password form that toggling "New password" doesn't
+affect "Current password" or "Confirm new password".
+
 ## Security settings — do not loosen these to silence an error
 
 This codebase has a history of security controls being widened to make a
@@ -2014,6 +2035,76 @@ green used in the nav, `client/src/components/Layout.tsx`).
 project doesn't use (`stripe`, `openai`, `multer`, `nanoid`, `cors`, etc.) —
 leftover from whatever template generated the script. Harmless but should be
 trimmed to what's actually a dependency here.
+
+**Docker deployment via Hostinger's Docker Manager (2026-08-30/31): added,
+alongside the non-Docker path above (not a replacement).** User wanted the
+app visible/manageable from Hostinger's own dashboard rather than a plain
+SSH-and-`npm run start` process. `Dockerfile` is a two-stage build — stage
+one runs the existing `npm run build` with the full dependency tree, stage
+two copies just `dist/` plus a `npm prune --omit=dev`'d `node_modules`
+(the esbuild bundle only inlines a small allowlist of server deps, see
+above — everything else needs to actually exist at runtime). Verified
+without a local Docker daemon (none installed here) by replicating the
+exact sequence — `npm ci` → `npm run build` → `npm prune --omit=dev` →
+`node dist/index.cjs` — in an isolated copy; booted cleanly, served a
+real `200`.
+
+Hostinger's Docker Manager can only *pull* an already-built, publicly
+hosted image — it can't build from source (a `docker-compose.yml` with
+`build: .` gets rejected there, confirmed live by Hostinger's own error
+message). `.github/workflows/docker-publish.yml` builds the same
+Dockerfile and pushes it to `ghcr.io/johnslloyd/mapmyfence:latest` on
+every push to main — no Docker Hub account, uses the repo's own
+`GITHUB_TOKEN`. One manual one-time step this can't automate: the ghcr.io
+package starts *private*, and Hostinger can't authenticate to pull a
+private one — has to be flipped to Public once, in GitHub's Packages UI.
+`docker-compose.yml` points at that image; Hostinger's Docker Manager
+consumes it via **the raw GitHub URL**, not the repo page.
+
+**Temporary sharing subdomain — `myyardmanager.johnlloyd.cloud`, via
+Traefik (Hostinger's reverse proxy) — added so testers don't need the
+VPS's raw IP.** Real gotcha, not obvious from Hostinger's own support
+chat: pointing a Traefik-managed subdomain at a container needs explicit
+`traefik.*` Docker labels on the service — without them, Traefik falls
+back to its default self-signed cert (a browser privacy warning) and a
+404, which is genuinely confusing since it looks like the app itself is
+broken rather than "no route exists yet." `docker-compose.yml`'s
+`labels:` block: `entrypoints=websecure` and `certresolver=letsencrypt`
+confirmed correct by Hostinger support for Docker Manager specifically
+(not guessable from generic Traefik docs — these are Hostinger's own
+static config names). Router/service name in the labels is `mapmyfence`
+— matching Hostinger's own example AND the actual Docker Manager
+**project** name for this app, which is still literally "MapMyFence"
+on Hostinger's side (the in-app product rename never touched Hostinger's
+own project naming) — used deliberately instead of this repo's current
+`myyardmanager` image name, in case Docker Manager expects the router
+label prefix to match its project name internally.
+
+**A real, separate bug this surfaced: raw Postgres/Drizzle errors —
+including literal SQL, bound parameters, and a user's email — were
+leaking straight to the browser's Network tab on any unexpected server
+error.** `server/index.ts`'s catch-all error middleware was sending
+`err.message` to the client verbatim for every error, with no
+production/dev distinction. Confirmed live: the actual production outage
+(new-user registration and login both failing) turned out to be a
+`ENETUNREACH` — Supabase's *direct* database connection now resolves to
+an IPv6 address in this region, and the VPS/Docker networking has no
+real IPv6 route, so every connection attempt failed before the query
+ever ran. Real fix for THAT is infra-only (swap `DATABASE_URL` to
+Supabase's Session Pooler connection string, which is IPv4-compatible —
+no code change, `.env` only) — but diagnosing it live meant that raw
+error message really did leak to a real user's browser first, which is
+its own genuine problem independent of whatever the underlying error
+happens to be. Fixed: in production, any error reaching this catch-all
+with a 5xx now gets a generic "Something went wrong on our end" message
+client-side — every INTENTIONAL, user-facing error (wrong password, an
+expired reset link, hitting the free-plan property limit, ...) is
+already sent directly via its own route handler's own
+`res.status(...).json(...)` call, never through this generic path, so
+nothing legitimate got quieter. The full original error (real cause
+included) still reaches `console.error` server-side, unchanged —
+that's what actually diagnosed the `ENETUNREACH` in the first place, and
+stays available to whoever has server/container log access.
 
 ## Database migrations — expect an interactive prompt
 
