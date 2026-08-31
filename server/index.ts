@@ -110,10 +110,23 @@ app.use(passport.session());
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     let message = err.message || "Internal Server Error";
-    
+
     // Handle Zod validation errors
     if (err.name === 'ZodError' && err.errors && err.errors.length > 0) {
       message = err.errors[0].message || "Validation error";
+    } else if (process.env.NODE_ENV === "production" && status >= 500) {
+      // Every intentional, user-facing error (bad password, expired
+      // reset token, at the free-plan property limit, ...) is already
+      // sent directly via its own res.status(...).json({...}) call in
+      // the route handler — nothing that reaches this catch-all with a
+      // 5xx is meant for a user to see. Found live: a raw Drizzle/
+      // Postgres failure message (including the literal SQL, bound
+      // params, and a user's email) was reaching the browser's Network
+      // tab verbatim. The FULL error (with its real cause — connection
+      // refused, unreachable network, whatever) still goes to
+      // console.error below for whoever has server log access; the
+      // client only ever gets a generic message for a real 500.
+      message = "Something went wrong on our end. Please try again.";
     }
 
     console.error("Error:", err);
