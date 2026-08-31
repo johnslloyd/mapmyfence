@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -86,9 +86,8 @@ export default function ResetPassword() {
                 )}
                 <div className="grid gap-2">
                   <Label htmlFor="password">New password</Label>
-                  <Input
+                  <PasswordInput
                     id="password"
-                    type="password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -96,9 +95,8 @@ export default function ResetPassword() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="confirmPassword">Confirm new password</Label>
-                  <Input
+                  <PasswordInput
                     id="confirmPassword"
-                    type="password"
                     required
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}

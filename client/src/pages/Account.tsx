@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useProperties, useUpgradeToPro } from "@/hooks/use-projects";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -144,9 +144,8 @@ function ChangePasswordCard() {
           )}
           <div className="grid gap-2">
             <Label htmlFor="currentPassword">Current password</Label>
-            <Input
+            <PasswordInput
               id="currentPassword"
-              type="password"
               required
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
@@ -154,9 +153,8 @@ function ChangePasswordCard() {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="newPassword">New password</Label>
-            <Input
+            <PasswordInput
               id="newPassword"
-              type="password"
               required
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
@@ -164,9 +162,8 @@ function ChangePasswordCard() {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="confirmNewPassword">Confirm new password</Label>
-            <Input
+            <PasswordInput
               id="confirmNewPassword"
-              type="password"
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
