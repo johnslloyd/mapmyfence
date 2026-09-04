@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import 'leaflet/dist/leaflet.css';
 
 @tailwind base;
@@ -6,82 +6,87 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: 'IBM Plex Sans', sans-serif;
-  --font-display: 'Space Grotesk', sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
+  --font-sans: 'Public Sans', sans-serif;
+  --font-display: 'Archivo', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 
-  /* "Package" theme — warm cream, deep muted green, inspired by a reference
-     product package (see the design canvas artifact, "Package-inspired
-     (light)"). Converted from that artboard's exact OKLCH values via an
-     OKLCH->sRGB->HSL script, not eyeballed. Supersedes the earlier dark
-     "Precision" theme — the organic-hills exploration that followed this
-     artboard was tried and set aside; this is the plain version that was
-     actually picked. Lightened a pass further (background/secondary/muted/
-     accent/border all nudged up in L, down slightly in S) after the tan
-     tones read as "muddied," especially where several of these overlap
-     (e.g. bg-secondary/40 bands). */
-  --background: 40 32% 92%;
-  --foreground: 44 38% 7%;
+  /* "Blueprint" theme (2026-09-03) — technical/precision-drafting look,
+     picked from a 5-direction rebrand exploration (Blueprint, Fieldwork,
+     Ledger, Signal, Parcel — see that design-canvas artifact if it still
+     exists) alongside the MyYardManager -> Lot Planner rename. Pale
+     blue-gray paper, deep ink navy as the one dominant brand color
+     (mirrors the exact role the old "Package" theme's deep green played
+     — nearly every text-primary/bg-primary/border-primary call site in
+     the app stays correct with just this recolor, no component changes
+     needed), safety-orange reserved as a genuine but MINORITY accent.
+     Converted from exact hex via a hex->HSL script, not eyeballed —
+     same discipline "Package" was built with.
 
-  --card: 40 40% 96%;
-  --card-foreground: 44 38% 7%;
-  /* tailwind.config.ts's card/popover/secondary/muted/accent/primary/
-     destructive color groups all reference a "-border" sub-token
-     (border-card-border, border-primary-border, ...) that was never
-     defined here — same shape of bug as the font-display miss earlier in
-     this project's history. hsl(var(--card-border) / <alpha>) with an
-     empty --card-border is invalid CSS, so the browser drops that
-     declaration and falls back to the CSS default of currentColor —
-     which meant every Card with no explicit border override (e.g. the
-     EditFenceLineCard "Editing Line" panel) rendered a harsh near-black
-     border (matching --card-foreground, its text color), and every
-     bg-primary button rendered a pale cream rim (matching
-     --primary-foreground) instead of a clean edge. Confirmed live via
-     computed styles before fixing, not guessed. Filled in below —
-     surface roles get a soft neutral line (matching --border), fill
-     roles (primary/destructive) get their own color so the border seam
-     disappears into the fill instead of outlining it.
-  */
-  --card-border: 40 14% 84%;
+     Orange deliberately does NOT become --primary: primary drives 100+
+     call sites app-wide (buttons, links, headings, focus rings, badges)
+     and an all-orange app read as too loud/inconsistent with the
+     mockup's actual balance (navy-dominant, orange as a rare highlight).
+     Orange lives in --accent/--accent-foreground instead — a token
+     already used exactly where this app already wants a highlighted
+     callout (e.g. the map editor's run-length pill,
+     `bg-accent/95 text-primary border border-primary`), so real orange
+     presence shows up automatically without touching component code. */
+  --background: 204 29% 97%;
+  --foreground: 221 41% 12%;
 
-  --popover: 40 40% 96%;
-  --popover-foreground: 44 38% 7%;
-  --popover-border: 40 14% 84%;
+  --card: 0 0% 100%;
+  --card-foreground: 221 41% 12%;
+  /* See tailwind.config.ts's card/popover/secondary/muted/accent/
+     primary/destructive color groups — each references its own
+     "-border" sub-token; keep every one of these defined, or a card/
+     button silently falls back to `currentColor` for its border (a
+     real, previously-shipped bug in this app — see the "Brand" section
+     of CLAUDE.md for the full story). */
+  --card-border: 212 23% 87%;
 
-  --primary: 144 43% 21%;      /* Deep muted green */
-  --primary-foreground: 40 50% 94%;
-  --primary-border: 144 43% 21%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 221 41% 12%;
+  --popover-border: 212 23% 87%;
 
-  --secondary: 40 22% 89%;
-  --secondary-foreground: 44 38% 7%;
-  --secondary-border: 40 14% 84%;
+  --primary: 218 55% 19%;      /* Ink navy */
+  --primary-foreground: 204 29% 97%;
+  --primary-border: 218 55% 19%;
 
-  --muted: 40 22% 89%;
-  --muted-foreground: 34 19% 42%;
-  --muted-border: 40 14% 84%;
+  --secondary: 207 26% 93%;
+  --secondary-foreground: 221 41% 12%;
+  --secondary-border: 212 23% 87%;
 
-  --accent: 40 26% 87%;        /* Soft cream tint */
-  --accent-foreground: 144 43% 21%;
-  --accent-border: 40 14% 84%;
+  --muted: 207 26% 93%;
+  --muted-foreground: 215 16% 43%;
+  --muted-border: 212 23% 87%;
 
-  --destructive: 0 62% 30%;
-  --destructive-foreground: 210 20% 98%;
-  --destructive-border: 0 62% 30%;
+  --accent: 19 79% 92%;        /* Soft safety-orange tint */
+  --accent-foreground: 16 74% 27%;
+  --accent-border: 22 68% 82%;
 
-  --border: 40 14% 84%;
-  --input: 40 14% 84%;
-  --ring: 144 43% 21%;
-  --badge-outline: 40 14% 84%; /* badge.tsx's outline variant — same latent-token bug as above */
+  --destructive: 3 71% 41%;
+  --destructive-foreground: 5 73% 97%;
+  --destructive-border: 3 71% 41%;
+
+  --border: 212 23% 87%;
+  --input: 212 23% 87%;
+  --ring: 218 55% 19%;
+  --badge-outline: 212 23% 87%; /* badge.tsx's outline variant — same latent-token bug as above */
 
   /* The editor's right-hand panel (line list, material estimates, the
      line-editing card) is meant to read as a distinctly lighter, calmer
      surface than the rest of the app — not just proportionally lighter
      along with everything else. Applied to EditorSidebar, the floating
      SIDEBAR-state wrapper, and EditFenceLineCard. */
-  --panel: 40 28% 98%;
-  --panel-foreground: 44 38% 7%;
+  --panel: 200 43% 99%;
+  --panel-foreground: 221 41% 12%;
 
-  --radius: 0.5rem;
+  /* Still unused — tailwind.config.ts's borderRadius scale is hardcoded
+     to its own rem values, not wired to this variable (a pre-existing
+     gap, not something this pass introduced or fixed; noted so the next
+     person doesn't assume changing this does anything). Blueprint's
+     sharper corners are set directly in tailwind.config.ts instead. */
+  --radius: 0.25rem;
 }
 
 @layer base {
@@ -111,4 +116,17 @@
 
 .leaflet-popup-content {
   @apply font-sans text-sm m-3;
+}
+
+/* Blueprint theme's one signature decorative flourish — the survey/
+   grid-paper texture from the rebrand mockup. Deliberately scoped to
+   the guest homepage hero (Dashboard.tsx) only, not the whole app —
+   busy behind data-dense working screens (the editor, admin, property
+   list), it's a nice touch on the one page that's actually a marketing
+   surface. */
+.grid-paper {
+  background-image:
+    linear-gradient(hsl(var(--border)) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border)) 1px, transparent 1px);
+  background-size: 28px 28px;
 }

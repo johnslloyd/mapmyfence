@@ -53,9 +53,9 @@ function UnauthenticatedDashboard() {
       <div className="max-w-6xl mx-auto">
 
         {/* HERO */}
-        <div className="flex flex-col lg:flex-row items-center gap-14 px-6 md:px-12 py-20 md:py-24">
+        <div className="grid-paper flex flex-col lg:flex-row items-center gap-14 px-6 md:px-12 py-20 md:py-24">
           <div className="flex-1 min-w-0 text-center lg:text-left">
-            <div className="font-mono text-xs text-primary mb-5 tracking-wide">
+            <div className="font-mono text-xs text-accent-foreground mb-5 tracking-wide">
               &gt; FREE_TO_START · NO_ACCOUNT_REQUIRED
             </div>
             <h1 className="font-display font-semibold text-4xl md:text-5xl leading-tight tracking-tight mb-6 text-primary">
@@ -90,17 +90,17 @@ function UnauthenticatedDashboard() {
         {/* VALUE PROPS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-border border border-border">
           <div className="bg-secondary/40 p-9 flex flex-col gap-3.5">
-            <span className="font-mono text-xs text-primary">01</span>
+            <span className="font-mono text-xs text-accent-foreground">01</span>
             <h3 className="font-display font-semibold text-lg">Real satellite imagery</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">See your actual property — driveway, trees, structures — not a rough sketch.</p>
           </div>
           <div className="bg-secondary/40 p-9 flex flex-col gap-3.5">
-            <span className="font-mono text-xs text-primary">02</span>
+            <span className="font-mono text-xs text-accent-foreground">02</span>
             <h3 className="font-display font-semibold text-lg">Real material pricing</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">Costs pulled from real hardware store listings — exact products, exact prices, whatever you're planning.</p>
           </div>
           <div className="bg-secondary/40 p-9 flex flex-col gap-3.5">
-            <span className="font-mono text-xs text-primary">03</span>
+            <span className="font-mono text-xs text-accent-foreground">03</span>
             <h3 className="font-display font-semibold text-lg">No commitment to start</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">Plan as a guest. Create an account only when you're ready to save.</p>
           </div>
@@ -134,22 +134,22 @@ function UnauthenticatedDashboard() {
         {/* HOW IT WORKS */}
         <div className="px-6 md:px-12 py-24 border-t border-border">
           <div className="text-center mb-16">
-            <div className="font-mono text-xs text-primary mb-3 tracking-wide">FENCING · HOW IT WORKS</div>
+            <div className="font-mono text-xs text-accent-foreground mb-3 tracking-wide">FENCING · HOW IT WORKS</div>
             <h2 className="font-display font-semibold text-3xl tracking-tight">Three steps. No spreadsheet.</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-border border border-border max-w-4xl mx-auto">
             <div className="bg-background p-8 flex flex-col gap-4">
-              <div className="font-mono text-xs text-primary">STEP_01</div>
+              <div className="font-mono text-xs text-accent-foreground">STEP_01</div>
               <h3 className="font-display font-semibold text-lg">Find your property</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">Search your address — we center a real satellite view of your yard.</p>
             </div>
             <div className="bg-background p-8 flex flex-col gap-4">
-              <div className="font-mono text-xs text-primary">STEP_02</div>
+              <div className="font-mono text-xs text-accent-foreground">STEP_02</div>
               <h3 className="font-display font-semibold text-lg">Draw your fence line</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">Click points along the line — length calculates as you go.</p>
             </div>
             <div className="bg-background p-8 flex flex-col gap-4">
-              <div className="font-mono text-xs text-primary">STEP_03</div>
+              <div className="font-mono text-xs text-accent-foreground">STEP_03</div>
               <h3 className="font-display font-semibold text-lg">Get your estimate</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">A full materials list and total cost, sourced from real store pricing.</p>
             </div>

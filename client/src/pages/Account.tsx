@@ -62,7 +62,7 @@ function PlanCard() {
             </div>
           </div>
           <p className="text-sm text-muted-foreground max-w-md mb-4">
-            Upgrade to Pro for unlimited properties — no payment info needed, it's free while MyYardManager is in beta.
+            Upgrade to Pro for unlimited properties — no payment info needed, it's free while Lot Planner is in beta.
           </p>
           <Button onClick={handleUpgrade} disabled={upgrade.isPending} className="gap-2">
             <Sparkles className="w-4 h-4" /> {upgrade.isPending ? "Upgrading..." : "Upgrade to Pro — free during beta"}
@@ -80,7 +80,7 @@ function PlanCard() {
 // user's existing projects/fence lines first. A stated, working way out
 // is what beta users are owed; building the automated flow safely can
 // follow once that's been thought through.
-const SUPPORT_EMAIL = "support@myyardmanager.app";
+const SUPPORT_EMAIL = "support@lotplanner.app";
 
 function ChangePasswordCard() {
   const { toast } = useToast();
@@ -194,7 +194,7 @@ function DeleteAccountCard() {
           Account deletion isn't self-serve yet — email us and we'll take care of it for you.
         </p>
         <Button asChild variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10">
-          <a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("Delete my MyYardManager account")}`}>
+          <a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("Delete my Lot Planner account")}`}>
             Email {SUPPORT_EMAIL}
           </a>
         </Button>

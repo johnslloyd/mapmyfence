@@ -5,10 +5,14 @@ export default {
   content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
+      // Blueprint theme (2026-09-03): sharper, more technical corners
+      // than the old "Package" theme's rounder scale (was 9px/6px/3px)
+      // — still enough radius to read as intentional on a real click
+      // target, not literal 0px everywhere.
       borderRadius: {
-        lg: ".5625rem", /* 9px */
-        md: ".375rem", /* 6px */
-        sm: ".1875rem", /* 3px */
+        lg: ".25rem", /* 4px */
+        md: ".1875rem", /* 3px */
+        sm: ".125rem", /* 2px */
       },
       colors: {
         // Flat / base colors (regular buttons)

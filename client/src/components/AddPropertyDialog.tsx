@@ -142,7 +142,7 @@ export function AddPropertyDialog({
                 <Sparkles className="w-5 h-5 text-primary" /> You're at the free limit
               </DialogTitle>
               <DialogDescription>
-                Free accounts can have up to {FREE_PROPERTY_LIMIT} properties. Upgrade to Pro for unlimited — no payment info needed, it's free while MyYardManager is in beta.
+                Free accounts can have up to {FREE_PROPERTY_LIMIT} properties. Upgrade to Pro for unlimited — no payment info needed, it's free while Lot Planner is in beta.
               </DialogDescription>
             </DialogHeader>
             <div className="flex justify-end pt-4">

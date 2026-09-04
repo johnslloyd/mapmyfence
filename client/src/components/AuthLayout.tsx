@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { LandPlot } from "lucide-react";
+import { Crosshair } from "lucide-react";
 import { PageHeader } from "./PageHeader";
 
 // Login/Register/ForgotPassword/ResetPassword each rendered their own
@@ -20,9 +20,9 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
       <PageHeader>
         <Link href="/" className="flex items-center gap-2">
           <div className="bg-primary text-primary-foreground p-2 rounded-lg">
-            <LandPlot className="w-6 h-6" />
+            <Crosshair className="w-6 h-6" />
           </div>
-          <span className="font-display font-bold text-xl">MyYardManager</span>
+          <span className="font-display font-bold text-xl">Lot Planner</span>
         </Link>
       </PageHeader>
       <main className="flex-1 flex items-center justify-center p-4">

@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { AddPropertyDialog } from "@/components/AddPropertyDialog";
 import { PropertySatelliteImage } from "@/components/PropertySatelliteImage";
 import { Link } from "wouter";
-import { Trash2, LandPlot, Plus } from "lucide-react";
+import { Trash2, Crosshair, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
@@ -114,7 +114,7 @@ function FirstPropertyOnboarding() {
     <div className="bg-card rounded-3xl border border-dashed overflow-hidden">
       <div className="flex flex-col items-center text-center px-6 py-16">
         <div className="w-16 h-16 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center mb-5">
-          <LandPlot className="w-8 h-8" />
+          <Crosshair className="w-8 h-8" />
         </div>
         <h3 className="font-display text-2xl font-bold">Let's map your first yard</h3>
         <p className="text-muted-foreground mt-2 max-w-md">
@@ -128,17 +128,17 @@ function FirstPropertyOnboarding() {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border border-t border-border">
         <div className="p-6 flex flex-col gap-1.5">
-          <span className="font-mono text-xs text-primary">STEP_01</span>
+          <span className="font-mono text-xs text-accent-foreground">STEP_01</span>
           <h4 className="font-display font-semibold text-sm">Add your property</h4>
           <p className="text-xs text-muted-foreground leading-relaxed">Give it a name and an address.</p>
         </div>
         <div className="p-6 flex flex-col gap-1.5">
-          <span className="font-mono text-xs text-primary">STEP_02</span>
+          <span className="font-mono text-xs text-accent-foreground">STEP_02</span>
           <h4 className="font-display font-semibold text-sm">Draw your fence line</h4>
           <p className="text-xs text-muted-foreground leading-relaxed">Click points on real satellite imagery.</p>
         </div>
         <div className="p-6 flex flex-col gap-1.5">
-          <span className="font-mono text-xs text-primary">STEP_03</span>
+          <span className="font-mono text-xs text-accent-foreground">STEP_03</span>
           <h4 className="font-display font-semibold text-sm">Get your estimate</h4>
           <p className="text-xs text-muted-foreground leading-relaxed">A full materials list and real cost, instantly.</p>
         </div>

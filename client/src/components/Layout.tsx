@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LandPlot, FolderKanban, Menu, X, LogOut, User as UserIcon, Sparkles, Shield } from "lucide-react";
+import { Crosshair, FolderKanban, Menu, X, LogOut, User as UserIcon, Sparkles, Shield } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { AddPropertyDialog } from "./AddPropertyDialog";
@@ -100,9 +100,9 @@ export function Layout({ children }: LayoutProps) {
           {/* Logo */}
           <Link href="/" className="mr-6 flex items-center gap-2">
             <div className="bg-primary text-primary-foreground p-2 rounded-lg">
-              <LandPlot className="w-6 h-6" />
+              <Crosshair className="w-6 h-6" />
             </div>
-            <span className="font-display font-bold text-xl hidden sm:inline-block">MyYardManager</span>
+            <span className="font-display font-bold text-xl hidden sm:inline-block">Lot Planner</span>
           </Link>
 
           {/* Desktop Navigation */}
