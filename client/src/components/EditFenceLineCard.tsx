@@ -65,6 +65,7 @@ export function EditFenceLineCard({
               <SelectContent>
                 <SelectItem value="wood_pine">Wood: Pine</SelectItem>
                 <SelectItem value="wood_cedar">Wood: Cedar</SelectItem>
+                <SelectItem value="wood_pine_cedar_picket">Wood: Pine (Cedar Pickets)</SelectItem>
                 <SelectItem value="vinyl" disabled>Vinyl (pricing coming soon)</SelectItem>
                 <SelectItem value="iron" disabled>Iron (pricing coming soon)</SelectItem>
               </SelectContent>

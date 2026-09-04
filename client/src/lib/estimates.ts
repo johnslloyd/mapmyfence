@@ -7,6 +7,17 @@ export const STORE_LABELS: Record<string, string> = {
   home_depot: "Home Depot",
 };
 
+// A fence line's `material` field is a free-text string, set from
+// EditFenceLineCard's picker (the only three real values today) —
+// existing lines can also carry legacy/inconsistent values (see
+// CLAUDE.md's "Cross-retailer pricing" notes), which fall through to
+// the raw string unchanged rather than a blank label.
+export const MATERIAL_LABELS: Record<string, string> = {
+  wood_pine: "Pine",
+  wood_cedar: "Cedar",
+  wood_pine_cedar_picket: "Pine (Cedar Pickets)",
+};
+
 // Buying order, not alphabetical: structural first (post + the concrete
 // that sets it), then the rail that spans between posts, then the
 // pickets that face it, then hardware last.

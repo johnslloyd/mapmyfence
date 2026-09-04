@@ -24,7 +24,7 @@ import { Label } from "@/components/ui/label";
 import { NewProjectInstructions } from "@/components/NewProjectInstructions";
 import { EditFenceLineCard } from "@/components/EditFenceLineCard";
 import { NewFenceLineCard } from "@/components/NewFenceLineCard";
-import { STORE_LABELS, consolidateMaterials } from "@/lib/estimates";
+import { STORE_LABELS, MATERIAL_LABELS, consolidateMaterials } from "@/lib/estimates";
 import { ClipboardCheck, ShieldAlert } from "lucide-react";
 
 type UiState = "HIDDEN" | "INSTRUCTIONS" | "DRAWING" | "SIDEBAR" | "EDITING";
@@ -394,9 +394,14 @@ export default function Editor() {
     return <Layout><NotFound /></Layout>;
   }
 
+  // Default material for a brand-new line: pine post/rail, cedar picket
+  // — the cheaper structural lumber with the nicer-looking face, not
+  // plain cedar throughout. User-changeable via EditFenceLineCard's
+  // Material picker right after; this is just the starting point both
+  // the guest (pending) and authenticated direct-save paths land on.
   const handleSaveLine = async (points: any[], length: number) => {
     if (!isAuthenticated) {
-      const pendingLine = { projectId: project.id, points, length, material: 'wood_cedar', height: 6 };
+      const pendingLine = { projectId: project.id, points, length, material: 'wood_pine_cedar_picket', height: 6 };
       localStorage.setItem(`pendingFenceLine_${project.id}`, JSON.stringify(pendingLine));
       setShowSignUpModal(true);
       return;
@@ -405,7 +410,7 @@ export default function Editor() {
       await createLineMutation.mutateAsync({
         projectId: project.id,
         name: defaultLineName(project.property.address),
-        material: 'wood_cedar',
+        material: 'wood_pine_cedar_picket',
         height: 6,
         length,
         color: "natural",
@@ -508,7 +513,7 @@ export default function Editor() {
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                         <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
-                          {line.material}
+                          {MATERIAL_LABELS[line.material] || line.material}
                         </Badge>
                         <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
                           {line.height} ft high
