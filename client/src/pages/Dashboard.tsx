@@ -59,7 +59,7 @@ function UnauthenticatedDashboard() {
               &gt; FREE_TO_START · NO_ACCOUNT_REQUIRED
             </div>
             <h1 className="font-display font-semibold text-4xl md:text-5xl leading-tight tracking-tight mb-6 text-primary">
-              Plan your yard projects like a pro, one at a time.
+              Plan your fence like a pro, one line at a time.
             </h1>
             <p className="text-lg text-muted-foreground max-w-xl mx-auto lg:mx-0 mb-9 leading-relaxed">
               Map your property once on real satellite imagery, then plan what you're building on top of it — fencing today, with lawn care and more yard projects on the way — all with exact costs pulled from real retailer pricing.

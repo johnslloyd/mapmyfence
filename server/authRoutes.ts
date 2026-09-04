@@ -193,9 +193,9 @@ authRouter.post("/api/forgot-password", passwordResetLimiter, async (req, res, n
       const resetUrl = `${origin}/reset-password?token=${rawToken}`;
       await sendEmail({
         to: email,
-        subject: "Reset your Lot Planner password",
-        text: `We got a request to reset your Lot Planner password. This link expires in 1 hour and can only be used once:\n\n${resetUrl}\n\nIf you didn't request this, you can ignore this email — your password hasn't been changed.`,
-        html: `<p>We got a request to reset your Lot Planner password. This link expires in 1 hour and can only be used once:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can ignore this email — your password hasn't been changed.</p>`,
+        subject: "Reset your PostPlotter password",
+        text: `We got a request to reset your PostPlotter password. This link expires in 1 hour and can only be used once:\n\n${resetUrl}\n\nIf you didn't request this, you can ignore this email — your password hasn't been changed.`,
+        html: `<p>We got a request to reset your PostPlotter password. This link expires in 1 hour and can only be used once:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can ignore this email — your password hasn't been changed.</p>`,
       });
     }
 

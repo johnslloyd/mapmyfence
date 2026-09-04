@@ -16,7 +16,7 @@ export default function Privacy() {
         <div>
           <h1 className="font-display text-2xl font-bold">Privacy Policy</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Last updated {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })} — Lot Planner is currently in beta.
+            Last updated {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })} — PostPlotter is currently in beta.
           </p>
         </div>
 
@@ -68,7 +68,7 @@ export default function Privacy() {
           <section className="space-y-2">
             <h2 className="font-display font-bold text-lg text-foreground">Your choices</h2>
             <p>
-              You can use Lot Planner as a guest without creating an account — nothing is saved
+              You can use PostPlotter as a guest without creating an account — nothing is saved
               unless you sign up. Once you have an account, you can change your password or
               request account deletion from your{" "}
               <Link href="/account" className="underline text-primary">
@@ -82,8 +82,8 @@ export default function Privacy() {
             <h2 className="font-display font-bold text-lg text-foreground">Questions</h2>
             <p>
               Email us at{" "}
-              <a href="mailto:support@lotplanner.app" className="underline text-primary">
-                support@lotplanner.app
+              <a href="mailto:john.steven.lloyd.jr@gmail.com" className="underline text-primary">
+                john.steven.lloyd.jr@gmail.com
               </a>
               .
             </p>

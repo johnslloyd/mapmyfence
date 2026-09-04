@@ -22,7 +22,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           <div className="bg-primary text-primary-foreground p-2 rounded-lg">
             <Crosshair className="w-6 h-6" />
           </div>
-          <span className="font-display font-bold text-xl">Lot Planner</span>
+          <span className="font-display font-bold text-xl">PostPlotter</span>
         </Link>
       </PageHeader>
       <main className="flex-1 flex items-center justify-center p-4">

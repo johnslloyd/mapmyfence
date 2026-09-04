@@ -102,7 +102,7 @@ export function Layout({ children }: LayoutProps) {
             <div className="bg-primary text-primary-foreground p-2 rounded-lg">
               <Crosshair className="w-6 h-6" />
             </div>
-            <span className="font-display font-bold text-xl hidden sm:inline-block">Lot Planner</span>
+            <span className="font-display font-bold text-xl hidden sm:inline-block">PostPlotter</span>
           </Link>
 
           {/* Desktop Navigation */}
