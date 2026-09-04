@@ -1,4 +1,4 @@
-# Lot Planner
+# PostPlotter
 
 DIY fence-planning tool: users map fence lines on a satellite view of their
 property and get material estimates. Longer-term direction is a full yard
@@ -10,9 +10,11 @@ only" below for what's actually been built toward it so far (schema
 only, nothing user-facing).
 
 **Name history: "MapMyFence" → briefly "Yard Stick" → "MyYardManager" →
-"Lot Planner"** (first two renames same day, 2026-08-28; the third
-2026-09-03, alongside a full visual rebrand — see the dated Brand-section
-note below for that one). The first rename (see the dated
+"Lot Planner" → "PostPlotter"** (first two renames same day, 2026-08-28;
+the third 2026-09-03, alongside a full visual rebrand — see the dated
+Brand-section note below for that one; the fourth 2026-09-04, one day
+later, name only — see that same Brand-section note's follow-up entry).
+The first rename (see the dated
 note under Brand below) swapped to "Yard Stick" because a second,
 non-fence vertical was coming — a yard-generic name fits a multi-vertical
 product where a fence-specific one didn't. That name didn't survive
@@ -27,14 +29,17 @@ dated Brand-section note for the full reasoning and what got explicitly
 ruled out. Landed on **"MyYardManager"** — longer and plainly
 descriptive on purpose, chosen specifically because it's actually
 available (domain unregistered, no competing app/company found), not for
-cleverness. **"Lot Planner"** is the current name, chosen by the user
-directly (not a research pass like the prior two) alongside a genuine
-visual-identity rebrand — see the dated Brand-section note below. The
+cleverness. **"Lot Planner"** followed, chosen by the user directly (not
+a research pass like the first two) alongside a genuine visual-identity
+rebrand. **"PostPlotter"** is the current name, one day later — the
+user's own choice again, name only this time, no accompanying visual
+change (still the Blueprint theme, still the `Crosshair` mark) — see the
+dated Brand-section note below. The
 local directory (`/Users/johnlloyd/mapmyfence`) and the GitHub remote
 (`johnslloyd/mapmyfence`) still carry the ORIGINAL name — renaming either
 is a real, somewhat-disruptive infra action (breaks local shell muscle
 memory; a GitHub rename leaves redirects but still changes clone URLs)
-that has never been part of any of these three passes and should be its
+that has never been part of any of these four passes and should be its
 own deliberate call, not something done incidentally while renaming
 in-app strings.
 
@@ -330,6 +335,52 @@ working screen), Account, and Login/Register — zero console errors in
 a fresh tab, `npm run check` and `npm run build` both clean, 375px
 mobile checked on both the homepage and an authenticated page with zero
 horizontal overflow.
+
+**Name changed again the next day: "Lot Planner" → "PostPlotter"
+(2026-09-04).** Same full sweep, visual identity (Blueprint theme, the
+`Crosshair` mark) untouched — this was purely the name string moving
+again, not another look-and-feel pass. Every `Lot Planner` occurrence
+found via grep before editing (confirmed against the sweep list this
+section's own prior entry documents, so nothing got missed): `index.html`
+`<title>`, `Layout.tsx`/`AuthLayout.tsx` nav wordmark,
+`AddPropertyDialog.tsx`, `Account.tsx`, `Privacy.tsx`,
+`BeforeYouDig.tsx`, `server/authRoutes.ts` (reset-email subject/body),
+`server/email.ts` (from-address display name), `package.json`'s
+`"name"` (`lot-planner` → `postplotter`), `.claude/launch.json`'s dev
+server config name (`lot-planner-dev` → `postplotter-dev`). The one
+`Lot Planner` string deliberately left alone: `index.css`'s own Brand
+comment documenting the PRIOR rename event itself — that's real history,
+not current-state copy, same as every other historical note in this
+file.
+
+**Support email changed at the same time**: the placeholder
+`support@lotplanner.app` (never a real inbox, across every rename)
+swapped for the user's own real address,
+`john.steven.lloyd.jr@gmail.com`, "for now" — a genuinely monitored
+inbox in place of a domain nobody receives mail at, not a permanent
+choice. Two call sites: `Account.tsx`'s `SUPPORT_EMAIL` constant
+(delete-account mailto) and `Privacy.tsx`'s separate hardcoded literal
+(never actually shared the constant — a pre-existing minor duplication,
+not fixed here, just both values updated in step). Update the MVP
+launch-blockers note (memory) once a real dedicated inbox exists.
+
+**Homepage H1 narrowed to what's actually built, same day**: "Plan your
+yard projects like a pro, one at a time." read as already covering the
+lawn-care vertical, which doesn't exist yet — direct feedback that this
+overclaimed readiness the way the "Homepage copy updated to match"
+lawn-care section elsewhere in this file already commits to avoiding.
+Changed to "Plan your fence like a pro, one line at a time." — same
+rhythm/length as the wording it replaces (a deliberately tightened
+phrase from an earlier pass), just narrowed from "yard projects"/
+"project" to "fence"/"line," this app's own term for what a user
+actually draws. The subhead directly below it already does the
+"fencing today, lawn care coming" framing correctly and was left
+untouched — a targeted fix, not a rewrite of the whole hero.
+
+Verified live: fresh dev-server tab confirms zero occurrences of "Lot
+Planner" anywhere in the rendered DOM and the new support email present
+on both Account and Privacy; `npm run check` clean; the new H1 renders
+at the same size/wrap behavior as before.
 
 ## Property / Project restructure (2026-08-28)
 
@@ -2410,6 +2461,65 @@ simplified copy). Reproduced the Radix warning first, then confirmed
 it was gone in a fresh tab after the fix (the mid-session tab still
 briefly showed the old error — the documented stale-console-replay
 gotcha elsewhere in this file, not a real regression).
+
+**Delete a user's account (2026-09-04) — the one admin action that
+isn't read-only.** Direct request. This is a REAL, permanent delete —
+matches how the existing self-serve "Delete Account" flow
+(`Account.tsx`) is already worded ("Delete Account," not "Deactivate"),
+just automated here instead of "email us and we'll take care of it."
+
+**The actual engineering question was cascade correctness, not the
+button.** `properties.userId → users.id` has no `onDelete` cascade
+(deliberate — an orphaned property was never meant to silently vanish
+on its own), while `properties → projects → fenceLines →
+{coordinates, gates}`, and `yardBoundaries → yardBoundaryPoints`, all
+already cascade cleanly from `properties.id` (confirmed via a real grep
+of every `.references()` in `shared/schema.ts` before writing any
+delete logic, not assumed). So a direct `DELETE FROM users` would fail
+outright with a foreign-key violation the moment the target owns even
+one property. `storage.deleteUserAndData(id)`
+(`server/storage.ts`) wraps both steps in one `db.transaction`: delete
+every property the user owns first (which cascades everything under
+them automatically), then the user row itself. `events.userId`/
+`.targetUserId` are plain `text` columns with no FK constraint, so they
+don't block this either way — left as a legitimate historical record
+after a delete, same as any event already referencing a since-deleted
+property/project.
+
+**New route, `DELETE /api/admin/users/:id`** (`api.admin.deleteUser`,
+`shared/routes.ts`), gated by the same `isAdmin` middleware as every
+other admin route, plus one route-level guard of its own: **an admin
+can't delete their own account through this panel** — a slip here would
+lock them out with no self-serve way back in, a materially worse
+failure mode than the same click on anyone else's row, so it's checked
+server-side (400) before anything else, not just hidden client-side.
+`AdminUserDetail.tsx` hides the button entirely when viewing your own
+account for the same reason (belt-and-suspenders, not the actual
+gate). Logged as a new `admin_deleted_user` event type — the one
+`admin_*` event that's an ACTION, not a view; `targetUserId` points at
+a user row that's gone the instant after the event is written, which
+is fine, same no-FK-constraint reasoning as above.
+
+**UI: `AlertDialog`, not a plain confirm click** — something this
+irreversible gets a real second step, and the confirmation names
+exactly what's being removed (the target's actual email, and their
+real property count: "and their 1 property" / "and all 3 properties" /
+"and any properties" for zero — not a generic "are you sure?"),
+matching the style `shadcn`'s `AlertDialog` is built for and this app
+already uses for other destructive confirms.
+
+Verified live end-to-end, not just typechecked: created a genuinely
+fresh test account with a real property → project → fence line (2
+coordinates) → gate, deleted it from the admin side, then queried
+`DATABASE_URL` directly (bypassing the API entirely) to confirm all six
+rows — user, property, project, fence line, coordinates, gate — were
+actually gone, not just unreachable through the now-401'd owner
+session. Separately confirmed the self-delete guard: called the route
+against the logged-in admin's own id directly and got the exact 400 +
+message back, and confirmed the resulting `admin_deleted_user` event
+recorded the right admin as `userId` and the deleted id as
+`targetUserId` (with `targetUserEmail` correctly `null`, since that
+join has nothing left to resolve).
 
 ## Usage event logging
 
