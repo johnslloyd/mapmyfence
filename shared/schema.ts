@@ -157,9 +157,11 @@ export const events = pgTable("events", {
   // panel's own audit trail — see targetUserId below and
   // server/adminRoutes.ts. Deliberately logged the same way every other
   // funnel event is, not a separate audit system, so "who looked at
-  // what, and when" lives in one place.
+  // what, and when" lives in one place. "admin_viewed_project"
+  // (2026-09-01) is the same idea, one level deeper — opening a specific
+  // fence diagram/estimate from a user's detail page.
   type: text("type", {
-    enum: ["property_created", "project_created", "fence_line_created", "estimate_viewed", "account_created", "account_upgraded", "admin_viewed_users", "admin_viewed_user"],
+    enum: ["property_created", "project_created", "fence_line_created", "estimate_viewed", "account_created", "account_upgraded", "admin_viewed_users", "admin_viewed_user", "admin_viewed_project"],
   }).notNull(),
   propertyId: integer("property_id"),
   projectId: integer("project_id"),

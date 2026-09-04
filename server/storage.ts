@@ -49,6 +49,10 @@ export interface IStorage {
   getUserById(id: string): Promise<any | undefined>;
   getAllUsersWithCounts(): Promise<any[]>;
   getRecentEvents(limit: number): Promise<any[]>;
+  // Same fence-line/coordinate/gate detail getProject(id, userId) returns,
+  // deliberately WITHOUT the ownership check — admin-only caller, gated by
+  // the isAdmin route middleware instead of a userId match.
+  getProjectWithLines(id: number): Promise<ProjectWithLines | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -96,7 +100,7 @@ export class DatabaseStorage implements IStorage {
     await this.db.delete(properties).where(eq(properties.id, id));
   }
 
-  private async getProjectWithLines(id: number): Promise<ProjectWithLines | undefined> {
+  async getProjectWithLines(id: number): Promise<ProjectWithLines | undefined> {
     const result = await this.db.select().from(projects).where(eq(projects.id, id)).limit(1);
     if (!result || result.length === 0) return undefined;
     const p = result[0];

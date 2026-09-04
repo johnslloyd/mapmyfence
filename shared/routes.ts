@@ -76,6 +76,20 @@ export const api = {
         403: errorSchemas.notFound,
       },
     },
+    // A specific project's real fence-line detail (coordinates, gates)
+    // plus its computed materials estimate — same data shape a user's
+    // own editor sidebar shows, fetched cross-user via storage's
+    // unrestricted getProjectWithLines rather than the ownership-gated
+    // storage.getProject a real user's /api/projects/:id/estimates uses.
+    getProject: {
+      method: 'GET' as const,
+      path: '/api/admin/projects/:id',
+      responses: {
+        200: z.any(),
+        403: errorSchemas.notFound,
+        404: errorSchemas.notFound,
+      },
+    },
   },
   // A property is just an address — name/address/description, no type,
   // no status. See CLAUDE.md's "Property / Project restructure" section.

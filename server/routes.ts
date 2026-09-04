@@ -373,6 +373,36 @@ export async function registerRoutes(
     }
   });
 
+  app.get(api.admin.getProject.path, isAdmin, async (req, res) => {
+    try {
+      const adminId = (req.user as any).id;
+      const projectId = Number(req.params.id);
+      // Unlike storage.getProject (used by every user-facing route),
+      // this has no ownership check at all — deliberately, since the
+      // whole point is viewing a project that belongs to someone else.
+      // Access control is the isAdmin middleware above, not a userId
+      // match.
+      const project = await storage.getProjectWithLines(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const totalLength = project.fenceLines.reduce((acc, line) => acc + (line.length || 0), 0);
+      const estimate = totalLength === 0
+        ? { options: [] }
+        : await calculateEstimate(
+            project.fenceLines.map((line) => ({ length: line.length || 0, material: line.material, height: line.height })),
+            project.fenceLines.flatMap((line) => (line.gates || []).map((g) => ({ type: g.type }))),
+          );
+
+      logEvent("admin_viewed_project", { userId: adminId, targetUserId: project.property.userId ?? undefined, projectId });
+      res.json({ project, estimate });
+    } catch (err) {
+      console.error('Failed to get project for admin', err);
+      res.status(500).json({ message: 'Failed to get project' });
+    }
+  });
+
   app.get(api.admin.listEvents.path, isAdmin, async (req, res) => {
     try {
       const recentEvents = await storage.getRecentEvents(200);
