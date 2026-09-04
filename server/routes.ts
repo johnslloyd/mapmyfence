@@ -373,6 +373,36 @@ export async function registerRoutes(
     }
   });
 
+  app.delete(api.admin.deleteUser.path, isAdmin, async (req, res) => {
+    try {
+      const adminId = (req.user as any).id;
+      const targetId = req.params.id;
+      // The one guard this route enforces itself: can't delete your
+      // own account through the admin panel — a slip here would lock
+      // an admin out of their own account with no self-serve way back
+      // in, a much worse failure mode than the same click on any other
+      // user's row.
+      if (targetId === adminId) {
+        return res.status(400).json({ message: "You can't delete your own account from here." });
+      }
+      const targetUser = await storage.getUserById(targetId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      await storage.deleteUserAndData(targetId);
+      // targetUserId here points at a user row that no longer exists
+      // the instant after this — fine, events.targetUserId carries no
+      // FK constraint (see storage.deleteUserAndData's own comment),
+      // so this is a legitimate historical record of who was deleted,
+      // not a reference the audit trail ever expects to still resolve.
+      logEvent("admin_deleted_user", { userId: adminId, targetUserId: targetId });
+      res.status(204).end();
+    } catch (err) {
+      console.error('Failed to delete user', err);
+      res.status(500).json({ message: 'Failed to delete user' });
+    }
+  });
+
   app.get(api.admin.getProject.path, isAdmin, async (req, res) => {
     try {
       const adminId = (req.user as any).id;

@@ -53,6 +53,8 @@ export interface IStorage {
   // deliberately WITHOUT the ownership check — admin-only caller, gated by
   // the isAdmin route middleware instead of a userId match.
   getProjectWithLines(id: number): Promise<ProjectWithLines | undefined>;
+  // Real, permanent delete — the user row AND everything they own.
+  deleteUserAndData(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -206,6 +208,28 @@ export class DatabaseStorage implements IStorage {
     const result = await this.db.select().from(users).where(eq(users.id, id)).limit(1);
     if (!result || result.length === 0) return undefined;
     return stripSensitiveUserFields(result[0]);
+  }
+
+  // Real, permanent delete, not a soft/deactivate flag — matches how
+  // the existing self-serve "Delete Account" flow (Account.tsx) is
+  // worded and scoped, just automated here instead of "email us."
+  // properties -> projects -> fenceLines -> coordinates/gates, and
+  // yardBoundaries -> yardBoundaryPoints, all already CASCADE from
+  // properties.id at the DB level (see shared/schema.ts) — but
+  // properties.userId has NO cascade back to users.id (an orphaned
+  // property was never meant to silently vanish on its own), so this
+  // user's properties are deleted explicitly first, in the same
+  // transaction, before the user row itself — otherwise the user
+  // delete would fail on that foreign key the moment they own even one
+  // property. events rows mentioning this user (userId/targetUserId)
+  // are plain text columns with no FK constraint — left alone
+  // afterward, same as any historical event already referencing a
+  // since-deleted property/project.
+  async deleteUserAndData(id: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.delete(properties).where(eq(properties.userId, id));
+      await tx.delete(users).where(eq(users.id, id));
+    });
   }
 
   // Three flat queries instead of one per user (or a SQL-level join) —

@@ -1,12 +1,24 @@
 import { Layout } from "@/components/Layout";
 import { useRoute, Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { useAdminUser, useAdminProject } from "@/hooks/use-admin";
+import { useAdminUser, useAdminProject, useAdminDeleteUser } from "@/hooks/use-admin";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Fence, Sprout, Shield } from "lucide-react";
+import { ArrowLeft, Fence, Sprout, Shield, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { PlanThumbnail } from "@/lib/planPreview";
 import { STORE_LABELS, MATERIAL_TYPE_LABELS, MATERIAL_TYPE_ORDER, consolidateMaterials } from "@/lib/estimates";
@@ -55,15 +67,23 @@ export default function AdminUserDetail() {
           <ArrowLeft className="w-4 h-4" /> Back to Admin
         </Link>
 
-        <div>
-          <h1 className="font-display text-2xl font-bold flex items-center gap-2 flex-wrap">
-            {targetUser.email}
-            <Badge variant={targetUser.plan === "pro" ? "default" : "secondary"} className="capitalize">{targetUser.plan}</Badge>
-            {targetUser.isAdmin && (
-              <Badge variant="outline" className="gap-1"><Shield className="w-3 h-3" /> Admin</Badge>
-            )}
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">Joined {format(new Date(targetUser.createdAt), "MMMM d, yyyy")}</p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="font-display text-2xl font-bold flex items-center gap-2 flex-wrap">
+              {targetUser.email}
+              <Badge variant={targetUser.plan === "pro" ? "default" : "secondary"} className="capitalize">{targetUser.plan}</Badge>
+              {targetUser.isAdmin && (
+                <Badge variant="outline" className="gap-1"><Shield className="w-3 h-3" /> Admin</Badge>
+              )}
+            </h1>
+            <p className="text-muted-foreground text-sm mt-1">Joined {format(new Date(targetUser.createdAt), "MMMM d, yyyy")}</p>
+          </div>
+          {/* Hidden for your own account — the server also refuses this
+              (can't delete yourself through the admin panel), but there's
+              no reason to show a button that always errors. */}
+          {targetUser.id !== user?.id && (
+            <DeleteUserButton targetUser={targetUser} propertyCount={properties.length} />
+          )}
         </div>
 
         <div>
@@ -113,6 +133,56 @@ export default function AdminUserDetail() {
 
       <AdminProjectDialog projectId={openProjectId} onOpenChange={(open) => !open && setOpenProjectId(null)} />
     </Layout>
+  );
+}
+
+// Real, permanent delete — the account and every property/project/
+// fence line it owns (server/storage.ts's deleteUserAndData). A plain
+// button + confirm click was deliberately not enough for something
+// this irreversible — AlertDialog forces a second, explicit step, and
+// names exactly what's being removed (the real property count, not a
+// generic "are you sure") before the destructive action is reachable.
+function DeleteUserButton({ targetUser, propertyCount }: { targetUser: any; propertyCount: number }) {
+  const [, setLocation] = useLocation();
+  const deleteUser = useAdminDeleteUser();
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:border-destructive/60">
+          <Trash2 className="w-3.5 h-3.5" /> Delete Account
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete {targetUser.email}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This permanently deletes their account and {propertyCount === 0 ? "any properties" : propertyCount === 1 ? "their 1 property" : `all ${propertyCount} properties`} — every
+            fence line, gate, and estimate under {propertyCount === 1 ? "it" : "them"}. This can't be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className={buttonVariants({ variant: "destructive" })}
+            disabled={deleteUser.isPending}
+            onClick={async () => {
+              try {
+                await deleteUser.mutateAsync(targetUser.id);
+                setLocation("/admin");
+              } catch {
+                // Toast already shown by the hook's onError. Radix
+                // closes the AlertDialog either way, but only navigate
+                // away on real success — a failed delete leaves this
+                // user's page exactly as it was, not silently gone.
+              }
+            }}
+          >
+            {deleteUser.isPending ? "Deleting…" : "Delete Account"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

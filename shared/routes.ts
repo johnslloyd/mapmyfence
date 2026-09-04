@@ -90,6 +90,20 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    // Real, permanent delete — the user AND every property/project/
+    // fence line they own (see storage.deleteUserAndData). 400 covers
+    // the one guard this route enforces server-side: an admin can't
+    // delete their own account through this panel.
+    deleteUser: {
+      method: 'DELETE' as const,
+      path: '/api/admin/users/:id',
+      responses: {
+        204: z.void(),
+        400: errorSchemas.validation,
+        403: errorSchemas.notFound,
+        404: errorSchemas.notFound,
+      },
+    },
   },
   // A property is just an address — name/address/description, no type,
   // no status. See CLAUDE.md's "Property / Project restructure" section.

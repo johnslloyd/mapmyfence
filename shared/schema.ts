@@ -159,9 +159,13 @@ export const events = pgTable("events", {
   // funnel event is, not a separate audit system, so "who looked at
   // what, and when" lives in one place. "admin_viewed_project"
   // (2026-09-01) is the same idea, one level deeper — opening a specific
-  // fence diagram/estimate from a user's detail page.
+  // fence diagram/estimate from a user's detail page. "admin_deleted_user"
+  // (2026-09-04) is the one admin_* event that's an ACTION, not a view —
+  // targetUserId there points at a user row that's gone the instant
+  // after the event is written; harmless, since targetUserId (like
+  // userId) carries no FK constraint to users.id.
   type: text("type", {
-    enum: ["property_created", "project_created", "fence_line_created", "estimate_viewed", "account_created", "account_upgraded", "admin_viewed_users", "admin_viewed_user", "admin_viewed_project"],
+    enum: ["property_created", "project_created", "fence_line_created", "estimate_viewed", "account_created", "account_upgraded", "admin_viewed_users", "admin_viewed_user", "admin_viewed_project", "admin_deleted_user"],
   }).notNull(),
   propertyId: integer("property_id"),
   projectId: integer("project_id"),
