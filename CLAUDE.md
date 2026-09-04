@@ -1,4 +1,4 @@
-# MyYardManager
+# Lot Planner
 
 DIY fence-planning tool: users map fence lines on a satellite view of their
 property and get material estimates. Longer-term direction is a full yard
@@ -9,8 +9,10 @@ planned second one — see "Lawn-care vertical — architecture groundwork
 only" below for what's actually been built toward it so far (schema
 only, nothing user-facing).
 
-**Name history: "MapMyFence" → briefly "Yard Stick" → "MyYardManager,"
-both renames same day (2026-08-28).** The first rename (see the dated
+**Name history: "MapMyFence" → briefly "Yard Stick" → "MyYardManager" →
+"Lot Planner"** (first two renames same day, 2026-08-28; the third
+2026-09-03, alongside a full visual rebrand — see the dated Brand-section
+note below for that one). The first rename (see the dated
 note under Brand below) swapped to "Yard Stick" because a second,
 non-fence vertical was coming — a yard-generic name fits a multi-vertical
 product where a fence-specific one didn't. That name didn't survive
@@ -25,11 +27,14 @@ dated Brand-section note for the full reasoning and what got explicitly
 ruled out. Landed on **"MyYardManager"** — longer and plainly
 descriptive on purpose, chosen specifically because it's actually
 available (domain unregistered, no competing app/company found), not for
-cleverness. The local directory (`/Users/johnlloyd/mapmyfence`) and the
-GitHub remote (`johnslloyd/mapmyfence`) still carry the original name —
-renaming either is a real, somewhat-disruptive infra action (breaks
-local shell muscle memory; a GitHub rename leaves redirects but still
-changes clone URLs) that wasn't part of either pass and should be its
+cleverness. **"Lot Planner"** is the current name, chosen by the user
+directly (not a research pass like the prior two) alongside a genuine
+visual-identity rebrand — see the dated Brand-section note below. The
+local directory (`/Users/johnlloyd/mapmyfence`) and the GitHub remote
+(`johnslloyd/mapmyfence`) still carry the ORIGINAL name — renaming either
+is a real, somewhat-disruptive infra action (breaks local shell muscle
+memory; a GitHub rename leaves redirects but still changes clone URLs)
+that has never been part of any of these three passes and should be its
 own deliberate call, not something done incidentally while renaming
 in-app strings.
 
@@ -219,6 +224,112 @@ parity. Verified live: triggered a real success toast (project created)
 and a real error toast (geocoding an invalid address) side by side —
 green and red respectively, both clearly legible and visibly part of
 the same warm/muted palette rather than a bolted-on alert-library look.
+
+## Rebrand: "Package" → "Blueprint," MyYardManager → Lot Planner (2026-09-03)
+
+**A genuine third theme, and a fourth product name — the first time
+either has changed since the app settled on "Package" and
+"MyYardManager."** Explored as five distinct visual directions first
+(Blueprint, Fieldwork, Ledger, Signal, Parcel — technical/precision,
+confident-outdoors, ultra-minimal, bold-editorial, and colorful-
+product-led respectively), each built as a full nav+hero+card mockup
+on real app copy in a design-canvas artifact (see that artifact if it
+still exists), before the user picked **Blueprint** to actually ship.
+Unlike the two prior name changes (each a real competition-research
+pass — see "Name history" above), "Lot Planner" was simply the user's
+own choice going in; this pass was about the LOOK, not the name
+search.
+
+**Blueprint's concept**: a technical, precision-drafting feel —
+pale blue-gray "paper" background, a single dominant ink-navy brand
+color, safety-orange reserved as a genuine but MINORITY accent,
+Archivo/Public Sans/JetBrains Mono in place of Space Grotesk/IBM Plex
+Sans/IBM Plex Mono, and sharper, more technical corners than the old
+theme's rounder scale.
+
+**The one real design decision this took, not just a recolor**: does
+orange become the new `--primary` (matching its starring role in the
+mockup's CTA button), or does navy stay `--primary`? `--primary` alone
+drives 100+ call sites app-wide (`text-primary`/`bg-primary`/
+`border-primary`/focus rings/badges — checked via a real grep count
+before deciding, not guessed) — making it orange would have meant
+either an all-orange app (loud, not what the mockup's actual balance
+showed — navy-dominant with orange as a rare highlight) or manually
+re-auditing 100+ individual call sites to split "should stay navy" from
+"should go orange," which isn't a recolor anymore, it's a rewrite.
+Resolved by keeping `--primary` = ink navy (mirrors the exact role deep
+green played in the old theme, so nearly every existing call site is
+already correct with zero component changes) and mapping orange onto
+`--accent`/`--accent-foreground` instead — a token this app ALREADY
+uses exactly where Blueprint wants a highlighted callout (the map
+editor's run-length pill and gate label, `bg-accent/95 text-primary
+border border-primary`; every homepage "eyebrow"/`STEP_0N` mono label,
+retargeted from `text-primary` to `text-accent-foreground` specifically
+for this pass in `Dashboard.tsx` and `Properties.tsx`) — so real orange
+presence shows up automatically in the right places without touching
+most component code at all.
+
+**Tokens** (`client/src/index.css`): full HSL palette swap, converted
+from exact hex via a hex->HSL script, not eyeballed — same discipline
+"Package" was built with. `tailwind.config.ts`'s `borderRadius` scale
+(hardcoded rem values, confirmed NOT wired to `--radius` — a
+pre-existing gap this pass found but didn't fix, since fixing it wasn't
+necessary to ship the new radii) went from 9px/6px/3px to 4px/3px/2px.
+
+**One deliberate, scoped decorative flourish**: a `.grid-paper`
+background texture (thin repeating grid lines from `--border`) on the
+guest homepage's hero section only (`Dashboard.tsx`) — not app-wide.
+Considered and rejected for the working screens (editor, admin,
+property list) — texture behind data-dense UI is noise, not polish;
+the homepage is the one page that's actually a marketing surface. The
+existing hero illustration (`HeroIllustration`, the dashed-line
+property diagram) needed zero code changes — it was already fully
+token-driven (`hsl(var(--primary))`/`hsl(var(--accent))`), so it just
+picked up the new navy/orange palette for free.
+
+**Logo mark: `LandPlot` → `Crosshair`** (`lucide-react`), in the same
+rounded-square/`bg-primary`/`text-primary-foreground` badge treatment
+already established — swapped in `Layout.tsx`'s nav, `AuthLayout.tsx`'s
+auth-page header, and `Properties.tsx`'s first-property-onboarding icon
+(all three previously used `LandPlot`), plus `favicon.svg`, redrawn
+using Crosshair's exact lucide path data at the new navy/cream hex
+values — same "confirmed exact glyph, not hand-approximated" discipline
+the favicon was built with originally.
+
+**Full name sweep, same scope as the two prior renames**: `index.html`
+(`<title>`), `Layout.tsx`/`AuthLayout.tsx` (nav wordmark),
+`BeforeYouDig.tsx`, `AddPropertyDialog.tsx`, `Account.tsx`,
+`Privacy.tsx`, `server/authRoutes.ts` (password-reset email subject/
+body), `server/email.ts` (from-address display name) — every
+`MyYardManager` string swapped to `Lot Planner`. Support address moved
+`support@myyardmanager.app` → `support@lotplanner.app`, same placeholder
+caveat as always (nothing receives mail there yet — see MVP launch
+blockers). `package.json`'s `"name"` (`my-yard-manager` →
+`lot-planner`) and `.claude/launch.json`'s dev-server config name
+(`my-yard-manager-dev` → `lot-planner-dev`) updated too, same low-stakes
+reasoning as the prior renames. Local directory and GitHub remote name
+deliberately untouched — see "Name history" above.
+
+**Found and fixed while touching `index.html`, not part of the ask**:
+its Google Fonts `<link>` was loading ~25 entirely unused font families
+(Architects Daughter, DM Sans, Geist, Inter, Montserrat, Playfair
+Display, Poppins, Roboto, and more) — dead weight left over from
+whatever template originally generated this app, on top of and
+inconsistent with `index.css`'s own separate `@import` for the fonts
+actually used. Trimmed to the same 3 families the theme actually needs;
+`index.html`'s production build output dropped from 2.50 kB to 1.52 kB
+from this alone.
+
+Verified live across both authenticated and guest surfaces, not just
+the homepage: the guest landing hero (grid-paper texture, orange
+eyebrow label, the illustration's dimension badges reading correctly in
+orange), the properties grid and Dossier page (satellite-image cards,
+plan thumbnails), the map editor (gate label and run-length badges in
+orange, confirming the `--accent` retarget reached a real data-dense
+working screen), Account, and Login/Register — zero console errors in
+a fresh tab, `npm run check` and `npm run build` both clean, 375px
+mobile checked on both the homepage and an authenticated page with zero
+horizontal overflow.
 
 ## Property / Project restructure (2026-08-28)
 
@@ -652,6 +763,74 @@ the DB are still inconsistent free text (`wood_cedar` vs `Cedar` vs
 `wood`, no enum constraint) — a data-quality issue, not fixed, though
 narrower now that only the pine/not-pine distinction actually matters
 for pricing.
+
+**A third material option: pine post/rail, cedar picket (2026-09-03).**
+Direct request, prompted by the user asking how the post-spacing formula
+worked and then wanting a real mixed option — cheaper structural lumber,
+nicer-looking cedar face. Real structural change, not just a new
+dropdown entry: post/picket had shared ONE `species` value per fence
+line since the original species-consistency work (species-consistent
+meant "post AND rail AND picket," on purpose, at the time) — supporting
+a genuine post/rail-vs-picket split meant `calculateEstimate`
+(`server/estimates.ts`) needed two independent species per line, not
+one.
+
+- `speciesFor` split into `postRailSpeciesFor` (unchanged logic — still
+  "contains /pine/i, else cedar") and `picketSpeciesFor` (same fallback,
+  but checks the new material value as an exact literal FIRST, so it
+  doesn't fall into the plain-pine branch below it).
+- Grouping key widened from `(species, height)` to `(postRailSpecies,
+  picketSpecies, height)` — a project mixing plain-pine and
+  pine-with-cedar-picket lines at the same height now correctly forms
+  TWO groups, not one, since their pickets differ even though their
+  posts don't.
+- Rail sourcing stayed keyed on post/rail species only (a picket-species
+  change never changes which rail gets bought); post and picket lookups
+  were split into their OWN independently-keyed maps (by their own
+  species+height, not the full group key) so two groups sharing a post
+  species — or sharing a picket species — reuse one product lookup
+  instead of repeating it.
+- New picker entry: `EditFenceLineCard.tsx`'s Material `<Select>` gained
+  `"wood_pine_cedar_picket"` → "Wood: Pine (Cedar Pickets)", a third
+  real value alongside the existing `wood_pine`/`wood_cedar`. Needed
+  **zero new seed data** — the combination just recombines the pine
+  post/rail products and the cedar picket product that already exist
+  for the two pure options.
+- New `MATERIAL_LABELS` map (`client/src/lib/estimates.ts`, alongside
+  `STORE_LABELS`/`MATERIAL_TYPE_LABELS`) gives all three real material
+  values a readable label ("Pine (Cedar Pickets)", not the raw
+  `wood_pine_cedar_picket` string) — used in `Editor.tsx`'s fence-line
+  list badge, which was rendering `line.material` completely raw before
+  this (a pre-existing, harmless-until-now gap: "wood_pine"/"wood_cedar"
+  read passably raw, the new three-word value wouldn't have).
+
+Verified live end-to-end on a real fence line (506 ft, 1 gate): pure
+cedar priced at $12,726.37 (posts/rail/picket all cedar); switching to
+the new mixed option repriced to $6,453.27 with posts and rails
+correctly switching to the SAME pine SKUs the pure-pine option uses,
+while the picket line item stayed the exact same cedar product/price as
+the pure-cedar option ($3,665.92 for 1024 pickets, unchanged) — proving
+the two species are genuinely independent, not one silently overriding
+the other. Switched back to pure cedar and pure pine afterward and
+confirmed both still price at their original, unchanged totals —
+no regression to the two existing options.
+
+**Pine post/rail + cedar picket is now the DEFAULT for a brand-new
+line**, not plain cedar — direct follow-up request, same day. Was
+`'wood_cedar'` hardcoded in exactly two places in `Editor.tsx`'s
+`handleSaveLine` — the guest (localStorage `pendingFenceLine`) path and
+the authenticated direct-save path, the only two places a newly-drawn
+line's initial material gets set (confirmed via grep before changing
+anything; `shared/schema.ts`'s `fenceLines.material` column has no
+DB-level default of its own). Both now default to
+`'wood_pine_cedar_picket'`; still fully user-changeable right after via
+`EditFenceLineCard`'s Material picker, same as any other line. Verified
+live on both paths: drew a real line as an authenticated user and
+confirmed the saved row's `material` and the sidebar's "Pine (Cedar
+Pickets)" badge; separately drew a line as a guest and confirmed the
+`pendingFenceLine_*` `localStorage` entry (read before completing
+signup, so no server round-trip to check instead) carries the same new
+default.
 
 **Fence line edits were silently corrupting length/cost estimates: fixed.**
 `Editor.tsx`'s `handleUpdateLine` used to recompute a line's length with a
@@ -2145,6 +2324,92 @@ existing table I might have renamed" — there's no existing signature to
 match), so it's arguably even safer than the additive-column case. Still
 NOT a substitute for `db:push` for anything destructive, renaming, or
 touching an *existing* table's shape.
+
+## Admin panel
+
+Read-only, server-side gated on `users.isAdmin` (added alongside Pro
+account tiers — see that section for `users.plan`/`isAdmin` schema
+history). Every route lives under `/api/admin/*`, protected by an
+`isAdmin` Express middleware (`server/routes.ts`) checked on the
+server on every request — never just a hidden nav link, since a
+client-side-only gate isn't real access control. A non-admin gets a
+403, not a 404 — this app has no reason to hide that admin routes
+exist, only to enforce who can use them. Every view is audit-logged
+through the same `logEvent` funnel-logging mechanism as everything
+else (`admin_viewed_users`, `admin_viewed_user`, `admin_viewed_project`
+event types), not a separate audit system.
+
+`Admin.tsx` (`/admin`): a searchable user table (email, plan,
+property/project counts, joined date) and an Activity tab listing
+recent events across the whole app. `AdminUserDetail.tsx`
+(`/admin/users/:id`): drill-down into one user's properties and
+projects, same shape a user sees on their own `/properties`. Both
+self-enforce their own auth+isAdmin redirect directly in the component
+(same pattern as `Account.tsx`), registered in `App.tsx` as plain
+routes rather than `ProtectedRoute` — the real gate is server-side.
+
+**Open a fence project's diagram, line detail, and materials cost
+(2026-09-01).** Direct ask: view the actual fence line a user drew and
+what it's estimated to cost, from the admin side — `AdminUserDetail.tsx`
+previously only listed a user's projects by name/status/type icon, no
+way to see what was actually inside one. Every FENCE project row (not
+`lawn_care` — no fence lines to show there yet) is now a button that
+opens a dialog with:
+
+- The real plan diagram — `PlanThumbnail` (`client/src/lib/
+  planPreview.tsx`), the same component the Dossier page and the
+  Properties grid already share, reused rather than rebuilt a third
+  time.
+- Total length / est. cost / gate count, and each fence line's own
+  name/length/material/height (a project can hold more than one line).
+- The full materials breakdown and total — `calculateEstimate`'s real
+  output, grouped and consolidated with the exact same
+  `STORE_LABELS`/`MATERIAL_TYPE_LABELS`/`MATERIAL_TYPE_ORDER`/
+  `consolidateMaterials` helpers (`client/src/lib/estimates.ts`) the
+  editor sidebar and shopping list use — a store picker appears when
+  more than one store prices everything the project needs, identical
+  "Best price" logic.
+
+**New admin-only endpoint, not a reuse of the regular one**: the
+existing `/api/projects/:id/estimates` route calls
+`storage.getProject(id, userId)`, which is ownership-gated to the
+REQUESTING user — exactly wrong for viewing someone else's project.
+`storage.getProjectWithLines(id)` (the private helper every project
+mutation already used internally to return fresh data) has no such
+check at all, so it was made a public `IStorage` method and given its
+own route, `GET /api/admin/projects/:id` (`api.admin.getProject`,
+`shared/routes.ts`) — gated by the `isAdmin` middleware instead of a
+userId match, computing the same `calculateEstimate` call inline and
+returning `{ project, estimate }` together in one response. `events.type`
+gained `"admin_viewed_project"` (a TS-only Drizzle enum value, no
+migration needed — see Database migrations below) logged with the
+viewing admin as `userId` and the project owner as `targetUserId`,
+same convention `admin_viewed_user` already established.
+
+**A real accessibility bug caught live, not assumed**: the dialog's
+`DialogTitle` only rendered once project data loaded, leaving Radix's
+required title element absent during the loading-skeleton render —
+confirmed via a genuine Radix console error (`DialogContent requires a
+DialogTitle`), not a hypothetical. Fixed by moving `DialogHeader`
+outside the loading conditional entirely, rendering a plain "Loading
+project…" title until the real one is available, so a `DialogTitle`
+is present on every render, not just the loaded one.
+
+Verified live end-to-end: registered two fresh test accounts (one as
+the data owner, one granted admin via `script/_grant_admin.ts`) rather
+than reusing an existing account, specifically to prove this works
+cross-user, not just on data the viewing admin happens to also own;
+created a real property/fence line/gate via direct API calls, opened
+it from the admin side, and confirmed the diagram rendered the real
+line and gate marker, the stats matched what the line/gate actually
+were, and the materials list correctly showed only Lowe's (Home
+Depot drops out for any project with a gate, since HD gate hardware
+isn't seeded yet — see "Gates on wooden fences" — confirming the
+admin route reuses the exact same store-eligibility rule, not a
+simplified copy). Reproduced the Radix warning first, then confirmed
+it was gone in a fresh tab after the fix (the mid-session tab still
+briefly showed the old error — the documented stale-console-replay
+gotcha elsewhere in this file, not a real regression).
 
 ## Usage event logging
 
