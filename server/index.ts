@@ -86,7 +86,14 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false, // Set to false to allow HTTP connections (e.g. via IP address)
+    // TLS is confirmed live on myyardmanager.johnlloyd.cloud (2026-09-04,
+    // a real Let's Encrypt cert, verified directly) -- true in production
+    // now, matching the same NODE_ENV convention already used elsewhere in
+    // this file (see the error-response and CSP-override branches below).
+    // Stays false in local dev, since a "secure" cookie is never sent by
+    // the browser over plain http://localhost -- flipping it unconditionally
+    // would silently break every local login test.
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax", // wasn't set at all before — a same-site-only default
     // that still allows normal top-level navigation (e.g. clicking a link
     // to the app from email/Slack) is a real, free CSRF-hardening step
