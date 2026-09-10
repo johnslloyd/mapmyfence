@@ -28,6 +28,7 @@ import { STORE_LABELS, MATERIAL_LABELS, consolidateMaterials } from "@/lib/estim
 import { ClipboardCheck, ShieldAlert, Send, Copy, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type UiState = "HIDDEN" | "INSTRUCTIONS" | "DRAWING" | "SIDEBAR" | "EDITING";
 
@@ -84,6 +85,11 @@ function SendQuoteDialog({ projectId, open, onOpenChange }: { projectId: number;
   const { data: myOrg } = useMyOrganization();
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  // Phase 3 — opt-in per quote, unchecked by default (most quotes are
+  // a new build with nothing to remove first). Only rendered at all
+  // when the business has actually set a teardownRatePerFoot — see
+  // its own render check below.
+  const [includeTeardown, setIncludeTeardown] = useState(false);
   const [result, setResult] = useState<{ publicUrl: string; emailSent: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
   const createQuote = useCreateQuote(projectId);
@@ -91,6 +97,7 @@ function SendQuoteDialog({ projectId, open, onOpenChange }: { projectId: number;
   const reset = () => {
     setCustomerName("");
     setCustomerEmail("");
+    setIncludeTeardown(false);
     setResult(null);
     setCopied(false);
   };
@@ -102,6 +109,7 @@ function SendQuoteDialog({ projectId, open, onOpenChange }: { projectId: number;
       const data = await createQuote.mutateAsync({
         customerName: customerName.trim() || undefined,
         customerEmail: customerEmail.trim(),
+        includeTeardown,
       });
       setResult({ publicUrl: data.publicUrl, emailSent: data.emailSent });
     } catch {
@@ -162,6 +170,14 @@ function SendQuoteDialog({ projectId, open, onOpenChange }: { projectId: number;
                 <Label htmlFor="quote-customer-email">Customer email</Label>
                 <Input id="quote-customer-email" type="email" required value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="jane@example.com" />
               </div>
+              {myOrg.teardownRatePerFoot != null && (
+                <div className="flex items-center gap-2 pt-1">
+                  <Checkbox id="quote-include-teardown" checked={includeTeardown} onCheckedChange={(v) => setIncludeTeardown(v === true)} />
+                  <Label htmlFor="quote-include-teardown" className="text-sm font-normal cursor-pointer">
+                    Include teardown of the existing fence (${myOrg.teardownRatePerFoot.toFixed(2)}/ft)
+                  </Label>
+                </div>
+              )}
             </div>
             <DialogFooter>
               {/* Real bug caught live, not a hypothetical: a native

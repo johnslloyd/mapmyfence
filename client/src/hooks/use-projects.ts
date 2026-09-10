@@ -536,7 +536,17 @@ export type MyOrganization = {
   phone: string | null;
   email: string | null;
   logoData: string | null;
+  teardownRatePerFoot: number | null;
   role: "admin" | "member";
+};
+
+export type OrganizationRate = {
+  id: number;
+  organizationId: number;
+  material: string;
+  height: number;
+  ratePerFoot: number;
+  createdAt: string;
 };
 
 export type OrganizationMemberWithEmail = {
@@ -577,7 +587,7 @@ export function useUpdateMyOrganization() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: { name?: string; phone?: string | null; email?: string | null; logoData?: string | null }) => {
+    mutationFn: async (data: { name?: string; phone?: string | null; email?: string | null; logoData?: string | null; teardownRatePerFoot?: number | null }) => {
       const validated = api.myOrganization.update.input.parse(data);
       const res = await fetch(api.myOrganization.update.path, {
         method: api.myOrganization.update.method,
@@ -605,7 +615,7 @@ export function useCreateQuote(projectId: number | undefined) {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: { customerName?: string; customerEmail: string }) => {
+    mutationFn: async (data: { customerName?: string; customerEmail: string; includeTeardown?: boolean }) => {
       if (!projectId) throw new Error("No project");
       const validated = api.quotes.create.input.parse(data);
       const url = buildUrl(api.quotes.create.path, { id: projectId });
@@ -741,5 +751,51 @@ export function useOrganizationQuotes(options: { enabled?: boolean } = {}) {
       return (await res.json()) as OrganizationQuote[];
     },
     ...options,
+  });
+}
+
+// ============================================
+// BUSINESS TIER, PHASE 3 — the rate sheet (per-material-per-height sell
+// rate + a flat teardown add-on). See CLAUDE.md's Phase 3 write-up.
+// ============================================
+
+export function useOrganizationRates(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: [api.myOrganization.getRates.path],
+    queryFn: async () => {
+      const res = await fetch(api.myOrganization.getRates.path, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch your rates");
+      return (await res.json()) as OrganizationRate[];
+    },
+    ...options,
+  });
+}
+
+export function useSetOrganizationRates() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (rates: { material: string; height: number; ratePerFoot: number | null }[]) => {
+      const validated = api.myOrganization.setRates.input.parse({ rates });
+      const res = await fetch(api.myOrganization.setRates.path, {
+        method: api.myOrganization.setRates.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validated),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to save your rates");
+      }
+      return (await res.json()) as OrganizationRate[];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.myOrganization.getRates.path] });
+      toast({ title: "Saved", description: "Your pricing has been updated.", variant: "success" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
   });
 }

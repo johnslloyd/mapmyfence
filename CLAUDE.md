@@ -2453,6 +2453,115 @@ everything the plan already marks out of scope entirely (scheduling,
 invoicing, payments, cross-company property history, DIY→business
 handoff, a business directory/marketplace).
 
+## Business accounts — Phase 3: the business sets its own price (2026-09-10)
+
+**Not in the original plan doc at all — a new feature request, direct
+from the user, that turned out to be a real pricing-model correction
+more than an addition.** Through Phase 1/2, a sent quote's bottom-line
+price was the real Lowe's/Home Depot material cost
+(`calculateEstimate`'s output), just relabeled as a linear-foot rate —
+literally PostPlotter's own computed retail cost, handed to the
+customer as if it were the contractor's price. The user's ask ("the
+business owner sets it by material... pine gets xx per foot... teardown
+adds xx per foot") is what the plan's own original framing ("a
+contractor can't hand a customer an itemized Lowe's receipt") always
+should have meant: the business's OWN sell rate, not this app's
+material-cost calculation reformatted. Two scoping questions asked and
+answered before building, since both genuinely changed the schema:
+rates vary by height as well as material (a 3×2 grid, not 3 numbers),
+and the business rate REPLACES the real material cost as the quote
+total rather than adding to it as a markup.
+
+**Schema**: `organizationRates` — one row per (organization, material,
+height), `ratePerFoot`. A real table, not 6 flat columns on
+`organizations` — this app's own fence-material values have already
+grown once before (pine / cedar / pine-post-cedar-picket, added
+2026-09-03), and a table survives that kind of growth with zero schema
+migration, the same reasoning `products` itself already uses
+(type/store/material/forHeight as row dimensions). `organizations`
+gained a separate `teardownRatePerFoot` (flat, not material/height-
+specific — removing an existing fence doesn't depend on what the new
+one is made of) and `quotes` gained `includesTeardown` (a boolean
+snapshot of whether that flag was applied to THIS quote, since
+`totalCost` already has it baked in and the sent-quotes rollup /
+customer view both need to say what was actually included, not
+recompute it). All three added via the usual raw-SQL-via-`pool`
+escape hatch (`script/migrations/2026-09-10-phase3-rates.ts`, RLS
+enabled on the new table). Missing = "this business doesn't quote this
+material/height yet," never treated as $0 — a project needing an
+unset (material, height) combination blocks quote creation with a
+specific, actionable message ("Set your rate for Pine at 6 ft on your
+Business page...") rather than silently pricing it free or falling
+back to material cost the way the DIY estimate's legacy-value handling
+does. Deliberately NOT the same fallback behavior — guessing at what a
+contractor would charge is a real risk to their money in a way
+guessing at DIY material substitution isn't.
+
+**`calculateEstimate` and the real material cost are UNCHANGED and
+still used** — just no longer for quote creation. `Editor.tsx`'s
+`MaterialEstimates`/`ShoppingList.tsx` (the DIYer's own itemized view)
+still show the real Lowe's/Home Depot numbers exactly as before; only
+`POST /api/projects/:id/quotes`'s pricing source changed.
+
+**Server** (`server/routes.ts`, `shared/routes.ts`'s new
+`api.myOrganization.{getRates,setRates}`): `setRates` is a bulk
+upsert-or-delete (`storage.setOrganizationRates`) — the rate editor UI
+always submits its whole 3×2 grid at once, and a `null` `ratePerFoot`
+for a cell deletes that row rather than storing a zero, matching
+"blank = not set" from the schema comment. `POST /api/projects/:id/
+quotes` now looks up each fence line's `(material, height)` rate,
+sums `rate × length` across all lines, adds
+`teardownRatePerFoot × totalLinearFeet` only when the request opts in
+AND the business has actually set a teardown rate (`includeTeardown`
+is otherwise silently ignored rather than erroring — a stray `true`
+from a stale form shouldn't block a send). `getRates` is open to any
+member; `setRates` is admin-gated, same pattern as every other
+business-profile write.
+
+**A repeat of the exact bug class Phase 2 already found once**:
+`storage.getUserOrganizations`'s explicit column-list select needed
+`teardownRatePerFoot` added the SAME way `logoData` was forgotten and
+then fixed in Phase 2 — caught and fixed proactively this time (with a
+comment pointing at the Phase 2 incident) rather than shipping the same
+gap a third time. Worth remembering as a standing checklist item any
+time `organizations` gains a new column: `getUserOrganizations`'s
+select is the one place it has to be added a SECOND time or it never
+reaches anything that reads via it.
+
+**Client**: `Business.tsx` gained a `PricingSection` — a 3×2 table
+(Pine/Cedar/Pine-Cedar-Picket × 6ft/8ft) of rate inputs plus one
+teardown field, admin-editable, read-only display for a plain member,
+reusing `MATERIAL_LABELS` from `client/src/lib/estimates.ts` (the same
+labels the DIYer-facing badges already use) so this reads as the same
+vocabulary, not a second naming scheme. `Editor.tsx`'s `SendQuoteDialog`
+gained a "Include teardown of the existing fence ($X/ft)" checkbox,
+rendered only when the business has actually set a teardown rate,
+unchecked by default (most quotes are a new build). `QuoteView.tsx`
+(the public page) shows an "Includes teardown of the existing fence"
+line when applicable, and its disclaimer text was corrected from
+"Materials cost only — doesn't include labor..." (accurate under the
+old Lowe's-cost model, actively WRONG now that the number is the
+business's own price, which may already include labor/margin/whatever
+they chose) to a generic "this is {business}'s own price, ask them what
+it includes."
+
+Verified live end-to-end through the real UI, not just curl: set a
+real $28.50/ft Pine-6ft rate and a $5.00/ft teardown rate through
+`Business.tsx`'s actual form (confirmed via a direct API read after
+saving, not just trusting the UI), sent a real quote with the teardown
+checkbox checked through `Editor.tsx`'s actual dialog, and confirmed
+the resulting public `QuoteView.tsx` page showed the exact expected
+math — 100 ft × $28.50 + 100 ft × $5.00 teardown = $3,350.00 — with the
+"Includes teardown" line present. Separately confirmed (before setting
+any rate) that sending a quote for an unrated material/height combo
+returns the specific blocking message, that clearing a rate back to
+blank actually deletes the row (re-blocks a subsequent send, not just
+hides it in the UI), that updating an existing rate updates the same
+row rather than duplicating it, and that a non-admin member gets a
+real 403 from `PUT /api/my-organization/rates`. Test accounts, the
+test organization, and its rates were deleted afterward; `npm run
+build` re-confirmed clean.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up

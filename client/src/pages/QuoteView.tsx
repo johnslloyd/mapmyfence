@@ -35,6 +35,7 @@ function useQuoteView(token: string | undefined) {
         businessPhone: string | null;
         businessEmail: string | null;
         businessLogoData: string | null;
+        includesTeardown: boolean;
         totalLinearFeet: number;
         totalCost: number;
         createdAt: string;
@@ -95,9 +96,14 @@ export default function QuoteView() {
             <div className="text-sm text-muted-foreground mt-1">
               {quote.totalLinearFeet.toFixed(0)} linear ft &middot; ${pricePerFoot.toFixed(2)}/ft
             </div>
+            {quote.includesTeardown && (
+              <div className="text-xs text-muted-foreground mt-2 pt-2 border-t border-border/60">
+                Includes teardown of the existing fence
+              </div>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Materials cost only — doesn't include labor, delivery, or taxes unless your contractor tells you otherwise. Reach out to them directly with any questions.
+This is {quote.businessName}'s own price. Reach out to them directly with any questions about what it includes.
           </p>
           {(quote.businessPhone || quote.businessEmail || quote.businessLogoData) && (
             <div className="border-t pt-4 space-y-2 text-sm">

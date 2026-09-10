@@ -9,8 +9,11 @@ import {
   useUpdateOrganizationMemberRole,
   useRemoveOrganizationMember,
   useOrganizationQuotes,
+  useOrganizationRates,
+  useSetOrganizationRates,
 } from "@/hooks/use-projects";
 import { ORG_SEAT_LIMIT } from "@shared/routes";
+import { MATERIAL_LABELS } from "@/lib/estimates";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,10 +31,19 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Building2, Users, UserPlus, Trash2, Image as ImageIcon, FileText } from "lucide-react";
+import { Building2, Users, UserPlus, Trash2, Image as ImageIcon, FileText, DollarSign } from "lucide-react";
 import { useLocation, Link } from "wouter";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { format } from "date-fns";
+
+// The 3 real fence material values (EditFenceLineCard.tsx's Material
+// select) and the 2 real heights (products.forHeight's own convention)
+// — the fixed 6-cell grid every business rate sheet actually needs.
+// Vinyl/Iron aren't listed: they're still disabled in the material
+// picker itself ("pricing coming soon", see CLAUDE.md), so a business
+// can't draw a line in that material yet either.
+const RATE_MATERIALS = ["wood_pine", "wood_cedar", "wood_pine_cedar_picket"] as const;
+const RATE_HEIGHTS = [6, 8] as const;
 
 // Business tier, Phase 2 (2026-09-10) — the first real roster-
 // management UI anywhere in this app. Phase 0/1 deliberately shipped
@@ -277,6 +289,141 @@ function RosterSection({ isAdmin, currentUserId }: { isAdmin: boolean; currentUs
   );
 }
 
+// Business tier, Phase 3 — the actual pricing model change: a quote's
+// bottom line is now this business's OWN rate (material x height),
+// not the real Lowe's/Home Depot material cost `calculateEstimate`
+// computes for the DIYer's own itemized view. See organizationRates'
+// shared/schema.ts comment for the full reasoning. A 3x2 grid (the
+// only real material/height combinations this app's fence editor
+// supports today) plus one flat teardown add-on — 7 numbers total,
+// matching exactly what was asked for: "all pine gets xx per foot...
+// teardown adds xx per foot."
+//
+// State is a local draft keyed by "material-height", seeded from the
+// fetched rates and re-synced whenever they change (save, or another
+// tab's edit) — same "local form state synced from server data" shape
+// as BusinessCard's own name/phone/email fields on Account.tsx. Empty
+// means "not set" (a blocked material for quoting), not zero.
+function PricingSection({ isAdmin, teardownRatePerFoot }: { isAdmin: boolean; teardownRatePerFoot: number | null }) {
+  const { data: rates, isLoading } = useOrganizationRates();
+  const setRates = useSetOrganizationRates();
+  const updateOrg = useUpdateMyOrganization();
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [teardownDraft, setTeardownDraft] = useState("");
+
+  useEffect(() => {
+    if (!rates) return;
+    const next: Record<string, string> = {};
+    for (const r of rates) {
+      next[`${r.material}-${r.height}`] = String(r.ratePerFoot);
+    }
+    setDraft(next);
+  }, [rates]);
+
+  useEffect(() => {
+    setTeardownDraft(teardownRatePerFoot != null ? String(teardownRatePerFoot) : "");
+  }, [teardownRatePerFoot]);
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = RATE_MATERIALS.flatMap((material) =>
+      RATE_HEIGHTS.map((height) => {
+        const raw = draft[`${material}-${height}`]?.trim();
+        return { material, height, ratePerFoot: raw ? parseFloat(raw) : null };
+      })
+    );
+    setRates.mutate(payload);
+    const teardownRaw = teardownDraft.trim();
+    updateOrg.mutate({ teardownRatePerFoot: teardownRaw ? parseFloat(teardownRaw) : null });
+  };
+
+  const isPending = setRates.isPending || updateOrg.isPending;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <DollarSign className="w-4 h-4 text-primary" /> Pricing
+        </CardTitle>
+        <CardDescription>
+          {isAdmin
+            ? "What you charge per linear foot, by material — this is what a customer sees on a sent quote, not the real material cost. Leave a cell blank to stop quoting that material."
+            : "What your business charges per linear foot. Only an admin can edit this."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="text-sm text-muted-foreground py-6 text-center">Loading your rates...</div>
+        ) : (
+          <form onSubmit={handleSave} className="space-y-4">
+            <div className="border border-border rounded-xl overflow-hidden overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/50 text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 font-medium">Material</th>
+                    {RATE_HEIGHTS.map((h) => (
+                      <th key={h} className="text-left px-4 py-2.5 font-medium">{h} ft ($/ft)</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {RATE_MATERIALS.map((material) => (
+                    <tr key={material} className="border-t border-border">
+                      <td className="px-4 py-2.5 font-medium">{MATERIAL_LABELS[material] || material}</td>
+                      {RATE_HEIGHTS.map((height) => {
+                        const key = `${material}-${height}`;
+                        return (
+                          <td key={key} className="px-4 py-2">
+                            {isAdmin ? (
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="Not set"
+                                value={draft[key] ?? ""}
+                                onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+                                className="h-8 w-28 font-mono"
+                              />
+                            ) : (
+                              <span className="font-mono">{draft[key] ? `$${draft[key]}` : "—"}</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="grid gap-1.5 max-w-xs">
+              <Label htmlFor="teardown-rate">Teardown of existing fence (per ft, optional)</Label>
+              {isAdmin ? (
+                <Input
+                  id="teardown-rate"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Not offered"
+                  value={teardownDraft}
+                  onChange={(e) => setTeardownDraft(e.target.value)}
+                  className="font-mono"
+                />
+              ) : (
+                <span className="font-mono text-sm">{teardownDraft ? `$${teardownDraft}` : "Not offered"}</span>
+              )}
+            </div>
+            {isAdmin && (
+              <Button type="submit" disabled={isPending} className="w-fit">
+                {isPending ? "Saving..." : "Save Pricing"}
+              </Button>
+            )}
+          </form>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // The "sent" half of the plan's "sent/viewed/accepted rollup" — see
 // api.myOrganization.listQuotes's own comment. The header says exactly
 // that, on purpose, rather than implying a fuller status view exists.
@@ -384,6 +531,7 @@ function BusinessContent({ userId }: { userId: string }) {
           <LogoUpload logoData={myOrg.logoData} isAdmin={isAdmin} />
         </CardContent>
       </Card>
+      <PricingSection isAdmin={isAdmin} teardownRatePerFoot={myOrg.teardownRatePerFoot} />
       <RosterSection isAdmin={isAdmin} currentUserId={userId} />
       <SentQuotesSection />
     </div>
