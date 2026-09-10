@@ -313,7 +313,15 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
 // Only fires once — guarded by the ref — so it doesn't fight a user's
 // own pan/zoom on every later edit, just on initial load (and,
 // incidentally, the moment a brand-new project's first line is saved).
-function FitBoundsOnLoad({ existingLines, isMobile }: { existingLines: ExistingLine[]; isMobile?: boolean }) {
+//
+// `maxZoom` is passed in rather than hardcoded to TILE_NATIVE_ZOOM
+// (2026-09-10) — that cap exists specifically because Esri's real
+// resolution ceiling is z19; a Pro account on Mapbox imagery has a
+// higher real ceiling (MAPBOX_NATIVE_ZOOM), so capping its auto-fit at
+// 19 regardless of plan would waste the sharper detail it's actually
+// paying for. The caller passes whichever ceiling matches the tile
+// layer actually in use.
+function FitBoundsOnLoad({ existingLines, isMobile, maxZoom }: { existingLines: ExistingLine[]; isMobile?: boolean; maxZoom: number }) {
   const map = useMap();
   const hasFitRef = useRef(false);
   useEffect(() => {
@@ -335,10 +343,10 @@ function FitBoundsOnLoad({ existingLines, isMobile }: { existingLines: ExistingL
       map.fitBounds(bounds, {
         paddingTopLeft: [40, 40],
         paddingBottomRight: [rightPadding, 40],
-        maxZoom: TILE_NATIVE_ZOOM,
+        maxZoom,
       });
     });
-  }, [existingLines, isMobile, map]);
+  }, [existingLines, isMobile, map, maxZoom]);
   return null;
 }
 
@@ -528,7 +536,13 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
       const results = await response.json();
       if (results.length > 0) {
         const { lat, lon } = results[0];
-        handleAddressFound(parseFloat(lat), parseFloat(lon), zoomToState ? 8 : 20);
+        // Same Pro/Mapbox-aware ceiling as FitBoundsOnLoad's maxZoom
+        // below — a brand-new property (no line yet, so this path runs
+        // instead of that one) shouldn't land at a more conservative
+        // zoom than the same property would get after its first line
+        // is saved and the page reloads.
+        const closeZoom = useMapboxImagery ? MAPBOX_NATIVE_ZOOM : 20;
+        handleAddressFound(parseFloat(lat), parseFloat(lon), zoomToState ? 8 : closeZoom);
         setGeocodeIssue(null);
       } else {
         toast({ title: "Address not found", description: "The provided address could not be located.", variant: "destructive" });
@@ -709,7 +723,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
         )}
         <style>{`.leaflet-edit-marker { filter: hue-rotate(120deg); }`}</style>
         {(isDrawing || isExtending) && <MapEvents onMapClick={handleMapClick} />}
-        <FitBoundsOnLoad existingLines={existingLines} isMobile={isMobile} />
+        <FitBoundsOnLoad existingLines={existingLines} isMobile={isMobile} maxZoom={useMapboxImagery ? MAPBOX_NATIVE_ZOOM : TILE_NATIVE_ZOOM} />
 
         {parcel && parcel.geometry && (
           // key forces a remount on a new lookup — react-leaflet's GeoJSON

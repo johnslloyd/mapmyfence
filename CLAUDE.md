@@ -1877,7 +1877,25 @@ they're genuinely sharper than Esri's z19 ceiling, and correct
 `MAPBOX_NATIVE_ZOOM` (currently 22, from Mapbox's docs, not measured)
 if this app's usual test regions turn out to have a real ceiling below
 that. CSP (`server/index.ts` and its `client/index.html` mirror) already
-allows `https://api.mapbox.com` in `img-src`.
+allows `https://api.mapbox.com` in `img-src`. `VITE_MAPBOX_TOKEN` is now
+set as a real GitHub Actions secret (2026-09-10) — the real-tile
+verification above still hadn't happened as of this note.
+
+**Two auto-zoom ceilings made Pro-aware too, same day**: both places
+this file computes an automatic zoom level were still hardcoded to
+Esri's z19 ceiling regardless of plan — direct ask, since a Pro
+account's Mapbox imagery has a higher real ceiling and was being wasted
+by capping the auto-zoom below it. `FitBoundsOnLoad`'s `maxZoom` (fits
+to a project's existing fence line on load) and `handleSearch`'s
+"close zoom" branch (a brand-new property with no line yet, geocoded on
+first load) both now take `MAPBOX_NATIVE_ZOOM` when `useMapboxImagery`
+is true, `TILE_NATIVE_ZOOM`/`20` otherwise — deliberately kept
+consistent between the two so a property doesn't visibly jump zoom
+levels between "no line yet" and "line saved, page reloaded." Verified
+live that the free/Esri path is a genuine no-op (a fresh property's
+map still requested z19 tiles, unchanged) — the Pro/Mapbox branch
+itself couldn't be exercised without a real token locally, same
+untested-tile caveat as the imagery work above.
 
 Verified live end-to-end, the request/approval half fully (a real
 throwaway requester + a real throwaway admin, using direct API calls
