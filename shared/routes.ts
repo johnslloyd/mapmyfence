@@ -31,6 +31,24 @@ export const errorSchemas = {
 // places. See CLAUDE.md's "Account tiers" section.
 export const FREE_PROPERTY_LIMIT = 3;
 
+// Business tier, Phase 2 — a business roster is capped at this many
+// members, per the plan doc's stated v1 limit. Same shared-constant,
+// server-enforced pattern as FREE_PROPERTY_LIMIT so the number can't
+// drift between the enforcement (server/routes.ts) and the UI copy
+// (Business.tsx). Not tied to billing yet — see the plan doc's own
+// "not built yet, but modeled as real countable memberships" note.
+export const ORG_SEAT_LIMIT = 10;
+
+// A logo is stored as a base64 data URI directly on the organizations
+// row (see that table's own schema comment for why) — capped well
+// under Postgres's practical row-size comfort zone and small enough
+// that a business's own dashboard, and the quote-send snapshot copy,
+// both stay cheap to fetch. ~280KB of raw image data before base64's
+// ~33% overhead — plenty for a logo after the client resizes it before
+// upload (see Business.tsx), nowhere near enough for someone to (ab)use
+// this as general file storage.
+export const ORG_LOGO_MAX_CHARS = 375_000;
+
 export const api = {
   // No billing exists yet, and (2026-09-10) upgrading is no longer
   // instant/self-serve — this REQUESTS Pro (sets planRequestedAt,
@@ -207,8 +225,8 @@ export const api = {
   // CRUD above. Deliberately named "my organization," singular: this
   // app treats a user's first/only org membership as the one that
   // matters for now (see server/routes.ts's own comment on that
-  // simplification) — a real multi-org picker is Phase 2 territory,
-  // once it's actually needed.
+  // simplification) — real multi-org picker UI stays deferred past
+  // Phase 2 too; nothing built so far has needed it.
   myOrganization: {
     get: {
       method: 'GET' as const,
@@ -228,10 +246,74 @@ export const api = {
         name: z.string().min(1).optional(),
         phone: z.string().nullable().optional(),
         email: z.string().email().nullable().optional(),
+        // Phase 2 — a base64 data URI (see organizations.logoData's own
+        // schema comment); ORG_LOGO_MAX_CHARS caps it well under
+        // Postgres's comfort zone. null explicitly means "remove it."
+        logoData: z.string().max(ORG_LOGO_MAX_CHARS).nullable().optional(),
       }),
       responses: {
         200: z.any(),
         400: errorSchemas.validation,
+        403: errorSchemas.notFound,
+      },
+    },
+    // Business tier, Phase 2 — roster self-service, admin-gated the
+    // same way `update` above is. Mirrors api.admin.*OrganizationMember
+    // above 1:1 in shape (same input/response schemas), but scoped to
+    // the CALLER's own org via membership, not an arbitrary :id a
+    // platform Staff account supplies — see server/routes.ts for why
+    // these are genuinely separate route handlers, not the same one
+    // reached two ways.
+    listMembers: {
+      method: 'GET' as const,
+      path: '/api/my-organization/members',
+      responses: {
+        200: z.array(z.any()), // (OrganizationMember & { email: string })[]
+        403: errorSchemas.notFound,
+      },
+    },
+    addMember: {
+      method: 'POST' as const,
+      path: '/api/my-organization/members',
+      input: z.object({ email: z.string().email(), role: z.enum(['admin', 'member']) }),
+      responses: {
+        201: z.any(),
+        400: errorSchemas.validation, // also covers the ORG_SEAT_LIMIT / DuplicateMemberError cases
+        403: errorSchemas.notFound,
+        404: errorSchemas.notFound, // email doesn't match a real account
+      },
+    },
+    updateMemberRole: {
+      method: 'PUT' as const,
+      path: '/api/my-organization/members/:userId',
+      input: z.object({ role: z.enum(['admin', 'member']) }),
+      responses: {
+        200: z.any(),
+        400: errorSchemas.validation, // covers LastAdminError
+        403: errorSchemas.notFound,
+        404: errorSchemas.notFound,
+      },
+    },
+    removeMember: {
+      method: 'DELETE' as const,
+      path: '/api/my-organization/members/:userId',
+      responses: {
+        204: z.void(),
+        400: errorSchemas.validation, // covers LastAdminError
+        403: errorSchemas.notFound,
+      },
+    },
+    // Business tier, Phase 2 — the "sent" half of the plan doc's
+    // "sent/viewed/accepted rollup" line item. Viewed/accepted columns
+    // don't exist (the accept button itself was cut from Phase 1 —
+    // see CLAUDE.md), so this is honestly just what was sent, by whom,
+    // to whom, for how much — not the full three-state rollup the plan
+    // describes. Revisit once the accept button actually exists.
+    listQuotes: {
+      method: 'GET' as const,
+      path: '/api/my-organization/quotes',
+      responses: {
+        200: z.array(z.any()),
         403: errorSchemas.notFound,
       },
     },

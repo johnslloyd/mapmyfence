@@ -271,6 +271,17 @@ export const organizations = pgTable("organizations", {
   name: text("name").notNull(),
   phone: text("phone"),
   email: text("email"),
+  // Phase 2 (2026-09-10) — a small logo, stored as a base64 data URI
+  // directly in this row rather than a real object-storage service.
+  // This app has no file-upload subsystem anywhere else (satellite
+  // imagery is FETCHED from Esri, never uploaded) and no S3/Cloudinary
+  // account exists — adding one just for a small logo would be a new
+  // external dependency for a nice-to-have. Postgres already holds
+  // everything else this app needs; a client-side-resized logo (a few
+  // hundred KB at most, enforced by ORG_LOGO_MAX_CHARS in
+  // shared/routes.ts) costs nothing extra to keep here. Revisit if
+  // logos turn out to need real CDN delivery at scale.
+  logoData: text("logo_data"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -342,6 +353,11 @@ export const quotes = pgTable("quotes", {
   businessName: text("business_name").notNull(),
   businessPhone: text("business_phone"),
   businessEmail: text("business_email"),
+  // Phase 2 (2026-09-10) — same snapshot-at-send-time reasoning as
+  // businessName/.../businessEmail above, extended to the logo added
+  // in this phase: a business later replacing or removing its logo
+  // shouldn't retroactively change what an already-sent quote shows.
+  businessLogoData: text("business_logo_data"),
   totalLinearFeet: doublePrecision("total_linear_feet").notNull(),
   totalCost: doublePrecision("total_cost").notNull(),
   tokenHash: text("token_hash").notNull().unique(),

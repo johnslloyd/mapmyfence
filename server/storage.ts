@@ -108,9 +108,14 @@ export interface IStorage {
   isUserPro(userId: string): Promise<boolean>;
   // Phase 1 (2026-09-10) — see quotes' own schema comment for the full
   // "why a snapshot, why tokenHash-not-token" reasoning.
-  updateOrganizationProfile(id: number, data: { name?: string; phone?: string | null; email?: string | null }): Promise<Organization>;
+  updateOrganizationProfile(id: number, data: { name?: string; phone?: string | null; email?: string | null; logoData?: string | null }): Promise<Organization>;
   createQuote(data: InsertQuote & { tokenHash: string }): Promise<Quote>;
   getQuoteByTokenHash(tokenHash: string): Promise<Quote | undefined>;
+  // Phase 2 — the "sent" rollup (see api.myOrganization.listQuotes's own
+  // comment on why it's not the full sent/viewed/accepted rollup the
+  // plan describes). Joins in the project's name and the sender's email
+  // purely for display — a quote row itself only stores ids for those.
+  getOrganizationQuotes(organizationId: number): Promise<(Quote & { projectName: string; createdByEmail: string | null })[]>;
 }
 
 // Thrown by removeOrganizationMember/updateOrganizationMemberRole when
@@ -372,6 +377,7 @@ export class DatabaseStorage implements IStorage {
         name: organizations.name,
         phone: organizations.phone,
         email: organizations.email,
+        logoData: organizations.logoData,
         createdAt: organizations.createdAt,
         role: organizationMembers.role,
       })
@@ -381,7 +387,7 @@ export class DatabaseStorage implements IStorage {
     return rows as (Organization & { role: "admin" | "member" })[];
   }
 
-  async updateOrganizationProfile(id: number, data: { name?: string; phone?: string | null; email?: string | null }): Promise<Organization> {
+  async updateOrganizationProfile(id: number, data: { name?: string; phone?: string | null; email?: string | null; logoData?: string | null }): Promise<Organization> {
     const [updated] = await this.db
       .update(organizations)
       .set(data)
@@ -403,6 +409,29 @@ export class DatabaseStorage implements IStorage {
   async getQuoteByTokenHash(tokenHash: string): Promise<Quote | undefined> {
     const [quote] = await this.db.select().from(quotes).where(eq(quotes.tokenHash, tokenHash)).limit(1);
     return quote;
+  }
+
+  async getOrganizationQuotes(organizationId: number): Promise<(Quote & { projectName: string; createdByEmail: string | null })[]> {
+    const rows = await this.db
+      .select({
+        quote: quotes,
+        projectName: projects.name,
+        createdByEmail: users.email,
+      })
+      .from(quotes)
+      // projectId cascades from projects (onDelete: 'cascade'), so a
+      // quote can never outlive its project — a plain inner join is
+      // safe here, unlike the users join below.
+      .innerJoin(projects, eq(quotes.projectId, projects.id))
+      // createdByUserId is a deliberately unconstrained text column
+      // (see quotes' own schema comment) — the sender's account can be
+      // deleted after the quote was sent, so this has to be a LEFT
+      // join, not inner, or a quote from a since-deleted account would
+      // silently vanish from its own business's rollup.
+      .leftJoin(users, eq(quotes.createdByUserId, users.id))
+      .where(eq(quotes.organizationId, organizationId))
+      .orderBy(desc(quotes.createdAt));
+    return rows.map((r) => ({ ...r.quote, projectName: r.projectName, createdByEmail: r.createdByEmail }));
   }
 
   async addOrganizationMember(organizationId: number, userId: string, role: "admin" | "member"): Promise<OrganizationMember> {

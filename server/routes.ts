@@ -2,7 +2,7 @@ import { calculateEstimate } from "./estimates";
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { IStorage, LastAdminError, DuplicateMemberError } from "./storage";
-import { api, FREE_PROPERTY_LIMIT } from "@shared/routes";
+import { api, FREE_PROPERTY_LIMIT, ORG_SEAT_LIMIT } from "@shared/routes";
 import { z } from "zod";
 import { logEvent } from "./events";
 import { lookupParcel, ParcelServiceUnavailableError } from "./parcels";
@@ -606,6 +606,138 @@ export async function registerRoutes(
     }
   });
 
+  // === BUSINESS TIER, PHASE 2 — roster self-service. Mirrors
+  // api.admin.*OrganizationMember above 1:1 in behavior, but resolves
+  // the target org from the CALLER's own membership (getUserOrganizations)
+  // instead of trusting a raw :id from the request — a plain member (or
+  // a member of a DIFFERENT business entirely) can never reach another
+  // org's roster through these routes, unlike the platform-Staff-only
+  // admin ones. ===
+
+  app.get(api.myOrganization.listMembers.path, isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const orgs = await storage.getUserOrganizations(userId);
+      const org = orgs[0];
+      if (!org) {
+        return res.status(403).json({ message: "You're not part of a business yet." });
+      }
+      const members = await storage.getOrganizationMembers(org.id);
+      res.json(members);
+    } catch (err: any) {
+      console.error('Failed to list organization members', err);
+      res.status(500).json({ message: 'Failed to load your team' });
+    }
+  });
+
+  app.post(api.myOrganization.addMember.path, isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const input = api.myOrganization.addMember.input.parse(req.body);
+      const orgs = await storage.getUserOrganizations(userId);
+      const org = orgs[0];
+      if (!org) {
+        return res.status(403).json({ message: "You're not part of a business yet." });
+      }
+      if (org.role !== "admin") {
+        return res.status(403).json({ message: "Only a business admin can add team members." });
+      }
+      // ORG_SEAT_LIMIT — checked here, not left to the client, same
+      // "server enforces, UI just reflects" discipline as
+      // FREE_PROPERTY_LIMIT's own check in POST /api/properties.
+      const existing = await storage.getOrganizationMembers(org.id);
+      if (existing.length >= ORG_SEAT_LIMIT) {
+        return res.status(400).json({ message: `Businesses are limited to ${ORG_SEAT_LIMIT} team members for now.` });
+      }
+      const target = await storage.getUserByEmail(input.email);
+      if (!target) {
+        return res.status(404).json({ message: `No account found for ${input.email} — they need to sign up for a free PostPlotter account first.` });
+      }
+      const member = await storage.addOrganizationMember(org.id, target.id, input.role);
+      res.status(201).json(member);
+    } catch (err: any) {
+      if (err instanceof DuplicateMemberError) {
+        return res.status(400).json({ message: err.message });
+      }
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message || "Invalid input" });
+      }
+      console.error('Failed to add team member', err);
+      res.status(500).json({ message: 'Failed to add team member' });
+    }
+  });
+
+  app.put(api.myOrganization.updateMemberRole.path, isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const targetUserId = req.params.userId;
+      const input = api.myOrganization.updateMemberRole.input.parse(req.body);
+      const orgs = await storage.getUserOrganizations(userId);
+      const org = orgs[0];
+      if (!org) {
+        return res.status(403).json({ message: "You're not part of a business yet." });
+      }
+      if (org.role !== "admin") {
+        return res.status(403).json({ message: "Only a business admin can change a teammate's role." });
+      }
+      const updated = await storage.updateOrganizationMemberRole(org.id, targetUserId, input.role);
+      res.json(updated);
+    } catch (err: any) {
+      if (err instanceof LastAdminError) {
+        return res.status(400).json({ message: err.message });
+      }
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message || "Invalid input" });
+      }
+      console.error('Failed to update team member role', err);
+      res.status(500).json({ message: 'Failed to update team member role' });
+    }
+  });
+
+  app.delete(api.myOrganization.removeMember.path, isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const targetUserId = req.params.userId;
+      const orgs = await storage.getUserOrganizations(userId);
+      const org = orgs[0];
+      if (!org) {
+        return res.status(403).json({ message: "You're not part of a business yet." });
+      }
+      if (org.role !== "admin") {
+        return res.status(403).json({ message: "Only a business admin can remove a teammate." });
+      }
+      await storage.removeOrganizationMember(org.id, targetUserId);
+      res.status(204).end();
+    } catch (err: any) {
+      if (err instanceof LastAdminError) {
+        return res.status(400).json({ message: err.message });
+      }
+      console.error('Failed to remove team member', err);
+      res.status(500).json({ message: 'Failed to remove team member' });
+    }
+  });
+
+  // Business tier, Phase 2 — the "sent" rollup (see
+  // api.myOrganization.listQuotes's own comment on the viewed/accepted
+  // gap). Open to any member, not just admins — seeing what the
+  // business has sent isn't the sensitive action editing its profile
+  // or roster is.
+  app.get(api.myOrganization.listQuotes.path, isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const orgs = await storage.getUserOrganizations(userId);
+      const org = orgs[0];
+      if (!org) {
+        return res.status(403).json({ message: "You're not part of a business yet." });
+      }
+      const quotes = await storage.getOrganizationQuotes(org.id);
+      res.json(quotes);
+    } catch (err: any) {
+      console.error('Failed to list organization quotes', err);
+      res.status(500).json({ message: 'Failed to load sent quotes' });
+    }
+  });
+
   app.post(api.quotes.create.path, isAuthenticated, async (req, res) => {
     try {
       const userId = (req.user as any).id;
@@ -663,6 +795,9 @@ export async function registerRoutes(
         businessName: org.name,
         businessPhone: org.phone ?? null,
         businessEmail: org.email ?? null,
+        // Phase 2 — snapshotted the same way the rest of the branding
+        // trio already is; see quotes' own schema comment.
+        businessLogoData: org.logoData ?? null,
         totalLinearFeet,
         totalCost: cheapest.totalCost,
         tokenHash,
@@ -708,6 +843,7 @@ export async function registerRoutes(
         businessName: quote.businessName,
         businessPhone: quote.businessPhone,
         businessEmail: quote.businessEmail,
+        businessLogoData: quote.businessLogoData,
         totalLinearFeet: quote.totalLinearFeet,
         totalCost: quote.totalCost,
         createdAt: quote.createdAt,
