@@ -36,3 +36,11 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
+          # VITE_MAPBOX_TOKEN must reach the Dockerfile's build stage as
+          # a build ARG, not a runtime env var (see Dockerfile's own
+          # comment on it) — read from a GitHub Actions repo secret of
+          # the same name. Safe to leave that secret unset for now: an
+          # empty build arg just means the built image falls back to
+          # the existing free Esri map for every account.
+          build-args: |
+            VITE_MAPBOX_TOKEN=${{ secrets.VITE_MAPBOX_TOKEN }}

@@ -40,6 +40,29 @@ const defaultIcon = new Icon({
 const TILE_NATIVE_ZOOM = 19;
 const MAP_MAX_ZOOM = 22;
 
+// Pro-only, higher-resolution satellite imagery (2026-09-10) — direct
+// answer to "the map is subpar," which the user identified as image
+// clarity specifically, not geocoding. `mapbox/satellite-streets-v12`
+// is Mapbox's own combined satellite-imagery-plus-street-labels style —
+// picked instead of plain `satellite-v9` (imagery only) specifically so
+// it replaces BOTH of Esri's two layers below (imagery + the separate
+// World_Transportation labels overlay) with one tile fetch, not because
+// it needed extra justification beyond "it's the documented style for
+// exactly this combination."
+//
+// HONESTY NOTE, matching this file's own "fetch real tiles before
+// trusting a service's name" discipline elsewhere: this URL/style and
+// MAPBOX_NATIVE_ZOOM are built from Mapbox's own public documentation,
+// NOT verified against real fetched tiles the way Esri's ceiling above
+// was — there was no real access token available to test against while
+// building this. Confirm live once VITE_MAPBOX_TOKEN is set: load a
+// real Pro-account map, check the actual tiles look sharp past z19, and
+// adjust MAPBOX_NATIVE_ZOOM if Mapbox's real ceiling in this app's
+// usual test regions differs from the documented 22.
+const MAPBOX_STYLE = "mapbox/satellite-streets-v12";
+const MAPBOX_NATIVE_ZOOM = 22;
+const MAPBOX_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
 // Fallback for when there's no geocoded point yet — a brand-new project,
 // or one whose address failed to geocode (see the initialAddress effect
 // below). `initialCenter` is undefined in every real call site today
@@ -365,9 +388,19 @@ interface MapEditorProps {
   // component just forwards the raw "user clicked delete on point N"
   // event, the same shape as onGatePlaced above.
   onDeletePoint?: (index: number) => void;
+  // Gates the Mapbox satellite-streets tile layer above — see
+  // MAPBOX_STYLE's own comment. Free accounts (or a Pro account before
+  // VITE_MAPBOX_TOKEN is set) fall through to the existing Esri stack
+  // unchanged, never a broken/blank map.
+  isPro?: boolean;
 }
 
-export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSaving, existingLines = [], isMobile, selectedLineId = null, onLineSelect = () => {}, editingLine = null, onLineUpdate = () => {}, isDrawing = false, onCancelDrawing = () => {}, controlsPosition = 'left', placingGateType = null, onGatePlaced = () => {}, onDeletePoint = () => {} }: MapEditorProps) {
+export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSaving, existingLines = [], isMobile, selectedLineId = null, onLineSelect = () => {}, editingLine = null, onLineUpdate = () => {}, isDrawing = false, onCancelDrawing = () => {}, controlsPosition = 'left', placingGateType = null, onGatePlaced = () => {}, onDeletePoint = () => {}, isPro = false }: MapEditorProps) {
+  // A Pro account with no token set yet (VITE_MAPBOX_TOKEN unset —
+  // see the migration/env-setup note in CLAUDE.md) still gets the
+  // normal free Esri map, never a broken one.
+  const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
+  const useMapboxImagery = isPro && !!mapboxToken;
   const [points, setPoints] = useState<Point[]>([]);
   const [totalDistance, setTotalDistance] = useState(0);
   const mapRef = useRef<any>(null);
@@ -640,22 +673,40 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   return (
     <div className="relative w-full h-full min-h-[500px]">
       <MapContainer ref={mapRef} center={initialCenter ?? DEFAULT_CENTER} zoom={initialCenter ? 12 : DEFAULT_ZOOM} maxZoom={MAP_MAX_ZOOM} scrollWheelZoom={true} className="w-full h-full z-0">
-        <TileLayer
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          attribution='&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-          maxZoom={MAP_MAX_ZOOM}
-          maxNativeZoom={TILE_NATIVE_ZOOM}
-        />
-        {/* Hybrid overlay: transparent street name labels on top of the satellite
-            imagery above. (Esri also has a Reference/World_Boundaries_and_Places
-            layer that looks similar on paper, but it's country/state/county
-            boundaries and place names, not street labels — verified by fetching
-            real tiles before choosing between them.) */}
-        <TileLayer
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"
-          attribution='&copy; Esri'
-          maxZoom={MAP_MAX_ZOOM}
-        />
+        {useMapboxImagery ? (
+          // Pro-only path — see MAPBOX_STYLE's comment above for why this
+          // one style replaces both Esri layers below (imagery + labels)
+          // instead of needing its own separate labels overlay.
+          <TileLayer
+            key="mapbox"
+            url={`https://api.mapbox.com/styles/v1/${MAPBOX_STYLE}/tiles/256/{z}/{x}/{y}?access_token=${mapboxToken}`}
+            attribution={MAPBOX_ATTRIBUTION}
+            maxZoom={MAP_MAX_ZOOM}
+            maxNativeZoom={MAPBOX_NATIVE_ZOOM}
+            tileSize={256}
+          />
+        ) : (
+          <>
+            <TileLayer
+              key="esri-imagery"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution='&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+              maxZoom={MAP_MAX_ZOOM}
+              maxNativeZoom={TILE_NATIVE_ZOOM}
+            />
+            {/* Hybrid overlay: transparent street name labels on top of the satellite
+                imagery above. (Esri also has a Reference/World_Boundaries_and_Places
+                layer that looks similar on paper, but it's country/state/county
+                boundaries and place names, not street labels — verified by fetching
+                real tiles before choosing between them.) */}
+            <TileLayer
+              key="esri-labels"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"
+              attribution='&copy; Esri'
+              maxZoom={MAP_MAX_ZOOM}
+            />
+          </>
+        )}
         <style>{`.leaflet-edit-marker { filter: hue-rotate(120deg); }`}</style>
         {(isDrawing || isExtending) && <MapEvents onMapClick={handleMapClick} />}
         <FitBoundsOnLoad existingLines={existingLines} isMobile={isMobile} />

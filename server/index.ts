@@ -25,7 +25,7 @@ const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' data: blob: https://server.arcgisonline.com https://unpkg.com https://cdn.midjourney.com",
+  "img-src 'self' data: blob: https://server.arcgisonline.com https://unpkg.com https://cdn.midjourney.com https://api.mapbox.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "connect-src 'self' https://nominatim.openstreetmap.org ws: wss:",
   "frame-src 'self'",

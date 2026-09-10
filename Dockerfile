@@ -18,6 +18,19 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
+# VITE_MAPBOX_TOKEN (client/src/components/MapEditorComponent.tsx's
+# Pro-only satellite imagery) is NOT like the runtime env vars noted
+# below — Vite bakes any VITE_-prefixed value into the compiled JS
+# bundle at `npm run build` time, so it has to exist as a real value
+# HERE, during the image build, not at `docker run` time (setting it in
+# Hostinger's Docker Manager would do nothing — the JS is already
+# built by then). Supplied as a build ARG from a GitHub Actions secret,
+# see .github/workflows/docker-publish.yml. Fine to leave unset — an
+# empty value here just means every account falls back to the existing
+# free Esri map (confirmed live, see CLAUDE.md's Account tiers section).
+ARG VITE_MAPBOX_TOKEN
+ENV VITE_MAPBOX_TOKEN=${VITE_MAPBOX_TOKEN}
+
 # Install with the lockfile before copying the rest of the source, so
 # this layer only re-runs when dependencies actually change.
 COPY package.json package-lock.json ./

@@ -158,7 +158,7 @@ export default function Editor() {
   const [match, params] = useRoute("/editor/:id");
   const projectId = match && params?.id ? parseInt(params.id) : undefined;
 
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
 
@@ -632,6 +632,7 @@ export default function Editor() {
             placingGateType={placingGateType}
             onGatePlaced={handleGatePlaced}
             onDeletePoint={handleDeletePoint}
+            isPro={user?.plan === "pro"}
           />
 
           {/* Mobile Menu Trigger */}
