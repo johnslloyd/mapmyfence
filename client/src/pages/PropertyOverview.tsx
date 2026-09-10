@@ -101,7 +101,19 @@ function FenceProjectRow({ project, guestQuery }: { project: any; guestQuery: st
   const cost = estimates?.options?.[0]?.totalCost;
 
   return (
-    <Link href={`/editor/${project.id}${guestQuery}`}>
+    // `block` is load-bearing, not cosmetic — an unstyled <Link> renders as
+    // a bare <a>, which defaults to display:inline. An inline element
+    // doesn't take its 100% share of the grid column's available width the
+    // way a block element does; it shrink-wraps to its own content's
+    // natural width instead, even though the flex child inside it has
+    // min-w-0. Confirmed live: without `block`, this row (and
+    // LawnCareProjectRow's identical shape below) could render wider than
+    // the dossier grid's main column, silently clipped by the grid's own
+    // overflow-hidden rather than wrapping or scrolling — the exact "grid
+    // content dictates track width" failure mode this file's own CSS-bug
+    // history already documents, just one level deeper (an inline anchor
+    // inside the track, not the track's own missing grid-cols-1 base).
+    <Link href={`/editor/${project.id}${guestQuery}`} className="block">
       <div className="group flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 py-6 -mx-2 px-2 rounded-xl hover:bg-secondary/30 transition-colors cursor-pointer">
         {/* 3x the round-two thumbnail size (112x80 -> 336x240) — full
             width on mobile, fixed width on sm+, both sides keeping the
@@ -141,7 +153,9 @@ function FenceProjectRow({ project, guestQuery }: { project: any; guestQuery: st
 
 function LawnCareProjectRow({ project, guestQuery }: { project: any; guestQuery: string }) {
   return (
-    <Link href={`/editor/${project.id}${guestQuery}`}>
+    // See FenceProjectRow's identical comment above — `block` is required
+    // for this row to actually respect the grid column's width.
+    <Link href={`/editor/${project.id}${guestQuery}`} className="block">
       <div className="group flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 py-6 -mx-2 px-2 rounded-xl hover:bg-secondary/30 transition-colors cursor-pointer">
         <div className="w-full sm:w-[252px] aspect-[160/116] sm:h-[180px] rounded-lg border border-dashed border-border bg-card shrink-0 flex items-center justify-center">
           <Sprout className="w-8 h-8 text-muted-foreground" />
@@ -230,8 +244,21 @@ function PropertyOverviewContent({ propertyId, isGuest }: { propertyId: number; 
         </div>
 
         {/* MAIN — every project, each carrying its own plan preview and
-            its own stats. */}
-        <div className="p-5 md:p-6">
+            its own stats. `min-w-0` is load-bearing, not decorative: this
+            div is the direct child occupying the outer grid's `1fr` track
+            (`grid-cols-[288px_1fr]` above), and a `1fr` track is really
+            `minmax(auto, 1fr)` — its minimum width defaults to the
+            min-content width of whatever's inside it. Without min-w-0
+            here, a wide project row (long name, several stat columns, a
+            status badge, none of which wrap) pushes this track wider than
+            the 1088px the grid container actually has, and since the
+            outer dossier wrapper has overflow-hidden, that excess is
+            silently clipped rather than wrapped or scrolled — confirmed
+            live (dossier scrollWidth 1186 vs. its own 1088px box) before
+            this fix, same "grid content dictates track width" failure
+            mode this file's other CSS-bug notes already document, one
+            level deeper than the missing-grid-cols-1-base shape. */}
+        <div className="p-5 md:p-6 min-w-0">
           <div className="mb-3">
             <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Projects ({property.projects.length})</span>
           </div>

@@ -2228,6 +2228,55 @@ already-loaded HMR module referencing the old name — the documented
 "stale dev-tab console" gotcha elsewhere in this file; a fresh tab
 loaded with zero errors, confirming the rename itself was clean.)
 
+**A real project-row overflow bug, reported live via a screenshot
+(2026-09-10) — the Dossier's right column could render wider than its
+own container, silently clipped rather than wrapped.** Two independent
+causes, both real, both needed:
+
+1. `FenceProjectRow`/`LawnCareProjectRow` (`PropertyOverview.tsx`) each
+   wrap their row in a bare `<Link>` with no `className` at all — an
+   unstyled `<Link>` renders as a plain `<a>`, which defaults to
+   `display: inline`. An inline element doesn't take its 100% share of
+   an ordinary block-level parent's available width the way a block
+   element does; it shrink-wraps to its own content's natural width
+   instead, regardless of `min-w-0` on a flex child further inside it.
+   Confirmed live via computed style (`display: inline`) before fixing.
+   Fixed with `className="block"` on both Links. **Not needed on
+   `Properties.tsx`'s equivalent card Link** — checked before assuming
+   it needed the same fix: that Link's parent is itself a flex
+   container, and CSS flexbox "blockification" already forces a flex
+   ITEM to block-level layout automatically, confirmed live
+   (`display: block` there already, with no explicit class needed).
+2. Even after that fix, the row was STILL overflowing — checked live,
+   not assumed fixed. The actual remaining cause: the Dossier's outer
+   grid (`grid-cols-[288px_1fr]`) has a `1fr` track, which is really
+   `minmax(auto, 1fr)` — its minimum width defaults to the min-content
+   width of whatever occupies it. The MAIN column's own direct grid
+   child (`<div className="p-5 md:p-6">`) had no `min-w-0`, so a wide
+   project row (a long name, three stat columns, a status badge, none
+   of which wrap) pushed the grid TRACK itself wider than the space the
+   grid container actually had — confirmed live via
+   `dossier.scrollWidth` (1186px) exceeding its own rendered width
+   (1088px) — and since the outer dossier wrapper has `overflow-hidden`
+   (see the Property Dossier section above), that excess was silently
+   clipped, never a scrollbar, matching exactly what the reported
+   screenshot showed. Fixed by adding `min-w-0` to that grid-track
+   child. Same underlying "grid/flex content dictates container size
+   unless told otherwise" failure mode this file's CSS-bug history
+   already documents twice (the round-one card-grid bug, the missing
+   unprefixed `grid-cols-1` base) — same root cause shape, one level
+   deeper in the tree each time, which is exactly why both real causes
+   here needed independent, live-confirmed fixes rather than stopping
+   at the first plausible one.
+
+Verified live end-to-end on the actual reported case (a real property
+with a long project name and a gate, at a real 1920px viewport matching
+the report): before the fix, `dossier.scrollWidth` (1186) exceeded its
+own box (1088); after both fixes, `scrollWidth` (1086) no longer
+exceeds it, the status badge renders fully on-screen instead of cut
+off, and the long project name truncates instead of pushing content
+off — checked again at 375px mobile with zero horizontal overflow.
+
 ## Properties.tsx ("My Properties" grid) — real content for a blank card (2026-08-30)
 
 Prompted directly: think through a brand-new user's first property with
