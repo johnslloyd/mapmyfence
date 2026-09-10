@@ -1,7 +1,7 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { db } from "./db";
-import { users } from "@shared/schema";
+import { users, organizationMembers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { Scrypt } from "lucia";
 
@@ -12,6 +12,32 @@ import { Scrypt } from "lucia";
 export function toSafeUser(user: typeof users.$inferSelect) {
   const { hashedPassword, resetTokenHash, resetTokenExpiresAt, ...safeUser } = user;
   return safeUser;
+}
+
+// Whether a user currently has Pro-tier capability — personally
+// (users.plan === "pro") OR by being an active member of ANY business
+// (2026-09-10: joining/being added to an organization grants Pro
+// automatically for as long as membership lasts — see shared/schema.ts's
+// organizationMembers comment). Computed fresh on every call rather than
+// cached on the user row, so being removed from a business's last
+// organization takes effect immediately, with no separate sync step.
+//
+// Kept as its own raw-`db` query here rather than reusing
+// storage.isUserPro — this file and authRoutes.ts already read the DB
+// directly everywhere else (see e.g. POST /api/account/upgrade), never
+// through the storage abstraction; server/routes.ts's own call site uses
+// storage.isUserPro instead, matching THAT file's own established
+// convention. Two small implementations of the same check, each
+// following the data-access pattern already established in its own
+// file, not accidental duplication.
+export async function isEffectivelyPro(user: typeof users.$inferSelect): Promise<boolean> {
+  if (user.plan === "pro") return true;
+  const [membership] = await db
+    .select({ id: organizationMembers.id })
+    .from(organizationMembers)
+    .where(eq(organizationMembers.userId, user.id))
+    .limit(1);
+  return !!membership;
 }
 
 passport.use(

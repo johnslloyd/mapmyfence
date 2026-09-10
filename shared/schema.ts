@@ -1,4 +1,4 @@
-import { pgTable, text, serial, doublePrecision, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, doublePrecision, timestamp, integer, boolean, unique } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -244,10 +244,64 @@ export const products = pgTable("products", {
   gateComponent: text("gate_component", { enum: ["hardware_kit", "cane_bolt"] }),
 });
 
+// Business tier, phase 0 (2026-09-10) — see CLAUDE.md's "PostPlotter for
+// Business" section for the full product reasoning. A business is a
+// ROSTER of member accounts, not a bigger toolset of its own: the
+// business itself gets no extra fence-planning capability, it grants
+// every member Pro-tier access automatically for as long as they're on
+// the roster (see server/auth.ts's isEffectivelyPro). Deliberately does
+// NOT own properties or projects — see the projects table's own
+// businessId comment below for why that attachment point matters.
+export const organizations = pgTable("organizations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// One row per person on a business's roster. `role` is per-membership,
+// not a single fixed ownerId on the organization — deliberately, so a
+// business can have more than one admin (a real, explicit product
+// decision, not the default "one owner" shape most Rails-tutorial SaaS
+// examples reach for). The invariant every business must have AT LEAST
+// ONE admin is enforced in server/storage.ts (removeOrganizationMember/
+// updateOrganizationMemberRole refuse to leave a business with zero) —
+// not something a plain CHECK constraint can express cleanly across
+// multiple rows, so this follows the same "guard it in application code"
+// convention already established for the gate-blocks-point-deletion
+// rule elsewhere in this app, not a new pattern.
+export const organizationMembers = pgTable("organization_members", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organization_id").references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
+  userId: text("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  role: text("role", { enum: ["admin", "member"] }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  // A person can't be added to the same business twice — a real
+  // integrity rule, not just a nicety, so this is a genuine DB
+  // constraint rather than only an application-level check.
+  uniqueMembership: unique().on(table.organizationId, table.userId),
+}));
+
 // === RELATIONS ===
 
 export const usersRelations = relations(users, ({ many }) => ({
   properties: many(properties),
+  organizationMemberships: many(organizationMembers),
+}));
+
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  members: many(organizationMembers),
+}));
+
+export const organizationMembersRelations = relations(organizationMembers, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [organizationMembers.organizationId],
+    references: [organizations.id],
+  }),
+  user: one(users, {
+    fields: [organizationMembers.userId],
+    references: [users.id],
+  }),
 }));
 
 export const propertiesRelations = relations(properties, ({ many, one }) => ({
@@ -317,6 +371,8 @@ export const insertCoordinateSchema = createInsertSchema(coordinates).omit({ id:
 export const insertGateSchema = createInsertSchema(gates).omit({ id: true, createdAt: true });
 export const insertYardBoundarySchema = createInsertSchema(yardBoundaries).omit({ id: true, createdAt: true });
 export const insertYardBoundaryPointSchema = createInsertSchema(yardBoundaryPoints).omit({ id: true });
+export const insertOrganizationSchema = createInsertSchema(organizations).omit({ id: true, createdAt: true });
+export const insertOrganizationMemberSchema = createInsertSchema(organizationMembers).omit({ id: true, createdAt: true });
 
 // === EXPLICIT API CONTRACT TYPES ===
 
@@ -335,6 +391,10 @@ export type YardBoundary = typeof yardBoundaries.$inferSelect;
 export type InsertYardBoundary = z.infer<typeof insertYardBoundarySchema>;
 export type YardBoundaryPoint = typeof yardBoundaryPoints.$inferSelect;
 export type InsertYardBoundaryPoint = z.infer<typeof insertYardBoundaryPointSchema>;
+export type Organization = typeof organizations.$inferSelect;
+export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
+export type OrganizationMember = typeof organizationMembers.$inferSelect;
+export type InsertOrganizationMember = z.infer<typeof insertOrganizationMemberSchema>;
 
 // Detailed types for frontend. ProjectWithLines is what the fence editor
 // needs: the project's own fields (type/name/status) PLUS its parent

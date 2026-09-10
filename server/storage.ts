@@ -1,10 +1,12 @@
 import {
   properties, projects, fenceLines, coordinates, gates, users, events,
+  organizations, organizationMembers,
   type InsertProperty, type PropertyWithProjects,
   type InsertProject, type ProjectWithLines,
   type FenceLine, type InsertFenceLine,
   type Coordinate, type InsertCoordinate,
   type Gate, type InsertGate,
+  type Organization, type OrganizationMember,
 } from "@shared/schema";
 import { and, eq, isNull, desc, inArray } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -47,6 +49,10 @@ export interface IStorage {
   // passed the isAdmin check; these intentionally have no per-user
   // ownership scoping the way everything else in this file does.
   getUserById(id: string): Promise<any | undefined>;
+  // Added for the business-tier admin routes (2026-09-10) — org members
+  // are always looked up by email there (what an operator actually has
+  // on hand for a pilot business), never a raw user id.
+  getUserByEmail(email: string): Promise<any | undefined>;
   getAllUsersWithCounts(): Promise<any[]>;
   getRecentEvents(limit: number): Promise<any[]>;
   // Same fence-line/coordinate/gate detail getProject(id, userId) returns,
@@ -67,7 +73,51 @@ export interface IStorage {
   // the request without granting anything.
   approveProUpgrade(id: string): Promise<any>;
   dismissProRequest(id: string): Promise<any>;
+
+  // Business tier, phase 0 (2026-09-10) — see shared/schema.ts's
+  // organizations/organizationMembers comments for the full model. A
+  // business is a roster (role: "admin" | "member" per membership, not
+  // a single fixed owner column) that must never drop below one admin —
+  // removeOrganizationMember/updateOrganizationMemberRole enforce that
+  // directly (throwing LastAdminError below) rather than relying on a
+  // DB constraint, the same "guard it in application code" convention
+  // the gate-blocks-point-deletion rule already established.
+  createOrganization(name: string, firstAdminUserId: string): Promise<Organization>;
+  getOrganization(id: number): Promise<Organization | undefined>;
+  getAllOrganizationsWithCounts(): Promise<any[]>;
+  getOrganizationMembers(id: number): Promise<(OrganizationMember & { email: string })[]>;
+  getUserOrganizations(userId: string): Promise<Organization[]>;
+  addOrganizationMember(organizationId: number, userId: string, role: "admin" | "member"): Promise<OrganizationMember>;
+  removeOrganizationMember(organizationId: number, userId: string): Promise<void>;
+  updateOrganizationMemberRole(organizationId: number, userId: string, role: "admin" | "member"): Promise<OrganizationMember>;
+  // Whether a user currently has Pro-tier capability via ANY
+  // organization membership — combined with users.plan === "pro"
+  // elsewhere to decide effective access (see server/routes.ts's
+  // property-limit check). A separate, raw-`db` version of this same
+  // check lives in server/auth.ts (isEffectivelyPro) for
+  // authRoutes.ts's own call sites, which already reach the DB
+  // directly rather than through this interface — two files each
+  // following their own already-established data-access convention,
+  // not accidental duplication.
+  isUserPro(userId: string): Promise<boolean>;
 }
+
+// Thrown by removeOrganizationMember/updateOrganizationMemberRole when
+// the change would leave a business with zero admins — a business must
+// always have at least one. Named and exported the same way
+// ParcelServiceUnavailableError is, so a route can catch this
+// specifically and return a real, honest 400 instead of a generic 500.
+export class LastAdminError extends Error {}
+
+// Thrown by addOrganizationMember when the target is already on the
+// roster — the composite unique constraint (organization_members_org_
+// user_unique) would catch this at the DB layer regardless, but a raw
+// Postgres 23505 falling through to the generic 500 handler is exactly
+// the un-friendly failure this app's error-handling convention exists
+// to avoid (see ParcelServiceUnavailableError/LastAdminError). Checked
+// in application code, same as the last-admin invariant above, rather
+// than caught from the DB exception.
+export class DuplicateMemberError extends Error {}
 
 export class DatabaseStorage implements IStorage {
   private db: NodePgDatabase<typeof schema>;
@@ -222,6 +272,12 @@ export class DatabaseStorage implements IStorage {
     return stripSensitiveUserFields(result[0]);
   }
 
+  async getUserByEmail(email: string): Promise<any | undefined> {
+    const result = await this.db.select().from(users).where(eq(users.email, email)).limit(1);
+    if (!result || result.length === 0) return undefined;
+    return stripSensitiveUserFields(result[0]);
+  }
+
   // Real, permanent delete, not a soft/deactivate flag — matches how
   // the existing self-serve "Delete Account" flow (Account.tsx) is
   // worded and scoped, just automated here instead of "email us."
@@ -260,6 +316,147 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return stripSensitiveUserFields(updated);
+  }
+
+  // A business's first admin is created in the SAME transaction as the
+  // business itself — an organization can never legitimately exist with
+  // zero members even for an instant, matching the "always at least one
+  // admin" invariant the whole business tier is built around.
+  async createOrganization(name: string, firstAdminUserId: string): Promise<Organization> {
+    return await this.db.transaction(async (tx) => {
+      const [org] = await tx.insert(organizations).values({ name }).returning();
+      await tx.insert(organizationMembers).values({
+        organizationId: org.id,
+        userId: firstAdminUserId,
+        role: "admin",
+      });
+      return org;
+    });
+  }
+
+  async getOrganization(id: number): Promise<Organization | undefined> {
+    const [org] = await this.db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
+    return org;
+  }
+
+  async getOrganizationMembers(id: number): Promise<(OrganizationMember & { email: string })[]> {
+    return await this.db
+      .select({
+        id: organizationMembers.id,
+        organizationId: organizationMembers.organizationId,
+        userId: organizationMembers.userId,
+        role: organizationMembers.role,
+        createdAt: organizationMembers.createdAt,
+        email: users.email,
+      })
+      .from(organizationMembers)
+      .innerJoin(users, eq(organizationMembers.userId, users.id))
+      .where(eq(organizationMembers.organizationId, id));
+  }
+
+  async getUserOrganizations(userId: string): Promise<Organization[]> {
+    return await this.db
+      .select({ id: organizations.id, name: organizations.name, createdAt: organizations.createdAt })
+      .from(organizationMembers)
+      .innerJoin(organizations, eq(organizationMembers.organizationId, organizations.id))
+      .where(eq(organizationMembers.userId, userId));
+  }
+
+  async addOrganizationMember(organizationId: number, userId: string, role: "admin" | "member"): Promise<OrganizationMember> {
+    const [existing] = await this.db
+      .select({ id: organizationMembers.id })
+      .from(organizationMembers)
+      .where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.userId, userId)))
+      .limit(1);
+    if (existing) {
+      throw new DuplicateMemberError("This person is already on the business's roster.");
+    }
+    const [member] = await this.db
+      .insert(organizationMembers)
+      .values({ organizationId, userId, role })
+      .returning();
+    return member;
+  }
+
+  // Refuses to remove the business's last remaining admin — see
+  // LastAdminError's own comment above. A no-op (not an error) if the
+  // target already isn't a member, matching the idempotent-delete
+  // spirit of deleteFenceLine/deleteGate elsewhere in this file.
+  async removeOrganizationMember(organizationId: number, userId: string): Promise<void> {
+    const [target] = await this.db
+      .select()
+      .from(organizationMembers)
+      .where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.userId, userId)))
+      .limit(1);
+    if (!target) return;
+    if (target.role === "admin") {
+      const admins = await this.db
+        .select({ id: organizationMembers.id })
+        .from(organizationMembers)
+        .where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.role, "admin")));
+      if (admins.length <= 1) {
+        throw new LastAdminError("A business must have at least one admin — promote someone else first.");
+      }
+    }
+    await this.db
+      .delete(organizationMembers)
+      .where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.userId, userId)));
+  }
+
+  // Same "would this leave zero admins" guard as removal — demoting the
+  // last admin to a plain member is exactly as forbidden as removing
+  // them outright.
+  async updateOrganizationMemberRole(organizationId: number, userId: string, role: "admin" | "member"): Promise<OrganizationMember> {
+    if (role === "member") {
+      const [target] = await this.db
+        .select()
+        .from(organizationMembers)
+        .where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.userId, userId)))
+        .limit(1);
+      if (target?.role === "admin") {
+        const admins = await this.db
+          .select({ id: organizationMembers.id })
+          .from(organizationMembers)
+          .where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.role, "admin")));
+        if (admins.length <= 1) {
+          throw new LastAdminError("A business must have at least one admin — promote someone else first.");
+        }
+      }
+    }
+    const [updated] = await this.db
+      .update(organizationMembers)
+      .set({ role })
+      .where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  // See the interface comment above for why this exists alongside
+  // server/auth.ts's isEffectivelyPro rather than being the one shared
+  // implementation.
+  async isUserPro(userId: string): Promise<boolean> {
+    const [user] = await this.db.select({ plan: users.plan }).from(users).where(eq(users.id, userId)).limit(1);
+    if (user?.plan === "pro") return true;
+    const [membership] = await this.db
+      .select({ id: organizationMembers.id })
+      .from(organizationMembers)
+      .where(eq(organizationMembers.userId, userId))
+      .limit(1);
+    return !!membership;
+  }
+
+  // For the admin org list — same "flat queries, count in JS" shape as
+  // getAllUsersWithCounts below, fine at this app's actual scale.
+  async getAllOrganizationsWithCounts(): Promise<any[]> {
+    const allOrgs = await this.db.select().from(organizations);
+    const allMembers = await this.db.select().from(organizationMembers);
+    const countByOrg = new Map<number, number>();
+    for (const m of allMembers) {
+      countByOrg.set(m.organizationId, (countByOrg.get(m.organizationId) ?? 0) + 1);
+    }
+    return allOrgs
+      .map((org) => ({ ...org, memberCount: countByOrg.get(org.id) ?? 0 }))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   // Three flat queries instead of one per user (or a SQL-level join) —

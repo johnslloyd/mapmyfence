@@ -2,7 +2,7 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
-import { passport, toSafeUser } from "./auth";
+import { passport, toSafeUser, isEffectivelyPro } from "./auth";
 import { db } from "./db";
 import { users, properties } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -44,9 +44,16 @@ function hashToken(rawToken: string) {
   return crypto.createHash("sha256").update(rawToken).digest("hex");
 }
 
-authRouter.get("/api/user", (req, res) => {
+authRouter.get("/api/user", async (req, res) => {
   if (req.isAuthenticated()) {
-    return res.json({ user: toSafeUser(req.user as typeof users.$inferSelect) });
+    const sessionUser = req.user as typeof users.$inferSelect;
+    // isPro is a SEPARATE, computed field alongside the raw `plan`
+    // column — see isEffectivelyPro's own comment. The client should
+    // read isPro for feature-gating (property limit, Mapbox imagery);
+    // `plan` itself stays the literal personal-tier value the account/
+    // admin approval workflows operate on.
+    const isPro = await isEffectivelyPro(sessionUser);
+    return res.json({ user: { ...toSafeUser(sessionUser), isPro } });
   }
 
   return res.json({ user: null });
@@ -111,7 +118,13 @@ authRouter.post("/api/register", authLimiter, async (req, res, next) => {
           console.error("Session save error after registration:", err);
           return res.status(500).json({ message: "Account created but session failed. Please try logging in." });
         }
-        res.status(201).json({ message: "User created", user: toSafeUser(user) });
+        // A brand-new user cannot possibly already belong to an
+        // organization — membership requires the account to exist
+        // first (organization_members.user_id is FK'd to users.id) —
+        // so isPro here is just the raw plan check, no query needed.
+        // isEffectivelyPro is used at every OTHER response site
+        // instead, where that's no longer guaranteed true.
+        res.status(201).json({ message: "User created", user: { ...toSafeUser(user), isPro: user.plan === "pro" } });
       });
     });
   } catch (error: any) {
@@ -141,9 +154,14 @@ authRouter.post("/api/login", authLimiter, (req, res, next) => {
     }
     req.login(user, (err) => {
       if (err) return next(err);
-      req.session.save((err) => {
+      req.session.save(async (err) => {
         if (err) return next(err);
-        res.json({ message: "Logged in", user: toSafeUser(user) });
+        try {
+          const isPro = await isEffectivelyPro(user);
+          res.json({ message: "Logged in", user: { ...toSafeUser(user), isPro } });
+        } catch (error) {
+          next(error);
+        }
       });
     });
   })(req, res, next);

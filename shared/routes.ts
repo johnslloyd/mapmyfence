@@ -130,6 +130,77 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    // Business tier, phase 0 (2026-09-10) — Staff-only (isAdmin-gated,
+    // same as everything else under api.admin) org CRUD. No self-serve
+    // or business-owner-facing equivalent exists yet on purpose — see
+    // CLAUDE.md's "PostPlotter for Business" section: this is how a
+    // pilot business gets onboarded manually for now, not the eventual
+    // in-product flow. Members are always identified by email (what an
+    // operator actually has on hand), never a raw user id.
+    listOrganizations: {
+      method: 'GET' as const,
+      path: '/api/admin/organizations',
+      responses: {
+        200: z.array(z.any()),
+        403: errorSchemas.notFound,
+      },
+    },
+    getOrganization: {
+      method: 'GET' as const,
+      path: '/api/admin/organizations/:id',
+      responses: {
+        200: z.any(),
+        403: errorSchemas.notFound,
+        404: errorSchemas.notFound,
+      },
+    },
+    // The org's first admin is created in the same request — an
+    // organization can never exist with zero members, see
+    // storage.createOrganization.
+    createOrganization: {
+      method: 'POST' as const,
+      path: '/api/admin/organizations',
+      input: z.object({ name: z.string().min(1), firstAdminEmail: z.string().email() }),
+      responses: {
+        201: z.any(),
+        400: errorSchemas.validation,
+        403: errorSchemas.notFound,
+        404: errorSchemas.notFound, // firstAdminEmail doesn't match a real account
+      },
+    },
+    addOrganizationMember: {
+      method: 'POST' as const,
+      path: '/api/admin/organizations/:id/members',
+      input: z.object({ email: z.string().email(), role: z.enum(['admin', 'member']) }),
+      responses: {
+        201: z.any(),
+        400: errorSchemas.validation,
+        403: errorSchemas.notFound,
+        404: errorSchemas.notFound,
+      },
+    },
+    // 400 covers LastAdminError — see server/storage.ts.
+    updateOrganizationMemberRole: {
+      method: 'PUT' as const,
+      path: '/api/admin/organizations/:id/members/:userId',
+      input: z.object({ role: z.enum(['admin', 'member']) }),
+      responses: {
+        200: z.any(),
+        400: errorSchemas.validation,
+        403: errorSchemas.notFound,
+        404: errorSchemas.notFound,
+      },
+    },
+    removeOrganizationMember: {
+      method: 'DELETE' as const,
+      path: '/api/admin/organizations/:id/members/:userId',
+      responses: {
+        204: z.void(),
+        400: errorSchemas.validation,
+        403: errorSchemas.notFound,
+        404: errorSchemas.notFound,
+      },
+    },
   },
   // A property is just an address — name/address/description, no type,
   // no status. See CLAUDE.md's "Property / Project restructure" section.

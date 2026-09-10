@@ -1,7 +1,7 @@
 import { calculateEstimate } from "./estimates";
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
-import { IStorage } from "./storage";
+import { IStorage, LastAdminError, DuplicateMemberError } from "./storage";
 import { api, FREE_PROPERTY_LIMIT } from "@shared/routes";
 import { z } from "zod";
 import { logEvent } from "./events";
@@ -147,7 +147,11 @@ export async function registerRoutes(
       const input = api.properties.create.input.parse(req.body);
       const userId = req.isAuthenticated() && user ? user.id : null;
 
-      if (userId && user.plan !== "pro") {
+      // isUserPro, not a raw user.plan check — a business's members are
+      // Pro automatically for as long as they're on the roster (see
+      // shared/schema.ts's organizationMembers comment), not just
+      // personally-approved accounts.
+      if (userId && !(await storage.isUserPro(userId))) {
         const existing = await storage.getProperties(userId);
         if (existing.length >= FREE_PROPERTY_LIMIT) {
           return res.status(400).json({
@@ -445,6 +449,115 @@ export async function registerRoutes(
     } catch (err) {
       console.error('Failed to dismiss Pro request', err);
       res.status(500).json({ message: 'Failed to dismiss Pro request' });
+    }
+  });
+
+  // === BUSINESS TIER, PHASE 0 — Staff-only org CRUD ===
+  // No self-serve or business-owner-facing equivalent exists yet — see
+  // CLAUDE.md's "PostPlotter for Business" section. This is how a pilot
+  // business gets onboarded manually today, not the eventual in-product
+  // flow. Members are always addressed by email, never a raw user id.
+
+  app.get(api.admin.listOrganizations.path, isAdmin, async (req, res) => {
+    try {
+      const orgs = await storage.getAllOrganizationsWithCounts();
+      res.json(orgs);
+    } catch (err) {
+      console.error('Failed to list organizations', err);
+      res.status(500).json({ message: 'Failed to list organizations' });
+    }
+  });
+
+  app.get(api.admin.getOrganization.path, isAdmin, async (req, res) => {
+    try {
+      const orgId = Number(req.params.id);
+      const org = await storage.getOrganization(orgId);
+      if (!org) {
+        return res.status(404).json({ message: "Business not found" });
+      }
+      const members = await storage.getOrganizationMembers(orgId);
+      res.json({ organization: org, members });
+    } catch (err) {
+      console.error('Failed to get organization', err);
+      res.status(500).json({ message: 'Failed to get organization' });
+    }
+  });
+
+  app.post(api.admin.createOrganization.path, isAdmin, async (req, res) => {
+    try {
+      const input = api.admin.createOrganization.input.parse(req.body);
+      const firstAdmin = await storage.getUserByEmail(input.firstAdminEmail);
+      if (!firstAdmin) {
+        return res.status(404).json({ message: `No account found for ${input.firstAdminEmail} — they need to sign up for a free PostPlotter account first.` });
+      }
+      const org = await storage.createOrganization(input.name, firstAdmin.id);
+      res.status(201).json(org);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message || "Invalid input" });
+      }
+      console.error('Failed to create organization', err);
+      res.status(500).json({ message: 'Failed to create organization' });
+    }
+  });
+
+  app.post(api.admin.addOrganizationMember.path, isAdmin, async (req, res) => {
+    try {
+      const orgId = Number(req.params.id);
+      const input = api.admin.addOrganizationMember.input.parse(req.body);
+      const org = await storage.getOrganization(orgId);
+      if (!org) {
+        return res.status(404).json({ message: "Business not found" });
+      }
+      const target = await storage.getUserByEmail(input.email);
+      if (!target) {
+        return res.status(404).json({ message: `No account found for ${input.email} — they need to sign up for a free PostPlotter account first.` });
+      }
+      const member = await storage.addOrganizationMember(orgId, target.id, input.role);
+      res.status(201).json(member);
+    } catch (err: any) {
+      if (err instanceof DuplicateMemberError) {
+        return res.status(400).json({ message: err.message });
+      }
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message || "Invalid input" });
+      }
+      console.error('Failed to add organization member', err);
+      res.status(500).json({ message: 'Failed to add organization member' });
+    }
+  });
+
+  app.put(api.admin.updateOrganizationMemberRole.path, isAdmin, async (req, res) => {
+    try {
+      const orgId = Number(req.params.id);
+      const targetUserId = req.params.userId;
+      const input = api.admin.updateOrganizationMemberRole.input.parse(req.body);
+      const updated = await storage.updateOrganizationMemberRole(orgId, targetUserId, input.role);
+      res.json(updated);
+    } catch (err: any) {
+      if (err instanceof LastAdminError) {
+        return res.status(400).json({ message: err.message });
+      }
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message || "Invalid input" });
+      }
+      console.error('Failed to update member role', err);
+      res.status(500).json({ message: 'Failed to update member role' });
+    }
+  });
+
+  app.delete(api.admin.removeOrganizationMember.path, isAdmin, async (req, res) => {
+    try {
+      const orgId = Number(req.params.id);
+      const targetUserId = req.params.userId;
+      await storage.removeOrganizationMember(orgId, targetUserId);
+      res.status(204).end();
+    } catch (err: any) {
+      if (err instanceof LastAdminError) {
+        return res.status(400).json({ message: err.message });
+      }
+      console.error('Failed to remove organization member', err);
+      res.status(500).json({ message: 'Failed to remove organization member' });
     }
   });
 
