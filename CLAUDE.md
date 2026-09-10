@@ -608,15 +608,13 @@ only for its `Scrypt` hasher used in `server/auth.ts` / `server/authRoutes.ts`
 a user, restarting the dev server, and confirming `GET /api/user` still
 resolved with the same cookie — sessions now survive a restart/redeploy.
 
-**Still open**: `cookie.secure` is still hardcoded `false`. Leave it that way
-until TLS termination is confirmed on the VPS — flipping it early would
-silently break login (browsers won't send a `secure` cookie over plain
-HTTP). **This is a genuine hard launch blocker, not just a "someday"
-item** — don't go live to real users over the public internet without
-flipping it, and set a real `SESSION_SECRET` in the VPS environment at
-the same time (see Environment below). Neither of these can be verified
-or done from a local dev session — they need someone with VPS access to
-confirm TLS is actually live, then make both changes there.
+**Resolved (2026-09-04/09).** `cookie.secure` now follows `NODE_ENV` (see
+the "Security settings" section below for the full writeup) and
+`SESSION_SECRET` is set as a real env var on the VPS — both were genuine
+hard launch blockers, confirmed done rather than assumed: TLS was
+verified live on the actual domain first (a real cert, not Traefik's
+self-signed default), then the code changed, then a live login/DB round
+trip was checked after deploy.
 
 **Password reset: added.** There was no way to recover a locked-out
 account at all before this — `server/email.ts`, `/api/forgot-password`
@@ -727,9 +725,48 @@ repeat that pattern:
   exists) — tightening further needs a real nonce-based rework, not a
   drop-in edit. If you add a new external origin (a new font, a new API),
   add it to the constant rather than widening to `*`.
-- The session cookie is hardcoded `secure: false`. If you're setting up TLS
-  termination on the VPS (see Deployment), flip this to `true` rather than
-  leaving auth cookies on plaintext HTTP.
+- **Session cookie `secure`: resolved (2026-09-04).** Was hardcoded
+  `false`; now `secure: process.env.NODE_ENV === "production"`
+  (`server/index.ts`) — `true` in production, still `false` in local dev
+  (a browser never sends a `secure` cookie over plain `http://localhost`,
+  so a hardcoded `true` would have silently broken every local login
+  test). Flipped only after confirming live that TLS is genuinely up
+  (a real Let's Encrypt cert, not Traefik's self-signed default) on the
+  domain testers actually use — flipping it before that would have meant
+  the browser silently refusing to send the cookie at all.
+- **Supabase Row-Level Security: enabled on every table (2026-09-09),
+  not previously on at all.** Real, live gap: Supabase auto-provisions a
+  PostgREST-based REST API on top of every table
+  (`https://<project>.supabase.co/rest/v1/<table>`), gated by a public
+  `anon` API key, completely separate from and parallel to this app's
+  own Express API — live by default whether you use it or not. This app
+  never uses Supabase's client library or that key anywhere (confirmed
+  via grep before touching anything), but with RLS off, anyone holding
+  that key could read/write every table directly through that URL —
+  including `users` (hashed passwords, reset token hashes) — bypassing
+  this app's own auth entirely. Surfaced by Supabase's own dashboard
+  security scanner, not found proactively.
+
+  Fixed by running `alter table public.<name> enable row level security`
+  against every public table, with **zero policies added** — the
+  standard fix for an app that doesn't use Supabase's Data API/PostgREST
+  layer at all. Confirmed safe before touching anything, not assumed:
+  `server/db.ts`'s connection authenticates as the `postgres` role,
+  which has `rolbypassrls: true` AND owns every table outright (checked
+  directly via `pg_roles`/`pg_class`) — RLS with no policies denies
+  every *other* role (the `anon`/`authenticated` roles PostgREST uses)
+  while this app's own connection is completely unaffected either way.
+  Verified live after enabling it on all 11 tables: the homepage and a
+  real DB-backed request (touching `users`) both still worked exactly
+  as before.
+
+  **Not automatic for a new table.** RLS status isn't part of
+  `shared/schema.ts` or anything Drizzle manages — a future migration
+  that adds a table starts with RLS off by default, same gap as this
+  one, unless `enable row level security` is included explicitly. Worth
+  checking any time a genuinely new table is added, the same way the
+  `session`-table migration prompt is a recurring thing to remember (see
+  Database migrations below).
 - If a security-related change is the only way you can find to fix a bug,
   stop and say so explicitly rather than making the change — there's almost
   always a root cause underneath.
@@ -2573,9 +2610,9 @@ debugging further.
 No test suite or CI currently exists. There's no `npm test` — don't assume
 one and don't invent test infra unasked; flag it if it becomes a blocker.
 
-**Pending as of the last session**: the `events` table (see Usage event
-logging) exists in `shared/schema.ts` but hasn't been pushed to the database
-yet — needs one `npm run db:push` run interactively.
+**Resolved**: the `events` table (see Usage event logging) is confirmed
+present in the real database — checked directly, not assumed from an
+older session's note.
 
 ## Known dead files
 
