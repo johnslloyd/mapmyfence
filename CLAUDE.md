@@ -3544,6 +3544,43 @@ manual approval + Mapbox imagery" section (under Account tiers) for the
 full writeup — `ProRequestBanner` on this same page is where an admin
 actually acts on a request the notification email linked them to.
 
+**A "Businesses" tab — create a business and manage its roster
+(2026-09-10), prompted directly by the user asking "how do I sign up
+for a business account?"** Real gap surfaced by that question: every
+`api.admin.*Organization*` route (list/get/create a business, add/
+remove/promote/demote a member) has existed since Phase 0, but NONE of
+it ever got a client UI — creating a business or helping one with its
+roster meant a raw `curl` call, every time, forever. This closes that
+gap with zero new server routes or schema — purely `Admin.tsx` (a new
+`OrganizationsTab`) and `use-admin.ts` (six new hooks) wired onto
+routes that were already fully built and tested in Phase 0.
+
+`OrganizationsTab`: every business, an expandable row per business
+(click to reveal its roster inline, reusing `getOrganization`'s
+`{organization, members}` shape), and a `CreateOrganizationDialog`
+(business name + owner's email — the owner needs an existing free
+PostPlotter account already, same "no shadow accounts" rule Phase 0
+established for both the admin and self-service member-add flows).
+Each expanded roster gets the SAME add/promote/demote/remove actions
+`Business.tsx`'s self-service `RosterSection` already gives a
+business's own admin — deliberately mirrored, not reduced, so a
+platform Staff account can genuinely help a business (onboarding, or
+assisting a stuck pilot) rather than only being able to create it and
+walk away. The page header's stale "Read-only. Every view on this page
+is logged." (already inaccurate before this — delete-user and approve/
+dismiss-pro predate it) is fixed to "Every view and edit here is
+logged," and the file's own top-of-file comment listing this page's
+real edit actions is updated to include this as the third/fourth.
+
+Verified live end-to-end through the real UI: created a genuine new
+business via the actual dialog (not the API directly) and confirmed
+its first admin's `isPro` flipped to `true` immediately via a direct
+`/api/user` check on that account; the new business appeared in the
+list without a manual refresh; expanding an existing business's row
+showed its real roster with working invite/promote/demote/remove
+controls. Test accounts and businesses created for this were deleted
+afterward; `npm run build` re-confirmed clean.
+
 ## Usage event logging
 
 `server/events.ts` has a `logEvent(type, {projectId, userId})` — local-only
