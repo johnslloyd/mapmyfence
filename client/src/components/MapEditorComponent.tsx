@@ -393,6 +393,49 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   // component.
   const [geocodeIssue, setGeocodeIssue] = useState<{ address: string; message: string } | null>(null);
 
+  // True whenever a click on the map places a point — a new line, an
+  // extension of an existing one, or a gate snapped to a segment. Drives
+  // the crosshair cursor (see index.css's .cursor-crosshair-map) so the
+  // one place a user's attention actually is — the map surface, right at
+  // their mouse — signals the click means something different than
+  // panning. Deliberately excludes plain editingLine dragging: that's a
+  // drag interaction, not click-to-place, so the default cursor is
+  // already correct there.
+  const isPlacingPoint = isDrawing || isExtending || !!placingGateType;
+
+  // MapContainer's own `className` prop only applies once, at the
+  // initial imperative L.map(...) construction — react-leaflet doesn't
+  // re-render it on later prop changes (confirmed live: the class was
+  // simply never there on a later check), same shape as the ResizeObserver
+  // effect below needing to reach into the container directly rather than
+  // relying on React's normal prop diffing for this imperatively-owned
+  // element.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.getContainer().classList.toggle("cursor-crosshair-map", isPlacingPoint);
+  }, [isPlacingPoint]);
+
+  // A brief one-time pulse around the map's edge right as a NEW line's
+  // drawing session starts (see index.css's fence-draw-hint keyframes) —
+  // connects "I clicked Create a Fence Line" to "now look at the map"
+  // more directly than text alone in a corner card. Scoped to isDrawing
+  // specifically (not isExtending/gate-placement, which a user reaches
+  // via more advanced, already-familiar flows). Re-fires every time a
+  // NEW line's drawing starts, not just the very first ever — cheap and
+  // harmless to repeat, unlike the INSTRUCTIONS card, which genuinely
+  // only shows once per project.
+  const [showDrawHint, setShowDrawHint] = useState(false);
+  useEffect(() => {
+    if (!isDrawing) {
+      setShowDrawHint(false);
+      return;
+    }
+    setShowDrawHint(true);
+    const timer = setTimeout(() => setShowDrawHint(false), 2000);
+    return () => clearTimeout(timer);
+  }, [isDrawing]);
+
   // Leaflet sizes its tile grid off the container's dimensions at mount
   // time (or the last invalidateSize() call) — it doesn't notice a
   // CSS-driven resize on its own. The editor's right-hand panel switches
@@ -668,6 +711,10 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
 
       </MapContainer>
 
+      {showDrawHint && (
+        <div className="absolute inset-0 z-30 pointer-events-none rounded-lg fence-draw-hint" />
+      )}
+
       {isDrawing && !editingLine && (
         <Card className={cn("absolute top-4 z-40 bg-panel/95 text-panel-foreground backdrop-blur shadow-xl border-border/50 rounded-lg", isMobile ? "left-4 right-4 w-auto" : `${controlsPosition === 'left' ? 'left-4' : 'right-4'} w-full max-w-md lg:w-96 p-4`)}>
           <h3 className={cn("font-display font-bold text-lg flex items-center gap-2", isMobile ? "mb-0 p-4" : "mb-4")}><Ruler className="w-5 h-5 text-primary" /> New Fence Line</h3>
@@ -714,7 +761,22 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
       )}
 
       <div className="absolute bottom-4 left-4 z-40 bg-background/80 backdrop-blur px-3 py-1.5 rounded-full text-xs font-medium border shadow-sm">
-        {placingGateType ? `Click on the highlighted line to place the ${placingGateType} gate` : isExtending ? "Click on the map to extend the line" : editingLine ? "Drag points to edit the line or click an endpoint to extend" : isDrawing ? "Click on map to place fence posts" : "Select a line to edit or create a new one"}
+        {placingGateType
+          ? `Click on the highlighted line to place the ${placingGateType} gate`
+          : isExtending
+          ? "Click on the map to extend the line"
+          : editingLine
+          ? "Drag points to edit the line or click an endpoint to extend"
+          : isDrawing
+          // Progressive, not a static message regardless of progress —
+          // matches NewFenceLineCard's own "click the first point again
+          // to finish" promise once there's an actual line to close.
+          ? points.length === 0
+            ? "Click on the map to place your first fence post"
+            : points.length === 1
+            ? "Click to add your next post"
+            : "Click to add another post, or click your first post again to finish"
+          : "Select a line to edit or create a new one"}
       </div>
 
       <div className="absolute bottom-4 right-4 z-40 flex gap-2">

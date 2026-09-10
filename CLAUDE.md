@@ -1255,6 +1255,52 @@ groups both under a "GATES" section with working Lowe's product links
 now), deleted the double gate and confirmed the estimate dropped back
 to exactly one hardware kit with the cane bolt gone.
 
+## First-fence-line onboarding clarity (2026-09-10)
+
+Direct feedback: clicking "Create a Fence Line" didn't clearly communicate
+what to do next — the map itself gave no signal that a click there now
+meant something different than panning. Three fixes, all in
+`MapEditorComponent.tsx` / `index.css`:
+
+1. **Crosshair cursor while placing a point** (drawing a new line,
+   extending one, or placing a gate). Real gotcha hit while building
+   this: `MapContainer`'s `className` prop only applies once, at the
+   initial imperative `L.map(...)` construction — react-leaflet doesn't
+   re-render it on later prop changes (confirmed live: setting it
+   conditionally via `cn()` silently never took effect after mount, same
+   category of "imperatively-owned DOM node" gotcha as the ResizeObserver
+   effect elsewhere in this file needing `map.getContainer()` directly
+   rather than relying on React's normal prop diffing). Fixed the same
+   way: a `useEffect` toggling the class directly via
+   `mapRef.current.getContainer().classList.toggle(...)`. The CSS itself
+   needs `!important` (`.leaflet-container.cursor-crosshair-map` in
+   `index.css`) since Leaflet sets its own cursor directly on
+   `.leaflet-container`/`.leaflet-interactive`.
+2. **Progressive status-pill text**, not a static message regardless of
+   progress — it used to say "Click on map to place fence posts" the
+   whole time, whether 0 or 3 points were placed. Now: "place your first
+   fence post" → (1 point) "add your next post" → (2+) "add another
+   post, or click your first post again to finish" — the last matching
+   `NewFenceLineCard`'s own existing "click the first point again to
+   finish" promise, not a new behavior.
+3. **A one-time pulse around the map's edge** the moment a new line's
+   drawing session starts (`.fence-draw-hint` keyframes, 2s, fades to
+   nothing on its own) — connects "I clicked the button" to "now look at
+   the map" more directly than text in a corner card, since that's the
+   one thing none of the existing guidance actually pointed at. Scoped to
+   starting a brand-new line specifically, not extending one or placing a
+   gate (more advanced, already-familiar actions by then). Respects
+   `prefers-reduced-motion`.
+
+Verified live end-to-end: registered a fresh test account, created a
+property, opened its auto-created empty fence project, and confirmed all
+three — cursor genuinely reads `crosshair` (checked via computed style,
+not just the class being present), the pill text updates correctly at
+0/1/2+ points, and the pulse element appears immediately then is gone
+~2s later — with zero regression to actually drawing and saving a real
+line (a real two-point line placed via simulated clicks came back with a
+correct computed length).
+
 ## Map editor polish + a real latent Tooltip bug (2026-08-29)
 
 Four separate pieces of direct user feedback after trying the gate

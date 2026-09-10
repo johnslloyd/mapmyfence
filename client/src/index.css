@@ -118,6 +118,47 @@
   @apply font-sans text-sm m-3;
 }
 
+/* While placing a point (drawing a new line, extending one, or placing a
+   gate — see MapEditorComponent's isPlacingPoint), the cursor should read
+   as "click to place," not Leaflet's default pan/grab cursor — the map
+   surface is the one place a user's attention actually is, and it
+   previously gave zero visual signal that clicking now did something
+   different than panning. `!important` is needed here: Leaflet sets its
+   own cursor directly on `.leaflet-container` (and on `.leaflet-interactive`
+   for hoverable vector layers like an existing fence line), so a plain
+   utility class of equal specificity can lose depending on stylesheet
+   order — this guarantees it wins in both cases. */
+.leaflet-container.cursor-crosshair-map,
+.leaflet-container.cursor-crosshair-map .leaflet-interactive {
+  cursor: crosshair !important;
+}
+
+/* One-time pulse around the map's edge the moment a new-line drawing
+   session starts — see MapEditorComponent's showDrawHint. All the other
+   guidance (the New Fence Line card, the bottom status pill) lives in
+   chrome around the edges of the screen; nothing previously drew the eye
+   to the map surface itself, which is where the actual next action needs
+   to happen. Plays once and fades to nothing on its own — not a lasting
+   decoration, and never fires again after the first line existed if the
+   drawing entrance is re-triggered on a later line.
+   prefers-reduced-motion: OK to skip per the artifact/accessibility
+   convention elsewhere in this app — this is a decorative hint, not
+   information the user only gets from the animation (the card + pill
+   text convey the same thing statically). */
+@keyframes fence-draw-hint {
+  0% { box-shadow: inset 0 0 0 4px hsl(var(--primary) / 0.65); opacity: 1; }
+  100% { box-shadow: inset 0 0 0 4px hsl(var(--primary) / 0); opacity: 0; }
+}
+.fence-draw-hint {
+  animation: fence-draw-hint 2s ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fence-draw-hint {
+    animation: none;
+    display: none;
+  }
+}
+
 /* Blueprint theme's one signature decorative flourish — the survey/
    grid-paper texture from the rebrand mockup. Deliberately scoped to
    the guest homepage hero (Dashboard.tsx) only, not the whole app —
