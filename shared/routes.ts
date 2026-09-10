@@ -202,6 +202,72 @@ export const api = {
       },
     },
   },
+  // Business tier, Phase 1 (2026-09-10) — the org member's OWN view of
+  // their business, distinct from api.admin's platform-admin-only org
+  // CRUD above. Deliberately named "my organization," singular: this
+  // app treats a user's first/only org membership as the one that
+  // matters for now (see server/routes.ts's own comment on that
+  // simplification) — a real multi-org picker is Phase 2 territory,
+  // once it's actually needed.
+  myOrganization: {
+    get: {
+      method: 'GET' as const,
+      path: '/api/my-organization',
+      responses: {
+        200: z.any(), // (Organization & { role: "admin" | "member" }) | null
+      },
+    },
+    // Admin-only (checked server-side, not just a client-side gate) —
+    // contact info shown on every quote this business sends, so it's
+    // treated with the same care as membership changes, not a casual
+    // profile edit any member can make.
+    update: {
+      method: 'PUT' as const,
+      path: '/api/my-organization',
+      input: z.object({
+        name: z.string().min(1).optional(),
+        phone: z.string().nullable().optional(),
+        email: z.string().email().nullable().optional(),
+      }),
+      responses: {
+        200: z.any(),
+        400: errorSchemas.validation,
+        403: errorSchemas.notFound,
+      },
+    },
+  },
+  // Business tier, Phase 1 — the actual quote-send loop. Create is
+  // scoped under a project (POST /api/projects/:id/quotes, not a
+  // top-level /api/quotes) since a quote only ever makes sense attached
+  // to one project's fence-line data; getPublic is the one endpoint in
+  // this entire app meant to be reachable with NO session at all, same
+  // shape as password reset's token-redeem route. See CLAUDE.md's Phase
+  // 1 write-up and quotes' own shared/schema.ts comment for the full
+  // "why a snapshot, why no accept step yet" reasoning.
+  quotes: {
+    create: {
+      method: 'POST' as const,
+      path: '/api/projects/:id/quotes',
+      input: z.object({
+        customerName: z.string().optional(),
+        customerEmail: z.string().email(),
+      }),
+      responses: {
+        201: z.any(), // { quote, publicUrl, emailSent: boolean }
+        400: errorSchemas.validation,
+        403: errorSchemas.notFound, // not an org member, or the project has no fence lines yet
+        404: errorSchemas.notFound,
+      },
+    },
+    getPublic: {
+      method: 'GET' as const,
+      path: '/api/quotes/public/:token',
+      responses: {
+        200: z.any(),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
   // A property is just an address — name/address/description, no type,
   // no status. See CLAUDE.md's "Property / Project restructure" section.
   properties: {

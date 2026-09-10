@@ -250,11 +250,27 @@ export const products = pgTable("products", {
 // business itself gets no extra fence-planning capability, it grants
 // every member Pro-tier access automatically for as long as they're on
 // the roster (see server/auth.ts's isEffectivelyPro). Deliberately does
-// NOT own properties or projects — see the projects table's own
-// businessId comment below for why that attachment point matters.
+// NOT own properties or projects — an org never appears as a FK on
+// `projects`/`properties` at all. A project is tagged to a business only
+// indirectly, through the `quotes` row that names it (`quotes.
+// organizationId`) — the actual thing a quote needs to know "who sent
+// this," not a general-purpose ownership link. This was a deliberate
+// choice over adding a `projects.organizationId` column: nothing in
+// Phase 1 needs "list every project this business has touched," only
+// "who is this specific quote from," so the narrower attachment point
+// is what actually gets built — see CLAUDE.md's Phase 1 write-up.
+//
+// `phone`/`email` (2026-09-10, Phase 1) are the business's own contact
+// info, shown on a sent quote — plain text, no verification, editable by
+// any admin member (see PUT /api/my-organization). Deliberately NOT
+// re-derived from the sending member's own personal account — a
+// business wants ITS number on a quote, not whichever member happened
+// to send it.
 export const organizations = pgTable("organizations", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -282,6 +298,56 @@ export const organizationMembers = pgTable("organization_members", {
   uniqueMembership: unique().on(table.organizationId, table.userId),
 }));
 
+// Business tier, Phase 1 (2026-09-10) — the actual hypothesis being
+// tested: can a solo pro send a customer a real, linked, bottom-line
+// quote and have them accept it. See CLAUDE.md's Phase 1 write-up for
+// the full reasoning; the short version of every non-obvious choice
+// below:
+//
+// - **Snapshot, not live-computed.** `totalLinearFeet`/`totalCost`, and
+//   the `businessName`/`businessPhone`/`businessEmail` trio, are all
+//   frozen at send time. A live-recalculated price could silently
+//   change what the customer was actually offered if retailer prices
+//   move, or if the sending business later edits its own contact info —
+//   same "freeze what was actually promised" reasoning as this app's
+//   password-reset token, just applied to a quote instead of a login
+//   credential.
+// - **`tokenHash`, never the raw token** — identical reasoning to
+//   `users.resetTokenHash`: the public link's token is SHA-256 hashed
+//   here; the raw value only ever exists in the emailed link and the
+//   incoming request that redeems it, so a DB leak can't hand out
+//   working quote links.
+// - **No `acceptedAt` (or any accept/status tracking) yet** — the
+//   accept button and any sent/viewed/accepted status view are
+//   explicitly deferred past this first slice (see CLAUDE.md); adding a
+//   nullable column later is the same cheap escape hatch every other
+//   incremental column in this file already uses, so there's no cost to
+//   waiting for it to actually be needed.
+// - **`createdByUserId` is a plain, unconstrained `text` column** — same
+//   convention as `events.userId`/`.targetUserId`: a quote is a
+//   historical record of what was actually sent, and shouldn't block or
+//   cascade off a later account change.
+// - **No itemized materials breakdown stored** — Phase 1's presentation
+//   is deliberately just linear-foot/bottom-line, not the DIY itemized
+//   list; storing only the two numbers that view actually shows avoids
+//   duplicating `calculateEstimate`'s real output into a second,
+//   potentially-stale copy for data this feature doesn't display.
+export const quotes = pgTable("quotes", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  organizationId: integer("organization_id").references(() => organizations.id).notNull(),
+  createdByUserId: text("created_by_user_id").notNull(),
+  customerName: text("customer_name"),
+  customerEmail: text("customer_email").notNull(),
+  businessName: text("business_name").notNull(),
+  businessPhone: text("business_phone"),
+  businessEmail: text("business_email"),
+  totalLinearFeet: doublePrecision("total_linear_feet").notNull(),
+  totalCost: doublePrecision("total_cost").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // === RELATIONS ===
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -301,6 +367,17 @@ export const organizationMembersRelations = relations(organizationMembers, ({ on
   user: one(users, {
     fields: [organizationMembers.userId],
     references: [users.id],
+  }),
+}));
+
+export const quotesRelations = relations(quotes, ({ one }) => ({
+  project: one(projects, {
+    fields: [quotes.projectId],
+    references: [projects.id],
+  }),
+  organization: one(organizations, {
+    fields: [quotes.organizationId],
+    references: [organizations.id],
   }),
 }));
 
@@ -373,6 +450,7 @@ export const insertYardBoundarySchema = createInsertSchema(yardBoundaries).omit(
 export const insertYardBoundaryPointSchema = createInsertSchema(yardBoundaryPoints).omit({ id: true });
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({ id: true, createdAt: true });
 export const insertOrganizationMemberSchema = createInsertSchema(organizationMembers).omit({ id: true, createdAt: true });
+export const insertQuoteSchema = createInsertSchema(quotes).omit({ id: true, createdAt: true, tokenHash: true });
 
 // === EXPLICIT API CONTRACT TYPES ===
 
@@ -395,6 +473,8 @@ export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
 export type OrganizationMember = typeof organizationMembers.$inferSelect;
 export type InsertOrganizationMember = z.infer<typeof insertOrganizationMemberSchema>;
+export type Quote = typeof quotes.$inferSelect;
+export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 
 // Detailed types for frontend. ProjectWithLines is what the fence editor
 // needs: the project's own fields (type/name/status) PLUS its parent

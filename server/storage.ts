@@ -1,12 +1,13 @@
 import {
   properties, projects, fenceLines, coordinates, gates, users, events,
-  organizations, organizationMembers,
+  organizations, organizationMembers, quotes,
   type InsertProperty, type PropertyWithProjects,
   type InsertProject, type ProjectWithLines,
   type FenceLine, type InsertFenceLine,
   type Coordinate, type InsertCoordinate,
   type Gate, type InsertGate,
   type Organization, type OrganizationMember,
+  type Quote, type InsertQuote,
 } from "@shared/schema";
 import { and, eq, isNull, desc, inArray } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -86,7 +87,12 @@ export interface IStorage {
   getOrganization(id: number): Promise<Organization | undefined>;
   getAllOrganizationsWithCounts(): Promise<any[]>;
   getOrganizationMembers(id: number): Promise<(OrganizationMember & { email: string })[]>;
-  getUserOrganizations(userId: string): Promise<Organization[]>;
+  // Includes the caller's own `role` on each org — Phase 1's "my
+  // business" routes (GET/PUT /api/my-organization) need to know
+  // whether the requester is an admin (only admins may edit contact
+  // info), and there's no other cheap way to get that alongside the
+  // org's own fields in one query.
+  getUserOrganizations(userId: string): Promise<(Organization & { role: "admin" | "member" })[]>;
   addOrganizationMember(organizationId: number, userId: string, role: "admin" | "member"): Promise<OrganizationMember>;
   removeOrganizationMember(organizationId: number, userId: string): Promise<void>;
   updateOrganizationMemberRole(organizationId: number, userId: string, role: "admin" | "member"): Promise<OrganizationMember>;
@@ -100,6 +106,11 @@ export interface IStorage {
   // following their own already-established data-access convention,
   // not accidental duplication.
   isUserPro(userId: string): Promise<boolean>;
+  // Phase 1 (2026-09-10) — see quotes' own schema comment for the full
+  // "why a snapshot, why tokenHash-not-token" reasoning.
+  updateOrganizationProfile(id: number, data: { name?: string; phone?: string | null; email?: string | null }): Promise<Organization>;
+  createQuote(data: InsertQuote & { tokenHash: string }): Promise<Quote>;
+  getQuoteByTokenHash(tokenHash: string): Promise<Quote | undefined>;
 }
 
 // Thrown by removeOrganizationMember/updateOrganizationMemberRole when
@@ -354,12 +365,44 @@ export class DatabaseStorage implements IStorage {
       .where(eq(organizationMembers.organizationId, id));
   }
 
-  async getUserOrganizations(userId: string): Promise<Organization[]> {
-    return await this.db
-      .select({ id: organizations.id, name: organizations.name, createdAt: organizations.createdAt })
+  async getUserOrganizations(userId: string): Promise<(Organization & { role: "admin" | "member" })[]> {
+    const rows = await this.db
+      .select({
+        id: organizations.id,
+        name: organizations.name,
+        phone: organizations.phone,
+        email: organizations.email,
+        createdAt: organizations.createdAt,
+        role: organizationMembers.role,
+      })
       .from(organizationMembers)
       .innerJoin(organizations, eq(organizationMembers.organizationId, organizations.id))
       .where(eq(organizationMembers.userId, userId));
+    return rows as (Organization & { role: "admin" | "member" })[];
+  }
+
+  async updateOrganizationProfile(id: number, data: { name?: string; phone?: string | null; email?: string | null }): Promise<Organization> {
+    const [updated] = await this.db
+      .update(organizations)
+      .set(data)
+      .where(eq(organizations.id, id))
+      .returning();
+    return updated;
+  }
+
+  // tokenHash is the SHA-256 hash of the raw public-link token — the
+  // caller (the route) generates the raw token, hashes it, and passes
+  // the hash here; the raw value is never persisted, same convention as
+  // users.resetTokenHash. See quotes' own schema comment for the full
+  // reasoning on every other snapshot field.
+  async createQuote(data: InsertQuote & { tokenHash: string }): Promise<Quote> {
+    const [quote] = await this.db.insert(quotes).values(data).returning();
+    return quote;
+  }
+
+  async getQuoteByTokenHash(tokenHash: string): Promise<Quote | undefined> {
+    const [quote] = await this.db.select().from(quotes).where(eq(quotes.tokenHash, tokenHash)).limit(1);
+    return quote;
   }
 
   async addOrganizationMember(organizationId: number, userId: string, role: "admin" | "member"): Promise<OrganizationMember> {

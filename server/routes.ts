@@ -6,6 +6,8 @@ import { api, FREE_PROPERTY_LIMIT } from "@shared/routes";
 import { z } from "zod";
 import { logEvent } from "./events";
 import { lookupParcel, ParcelServiceUnavailableError } from "./parcels";
+import { sendEmail } from "./email";
+import crypto from "crypto";
 
 // Middleware to check if the user is authenticated
 const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
@@ -558,6 +560,161 @@ export async function registerRoutes(
       }
       console.error('Failed to remove organization member', err);
       res.status(500).json({ message: 'Failed to remove organization member' });
+    }
+  });
+
+  // === BUSINESS TIER, PHASE 1 — the org member's own "my business" +
+  // quote-send routes. Unlike everything under api.admin.* above, these
+  // are gated on real org membership (via storage.getUserOrganizations),
+  // not users.isAdmin — a platform Staff account and a business's own
+  // admin are two different roles, see shared/schema.ts's organizations
+  // comment. ===
+
+  app.get(api.myOrganization.get.path, isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const orgs = await storage.getUserOrganizations(userId);
+      // First/only org — see api.myOrganization's own comment on this
+      // simplification. Real multi-org support (a picker) is Phase 2.
+      res.json(orgs[0] || null);
+    } catch (err: any) {
+      console.error('Failed to get my organization', err);
+      res.status(500).json({ message: 'Failed to load your business' });
+    }
+  });
+
+  app.put(api.myOrganization.update.path, isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const input = api.myOrganization.update.input.parse(req.body);
+      const orgs = await storage.getUserOrganizations(userId);
+      const org = orgs[0];
+      if (!org) {
+        return res.status(403).json({ message: "You're not part of a business yet." });
+      }
+      if (org.role !== "admin") {
+        return res.status(403).json({ message: "Only a business admin can edit its contact info." });
+      }
+      const updated = await storage.updateOrganizationProfile(org.id, input);
+      res.json(updated);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message || "Invalid input" });
+      }
+      console.error('Failed to update my organization', err);
+      res.status(500).json({ message: 'Failed to update your business' });
+    }
+  });
+
+  app.post(api.quotes.create.path, isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const projectId = Number(req.params.id);
+      const input = api.quotes.create.input.parse(req.body);
+
+      const orgs = await storage.getUserOrganizations(userId);
+      const org = orgs[0];
+      if (!org) {
+        return res.status(403).json({ message: "Sending a quote requires being part of a business — this is a Pro/DIY account today." });
+      }
+
+      // Ownership-gated the same way GET /api/projects/:id/estimates
+      // already is — a quote is sent off a project the sender actually
+      // has access to, same as viewing its estimate. This app doesn't
+      // (yet) let one business member send a quote for another
+      // member's own project — see CLAUDE.md's Phase 1 write-up.
+      const project = await storage.getProject(projectId, userId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const totalLinearFeet = project.fenceLines.reduce((acc, line) => acc + (line.length || 0), 0);
+      if (totalLinearFeet === 0) {
+        return res.status(400).json({ message: "Draw at least one fence line before sending a quote." });
+      }
+
+      // Same calculateEstimate call every other estimate view already
+      // uses — the bottom-line number is the cheapest store's real
+      // total, not a separately-computed "quote price." Markup/labor
+      // are explicitly NOT part of Phase 1 (see the plan doc) — this is
+      // the real material cost, presented as a linear-foot rate and a
+      // bottom line instead of an itemized list.
+      const estimate = await calculateEstimate(
+        project.fenceLines.map((line) => ({ length: line.length || 0, material: line.material, height: line.height })),
+        project.fenceLines.flatMap((line) => (line.gates || []).map((g) => ({ type: g.type }))),
+      );
+      const cheapest = estimate.options[0];
+      if (!cheapest) {
+        return res.status(400).json({ message: "No store can currently price every material this project needs — can't generate a quote yet." });
+      }
+
+      const rawToken = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+      const quote = await storage.createQuote({
+        projectId,
+        organizationId: org.id,
+        createdByUserId: userId,
+        customerName: input.customerName ?? null,
+        customerEmail: input.customerEmail,
+        // Snapshotted from the business's CURRENT profile at send
+        // time — see quotes' own schema comment for why this isn't a
+        // live join instead.
+        businessName: org.name,
+        businessPhone: org.phone ?? null,
+        businessEmail: org.email ?? null,
+        totalLinearFeet,
+        totalCost: cheapest.totalCost,
+        tokenHash,
+      });
+
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const publicUrl = `${origin}/quotes/${rawToken}`;
+      const pricePerFoot = quote.totalCost / quote.totalLinearFeet;
+
+      const emailSent = await sendEmail({
+        to: input.customerEmail,
+        subject: `Your fence quote from ${org.name}`,
+        text: `${org.name} sent you a fence quote for ${project.name}: ${totalLinearFeet.toFixed(0)} ft at $${pricePerFoot.toFixed(2)}/ft — $${quote.totalCost.toFixed(2)} total.\n\nView it here:\n${publicUrl}`,
+        html: `<p><strong>${org.name}</strong> sent you a fence quote for <strong>${project.name}</strong>:</p><p>${totalLinearFeet.toFixed(0)} ft at $${pricePerFoot.toFixed(2)}/ft &mdash; <strong>$${quote.totalCost.toFixed(2)} total</strong></p><p><a href="${publicUrl}">View your quote</a></p>`,
+      });
+
+      res.status(201).json({ quote, publicUrl, emailSent });
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message || "Invalid input" });
+      }
+      console.error('Failed to create quote', err);
+      res.status(500).json({ message: 'Failed to create quote' });
+    }
+  });
+
+  // The one route in this entire app meant to be reachable with NO
+  // session at all — same shape as /api/reset-password's token-redeem
+  // route. Looks up by tokenHash (never the raw token — see quotes'
+  // schema comment), and returns only what a customer actually needs to
+  // see: business branding + the linear-foot/bottom-line numbers. No
+  // internal ids beyond what's already public in the URL itself.
+  app.get(api.quotes.getPublic.path, async (req, res) => {
+    try {
+      const rawToken = req.params.token;
+      const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+      const quote = await storage.getQuoteByTokenHash(tokenHash);
+      if (!quote) {
+        return res.status(404).json({ message: "This quote link isn't valid." });
+      }
+      res.json({
+        customerName: quote.customerName,
+        businessName: quote.businessName,
+        businessPhone: quote.businessPhone,
+        businessEmail: quote.businessEmail,
+        totalLinearFeet: quote.totalLinearFeet,
+        totalCost: quote.totalCost,
+        createdAt: quote.createdAt,
+      });
+    } catch (err: any) {
+      console.error('Failed to get public quote', err);
+      res.status(500).json({ message: 'Failed to load quote' });
     }
   });
 
