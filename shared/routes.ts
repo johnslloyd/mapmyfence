@@ -250,9 +250,43 @@ export const api = {
         // schema comment); ORG_LOGO_MAX_CHARS caps it well under
         // Postgres's comfort zone. null explicitly means "remove it."
         logoData: z.string().max(ORG_LOGO_MAX_CHARS).nullable().optional(),
+        // Phase 3 — see organizations.teardownRatePerFoot's own schema
+        // comment. Non-negative since it's an add-on charge, never a
+        // discount; null explicitly means "we don't offer teardown."
+        teardownRatePerFoot: z.number().min(0).nullable().optional(),
       }),
       responses: {
         200: z.any(),
+        400: errorSchemas.validation,
+        403: errorSchemas.notFound,
+      },
+    },
+    // Business tier, Phase 3 — the rate sheet itself. A bulk endpoint,
+    // not one route per (material, height) cell — the editor UI
+    // (Business.tsx) always submits its whole small grid at once, and
+    // storage.setOrganizationRates already treats each entry as an
+    // independent upsert-or-delete (a null ratePerFoot removes that
+    // row), so partial edits are still safe to send as a full array.
+    getRates: {
+      method: 'GET' as const,
+      path: '/api/my-organization/rates',
+      responses: {
+        200: z.array(z.any()), // OrganizationRate[]
+        403: errorSchemas.notFound,
+      },
+    },
+    setRates: {
+      method: 'PUT' as const,
+      path: '/api/my-organization/rates',
+      input: z.object({
+        rates: z.array(z.object({
+          material: z.string(),
+          height: z.number().int(),
+          ratePerFoot: z.number().min(0).nullable(),
+        })),
+      }),
+      responses: {
+        200: z.array(z.any()),
         400: errorSchemas.validation,
         403: errorSchemas.notFound,
       },
@@ -333,10 +367,17 @@ export const api = {
       input: z.object({
         customerName: z.string().optional(),
         customerEmail: z.string().email(),
+        // Phase 3 — opt-in per quote, not assumed: most quotes are a
+        // new build with nothing to remove first. Only meaningful (and
+        // only actually charged) if the business has set a
+        // teardownRatePerFoot; the route ignores this otherwise rather
+        // than erroring, since a stray true from a stale form shouldn't
+        // block sending.
+        includeTeardown: z.boolean().optional(),
       }),
       responses: {
         201: z.any(), // { quote, publicUrl, emailSent: boolean }
-        400: errorSchemas.validation,
+        400: errorSchemas.validation, // also covers "set your rate for X material at Y ft first"
         403: errorSchemas.notFound, // not an org member, or the project has no fence lines yet
         404: errorSchemas.notFound,
       },

@@ -282,8 +282,59 @@ export const organizations = pgTable("organizations", {
   // shared/routes.ts) costs nothing extra to keep here. Revisit if
   // logos turn out to need real CDN delivery at scale.
   logoData: text("logo_data"),
+  // Phase 3 (2026-09-10) — a flat, material/height-agnostic add-on rate
+  // for tearing down an EXISTING fence before building the new one.
+  // Deliberately NOT a row in organizationRates below: teardown isn't
+  // about what's being BUILT (material/height), it's about what's
+  // being removed — one number covers it regardless of the new fence's
+  // material, and it's opt-in per quote (see quotes.includesTeardown).
+  teardownRatePerFoot: doublePrecision("teardown_rate_per_foot"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// Phase 3 (2026-09-10) — the business's OWN sell rate per linear foot,
+// set by material AND height (a taller fence costs more to build, same
+// real-world reasoning `products.forHeight` already models for retail
+// cost). This is a genuine pivot from Phase 1: a sent quote's bottom-
+// line price used to be the real Lowe's/Home Depot material cost
+// (`calculateEstimate`'s output) presented as a rate; it's now this —
+// the business's own price, which fully REPLACES that calculation for
+// quote creation. Direct product decision, not a default: a contractor
+// can't hand a customer an itemized Lowe's receipt (this app's own
+// original framing for the linear-foot view), and exposing PostPlotter's
+// computed retail cost as the quote total was already halfway to that
+// mistake — this closes the gap. `calculateEstimate` and the real
+// material cost are STILL used for the DIYer's own itemized view
+// (Editor.tsx's MaterialEstimates/ShoppingList) — nothing there changed.
+//
+// A row-per-(material, height) table, not 6 flat columns on
+// `organizations` — this app's own `material` values have already
+// grown once before (pine / cedar / pine-post-cedar-picket, added
+// 2026-09-03, see CLAUDE.md), and a table survives that kind of growth
+// without a schema migration each time, the same reasoning `products`
+// itself already uses (type/store/material/forHeight as row dimensions,
+// not one column per combination). Missing = "this business doesn't
+// quote this material/height yet," not "$0" — a project needing an
+// unset combination blocks quote creation with a clear message (see
+// server/routes.ts) rather than silently pricing it free.
+export const organizationRates = pgTable("organization_rates", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organization_id").references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
+  // Matches fenceLines.material's real values exactly — "wood_pine" |
+  // "wood_cedar" | "wood_pine_cedar_picket" (see EditFenceLineCard.tsx's
+  // Material select). Kept as free text, same as fenceLines.material
+  // itself, rather than a native enum — this app's own convention (see
+  // "Database migrations" in CLAUDE.md on why Drizzle's `enum` option
+  // is TypeScript-only) already makes adding a 4th material combo free.
+  material: text("material").notNull(),
+  height: integer("height").notNull(),
+  ratePerFoot: doublePrecision("rate_per_foot").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  // One rate per (business, material, height) — setting a new rate for
+  // a combination that already has one is an UPDATE, not a second row.
+  uniqueRate: unique().on(table.organizationId, table.material, table.height),
+}));
 
 // One row per person on a business's roster. `role` is per-membership,
 // not a single fixed ownerId on the organization — deliberately, so a
@@ -358,7 +409,22 @@ export const quotes = pgTable("quotes", {
   // in this phase: a business later replacing or removing its logo
   // shouldn't retroactively change what an already-sent quote shows.
   businessLogoData: text("business_logo_data"),
+  // Phase 3 (2026-09-10) — whether teardown of an existing fence was
+  // included in THIS quote's total. Opt-in per quote (see
+  // POST /api/projects/:id/quotes's `includeTeardown` input) — most
+  // quotes are new-build-only, so this isn't assumed. `totalCost` below
+  // already has any teardown charge baked in; this flag is purely so
+  // the sent-quotes rollup and the customer-facing view can say what
+  // was actually included, not a separate amount to add at read time.
+  includesTeardown: boolean("includes_teardown").notNull().default(false),
   totalLinearFeet: doublePrecision("total_linear_feet").notNull(),
+  // Phase 3 — the business's OWN rate-based price (organizationRates ×
+  // length, summed per line, plus teardown if included). Was the real
+  // Lowe's/Home Depot material cost through Phase 1/2; see
+  // organizationRates' own schema comment for the full reasoning on
+  // why that changed. Still the field a sent quote's total lives in —
+  // no rename, since "the bottom-line total" is the same concept, just
+  // sourced differently now.
   totalCost: doublePrecision("total_cost").notNull(),
   tokenHash: text("token_hash").notNull().unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -393,6 +459,13 @@ export const quotesRelations = relations(quotes, ({ one }) => ({
   }),
   organization: one(organizations, {
     fields: [quotes.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+export const organizationRatesRelations = relations(organizationRates, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [organizationRates.organizationId],
     references: [organizations.id],
   }),
 }));
@@ -467,6 +540,7 @@ export const insertYardBoundaryPointSchema = createInsertSchema(yardBoundaryPoin
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({ id: true, createdAt: true });
 export const insertOrganizationMemberSchema = createInsertSchema(organizationMembers).omit({ id: true, createdAt: true });
 export const insertQuoteSchema = createInsertSchema(quotes).omit({ id: true, createdAt: true, tokenHash: true });
+export const insertOrganizationRateSchema = createInsertSchema(organizationRates).omit({ id: true, createdAt: true });
 
 // === EXPLICIT API CONTRACT TYPES ===
 
@@ -491,6 +565,8 @@ export type OrganizationMember = typeof organizationMembers.$inferSelect;
 export type InsertOrganizationMember = z.infer<typeof insertOrganizationMemberSchema>;
 export type Quote = typeof quotes.$inferSelect;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
+export type OrganizationRate = typeof organizationRates.$inferSelect;
+export type InsertOrganizationRate = z.infer<typeof insertOrganizationRateSchema>;
 
 // Detailed types for frontend. ProjectWithLines is what the fence editor
 // needs: the project's own fields (type/name/status) PLUS its parent

@@ -9,6 +9,18 @@ import { lookupParcel, ParcelServiceUnavailableError } from "./parcels";
 import { sendEmail } from "./email";
 import crypto from "crypto";
 
+// Same labels client/src/lib/estimates.ts's MATERIAL_LABELS already
+// uses for the DIYer-facing badges — duplicated here rather than
+// imported (client code isn't reachable from the server bundle) purely
+// for the missing-rate error message in POST /api/projects/:id/quotes,
+// so "set your rate for X" reads like this app's own vocabulary
+// instead of a raw material value.
+const MATERIAL_LABELS: Record<string, string> = {
+  wood_pine: "Pine",
+  wood_cedar: "Cedar",
+  wood_pine_cedar_picket: "Pine (Cedar Pickets)",
+};
+
 // Middleware to check if the user is authenticated
 const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
   if (!req.isAuthenticated()) {
@@ -738,6 +750,50 @@ export async function registerRoutes(
     }
   });
 
+  // Business tier, Phase 3 — the rate sheet. Read is open to any
+  // member (same reasoning as listQuotes above — seeing the rates
+  // isn't the sensitive action, changing them is); write is admin-only,
+  // same gate as every other business-profile change.
+  app.get(api.myOrganization.getRates.path, isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const orgs = await storage.getUserOrganizations(userId);
+      const org = orgs[0];
+      if (!org) {
+        return res.status(403).json({ message: "You're not part of a business yet." });
+      }
+      const rates = await storage.getOrganizationRates(org.id);
+      res.json(rates);
+    } catch (err: any) {
+      console.error('Failed to get organization rates', err);
+      res.status(500).json({ message: 'Failed to load your rates' });
+    }
+  });
+
+  app.put(api.myOrganization.setRates.path, isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const input = api.myOrganization.setRates.input.parse(req.body);
+      const orgs = await storage.getUserOrganizations(userId);
+      const org = orgs[0];
+      if (!org) {
+        return res.status(403).json({ message: "You're not part of a business yet." });
+      }
+      if (org.role !== "admin") {
+        return res.status(403).json({ message: "Only a business admin can set pricing." });
+      }
+      await storage.setOrganizationRates(org.id, input.rates);
+      const rates = await storage.getOrganizationRates(org.id);
+      res.json(rates);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message || "Invalid input" });
+      }
+      console.error('Failed to set organization rates', err);
+      res.status(500).json({ message: 'Failed to save your rates' });
+    }
+  });
+
   app.post(api.quotes.create.path, isAuthenticated, async (req, res) => {
     try {
       const userId = (req.user as any).id;
@@ -765,20 +821,45 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Draw at least one fence line before sending a quote." });
       }
 
-      // Same calculateEstimate call every other estimate view already
-      // uses — the bottom-line number is the cheapest store's real
-      // total, not a separately-computed "quote price." Markup/labor
-      // are explicitly NOT part of Phase 1 (see the plan doc) — this is
-      // the real material cost, presented as a linear-foot rate and a
-      // bottom line instead of an itemized list.
-      const estimate = await calculateEstimate(
-        project.fenceLines.map((line) => ({ length: line.length || 0, material: line.material, height: line.height })),
-        project.fenceLines.flatMap((line) => (line.gates || []).map((g) => ({ type: g.type }))),
-      );
-      const cheapest = estimate.options[0];
-      if (!cheapest) {
-        return res.status(400).json({ message: "No store can currently price every material this project needs — can't generate a quote yet." });
+      // Phase 3 — the quote's bottom line is now the BUSINESS'S OWN
+      // rate per (material, height), not calculateEstimate's real
+      // Lowe's/Home Depot material cost (that's still what the DIYer's
+      // own itemized view uses — see MaterialEstimates/ShoppingList,
+      // unchanged). A contractor can't hand a customer an itemized
+      // Lowe's receipt; now they don't get PostPlotter's computed
+      // retail cost either — they get their own price. See
+      // organizationRates' shared/schema.ts comment for the full
+      // reasoning.
+      //
+      // Deliberately does NOT fall back to a "close enough" material
+      // (unlike the DIY estimate's legacy-value-defaults-to-cedar
+      // behavior) — an unset or unrecognized (material, height) blocks
+      // the quote with a specific, actionable message rather than
+      // guessing at what a business would charge for it.
+      const rates = await storage.getOrganizationRates(org.id);
+      const rateFor = (material: string | null, height: number | null) => {
+        const h = Math.round(height ?? 0);
+        return rates.find((r) => r.material === material && r.height === h)?.ratePerFoot;
+      };
+      const missing = new Set<string>();
+      let materialSubtotal = 0;
+      for (const line of project.fenceLines) {
+        const rate = rateFor(line.material, line.height);
+        if (rate === undefined) {
+          missing.add(`${MATERIAL_LABELS[line.material || ""] || line.material || "that material"} at ${Math.round(line.height ?? 0)} ft`);
+        } else {
+          materialSubtotal += rate * (line.length || 0);
+        }
       }
+      if (missing.size > 0) {
+        return res.status(400).json({
+          message: `Set your rate for ${Array.from(missing).join(", ")} on your Business page before sending this quote.`,
+        });
+      }
+
+      const includesTeardown = !!input.includeTeardown && org.teardownRatePerFoot != null;
+      const teardownCost = includesTeardown ? (org.teardownRatePerFoot as number) * totalLinearFeet : 0;
+      const totalCost = materialSubtotal + teardownCost;
 
       const rawToken = crypto.randomBytes(32).toString("hex");
       const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -798,20 +879,22 @@ export async function registerRoutes(
         // Phase 2 — snapshotted the same way the rest of the branding
         // trio already is; see quotes' own schema comment.
         businessLogoData: org.logoData ?? null,
+        includesTeardown,
         totalLinearFeet,
-        totalCost: cheapest.totalCost,
+        totalCost,
         tokenHash,
       });
 
       const origin = `${req.protocol}://${req.get("host")}`;
       const publicUrl = `${origin}/quotes/${rawToken}`;
       const pricePerFoot = quote.totalCost / quote.totalLinearFeet;
+      const teardownLine = includesTeardown ? ` (includes teardown of the existing fence)` : "";
 
       const emailSent = await sendEmail({
         to: input.customerEmail,
         subject: `Your fence quote from ${org.name}`,
-        text: `${org.name} sent you a fence quote for ${project.name}: ${totalLinearFeet.toFixed(0)} ft at $${pricePerFoot.toFixed(2)}/ft — $${quote.totalCost.toFixed(2)} total.\n\nView it here:\n${publicUrl}`,
-        html: `<p><strong>${org.name}</strong> sent you a fence quote for <strong>${project.name}</strong>:</p><p>${totalLinearFeet.toFixed(0)} ft at $${pricePerFoot.toFixed(2)}/ft &mdash; <strong>$${quote.totalCost.toFixed(2)} total</strong></p><p><a href="${publicUrl}">View your quote</a></p>`,
+        text: `${org.name} sent you a fence quote for ${project.name}: ${totalLinearFeet.toFixed(0)} ft at $${pricePerFoot.toFixed(2)}/ft — $${quote.totalCost.toFixed(2)} total${teardownLine}.\n\nView it here:\n${publicUrl}`,
+        html: `<p><strong>${org.name}</strong> sent you a fence quote for <strong>${project.name}</strong>:</p><p>${totalLinearFeet.toFixed(0)} ft at $${pricePerFoot.toFixed(2)}/ft &mdash; <strong>$${quote.totalCost.toFixed(2)} total</strong>${teardownLine}</p><p><a href="${publicUrl}">View your quote</a></p>`,
       });
 
       res.status(201).json({ quote, publicUrl, emailSent });
@@ -844,6 +927,7 @@ export async function registerRoutes(
         businessPhone: quote.businessPhone,
         businessEmail: quote.businessEmail,
         businessLogoData: quote.businessLogoData,
+        includesTeardown: quote.includesTeardown,
         totalLinearFeet: quote.totalLinearFeet,
         totalCost: quote.totalCost,
         createdAt: quote.createdAt,

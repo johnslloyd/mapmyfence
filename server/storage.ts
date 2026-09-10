@@ -1,6 +1,6 @@
 import {
   properties, projects, fenceLines, coordinates, gates, users, events,
-  organizations, organizationMembers, quotes,
+  organizations, organizationMembers, quotes, organizationRates,
   type InsertProperty, type PropertyWithProjects,
   type InsertProject, type ProjectWithLines,
   type FenceLine, type InsertFenceLine,
@@ -8,6 +8,7 @@ import {
   type Gate, type InsertGate,
   type Organization, type OrganizationMember,
   type Quote, type InsertQuote,
+  type OrganizationRate,
 } from "@shared/schema";
 import { and, eq, isNull, desc, inArray } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -108,7 +109,7 @@ export interface IStorage {
   isUserPro(userId: string): Promise<boolean>;
   // Phase 1 (2026-09-10) — see quotes' own schema comment for the full
   // "why a snapshot, why tokenHash-not-token" reasoning.
-  updateOrganizationProfile(id: number, data: { name?: string; phone?: string | null; email?: string | null; logoData?: string | null }): Promise<Organization>;
+  updateOrganizationProfile(id: number, data: { name?: string; phone?: string | null; email?: string | null; logoData?: string | null; teardownRatePerFoot?: number | null }): Promise<Organization>;
   createQuote(data: InsertQuote & { tokenHash: string }): Promise<Quote>;
   getQuoteByTokenHash(tokenHash: string): Promise<Quote | undefined>;
   // Phase 2 — the "sent" rollup (see api.myOrganization.listQuotes's own
@@ -116,6 +117,15 @@ export interface IStorage {
   // plan describes). Joins in the project's name and the sender's email
   // purely for display — a quote row itself only stores ids for those.
   getOrganizationQuotes(organizationId: number): Promise<(Quote & { projectName: string; createdByEmail: string | null })[]>;
+  // Phase 3 — the business's own per-(material, height) sell rate. See
+  // organizationRates' own shared/schema.ts comment for the full
+  // reasoning. setOrganizationRates is a bulk upsert-or-delete: a
+  // positive ratePerFoot upserts that row, null/omitted deletes it (a
+  // business un-setting a rate it no longer offers) — matches how the
+  // rate editor UI naturally submits its whole small grid at once
+  // rather than one row-level mutation per cell.
+  getOrganizationRates(organizationId: number): Promise<OrganizationRate[]>;
+  setOrganizationRates(organizationId: number, rates: { material: string; height: number; ratePerFoot: number | null }[]): Promise<void>;
 }
 
 // Thrown by removeOrganizationMember/updateOrganizationMemberRole when
@@ -378,6 +388,14 @@ export class DatabaseStorage implements IStorage {
         phone: organizations.phone,
         email: organizations.email,
         logoData: organizations.logoData,
+        // Phase 3 — added here deliberately, not forgotten the way
+        // logoData itself briefly was in Phase 2 (see CLAUDE.md's
+        // Phase 2 write-up on that exact bug class: this explicit
+        // column list is the one place a newly-added organizations
+        // column has to be added a SECOND time, or it silently never
+        // reaches anything that reads via getUserOrganizations —
+        // including quote creation's rate lookups).
+        teardownRatePerFoot: organizations.teardownRatePerFoot,
         createdAt: organizations.createdAt,
         role: organizationMembers.role,
       })
@@ -387,7 +405,7 @@ export class DatabaseStorage implements IStorage {
     return rows as (Organization & { role: "admin" | "member" })[];
   }
 
-  async updateOrganizationProfile(id: number, data: { name?: string; phone?: string | null; email?: string | null; logoData?: string | null }): Promise<Organization> {
+  async updateOrganizationProfile(id: number, data: { name?: string; phone?: string | null; email?: string | null; logoData?: string | null; teardownRatePerFoot?: number | null }): Promise<Organization> {
     const [updated] = await this.db
       .update(organizations)
       .set(data)
@@ -432,6 +450,32 @@ export class DatabaseStorage implements IStorage {
       .where(eq(quotes.organizationId, organizationId))
       .orderBy(desc(quotes.createdAt));
     return rows.map((r) => ({ ...r.quote, projectName: r.projectName, createdByEmail: r.createdByEmail }));
+  }
+
+  async getOrganizationRates(organizationId: number): Promise<OrganizationRate[]> {
+    return await this.db.select().from(organizationRates).where(eq(organizationRates.organizationId, organizationId));
+  }
+
+  async setOrganizationRates(organizationId: number, rates: { material: string; height: number; ratePerFoot: number | null }[]): Promise<void> {
+    for (const r of rates) {
+      if (r.ratePerFoot === null || r.ratePerFoot === undefined) {
+        await this.db
+          .delete(organizationRates)
+          .where(and(
+            eq(organizationRates.organizationId, organizationId),
+            eq(organizationRates.material, r.material),
+            eq(organizationRates.height, r.height),
+          ));
+      } else {
+        await this.db
+          .insert(organizationRates)
+          .values({ organizationId, material: r.material, height: r.height, ratePerFoot: r.ratePerFoot })
+          .onConflictDoUpdate({
+            target: [organizationRates.organizationId, organizationRates.material, organizationRates.height],
+            set: { ratePerFoot: r.ratePerFoot },
+          });
+      }
+    }
   }
 
   async addOrganizationMember(organizationId: number, userId: string, role: "admin" | "member"): Promise<OrganizationMember> {
