@@ -485,9 +485,10 @@ export function useDeleteGate() {
 }
 
 // ============================================
-// ACCOUNT — self-serve, free during beta (see FREE_PROPERTY_LIMIT and
-// api.account.upgrade in shared/routes.ts). Pulled out as a shared hook
-// so the Account page's Plan card and AddPropertyDialog's at-the-limit
+// ACCOUNT — Pro access requires manual approval as of 2026-09-10 (see
+// FREE_PROPERTY_LIMIT and api.account.upgrade in shared/routes.ts —
+// this REQUESTS Pro, an admin grants it). Pulled out as a shared hook so
+// the Account page's Plan card and AddPropertyDialog's at-the-limit
 // prompt don't each hand-roll the same fetch.
 // ============================================
 
@@ -500,11 +501,16 @@ export function useUpgradeToPro() {
       if (!res.ok) throw new Error("Failed to upgrade");
       return api.account.upgrade.responses[200].parse(await res.json());
     },
-    onSuccess: () => {
-      toast({ title: "You're on Pro", description: "Unlimited properties, free during beta.", variant: "success" });
+    onSuccess: (data) => {
+      // plan can come back "pro" here without a request ever being made
+      // (the route's own already-Pro short-circuit) — only toast the
+      // "request sent" message for an actual new pending request.
+      if (data.plan !== "pro") {
+        toast({ title: "Request sent", description: "An admin will review your Pro access request shortly.", variant: "success" });
+      }
     },
     onError: () => {
-      toast({ title: "Error", description: "Couldn't upgrade right now. Try again in a moment.", variant: "destructive" });
+      toast({ title: "Error", description: "Couldn't send your request right now. Try again in a moment.", variant: "destructive" });
     },
   });
 }

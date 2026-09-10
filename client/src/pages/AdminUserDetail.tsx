@@ -1,9 +1,9 @@
 import { Layout } from "@/components/Layout";
 import { useRoute, Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { useAdminUser, useAdminProject, useAdminDeleteUser } from "@/hooks/use-admin";
+import { useAdminUser, useAdminProject, useAdminDeleteUser, useAdminApprovePro, useAdminDismissProRequest } from "@/hooks/use-admin";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Fence, Sprout, Shield, Trash2 } from "lucide-react";
+import { ArrowLeft, Fence, Sprout, Shield, Trash2, Sparkles, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,7 +19,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { PlanThumbnail } from "@/lib/planPreview";
 import { STORE_LABELS, MATERIAL_TYPE_LABELS, MATERIAL_TYPE_ORDER, consolidateMaterials } from "@/lib/estimates";
 import { cn } from "@/lib/utils";
@@ -86,6 +86,15 @@ export default function AdminUserDetail() {
           )}
         </div>
 
+        {/* The thing the Pro-request notification email actually links
+            here to see — see server/authRoutes.ts's POST
+            /api/account/upgrade. Only shown for a genuinely pending
+            request (plan hasn't already been granted or the request
+            already dismissed). */}
+        {targetUser.plan !== "pro" && targetUser.planRequestedAt && (
+          <ProRequestBanner targetUser={targetUser} />
+        )}
+
         <div>
           <h2 className="font-display font-semibold text-lg mb-3">Properties ({properties.length})</h2>
           {properties.length === 0 ? (
@@ -133,6 +142,48 @@ export default function AdminUserDetail() {
 
       <AdminProjectDialog projectId={openProjectId} onOpenChange={(open) => !open && setOpenProjectId(null)} />
     </Layout>
+  );
+}
+
+// The manual-approval Pro flow's actual review step — see
+// shared/schema.ts's planRequestedAt comment and
+// server/authRoutes.ts's POST /api/account/upgrade, which is what set
+// this. Unlike deleting a user, approving/dismissing isn't destructive
+// enough to need a confirm-dialog step — a plain click either way,
+// same weight as any other admin action here.
+function ProRequestBanner({ targetUser }: { targetUser: any }) {
+  const approve = useAdminApprovePro();
+  const dismiss = useAdminDismissProRequest();
+  const isBusy = approve.isPending || dismiss.isPending;
+
+  return (
+    <div className="flex items-center justify-between gap-4 flex-wrap rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
+      <div className="flex items-center gap-2 text-sm">
+        <Sparkles className="w-4 h-4 text-primary shrink-0" />
+        <span>
+          <strong>{targetUser.email}</strong> requested Pro access {formatDistanceToNow(new Date(targetUser.planRequestedAt), { addSuffix: true })}.
+        </span>
+      </div>
+      <div className="flex gap-2 shrink-0">
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5"
+          disabled={isBusy}
+          onClick={() => dismiss.mutate(targetUser.id)}
+        >
+          <X className="w-3.5 h-3.5" /> Dismiss
+        </Button>
+        <Button
+          size="sm"
+          className="gap-1.5"
+          disabled={isBusy}
+          onClick={() => approve.mutate(targetUser.id)}
+        >
+          <Sparkles className="w-3.5 h-3.5" /> {approve.isPending ? "Approving..." : "Approve Pro"}
+        </Button>
+      </div>
+    </div>
   );
 }
 

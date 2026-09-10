@@ -81,6 +81,54 @@ export function useAdminDeleteUser() {
   });
 }
 
+// The two possible responses to a pending Pro request — see
+// AdminUserDetail.tsx's "Pro access requested" banner. Both invalidate
+// getUser (this target's own detail fetch) and listUsers (the table's
+// plan/pending column), same pattern useAdminDeleteUser already uses.
+export function useAdminApprovePro() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const url = buildUrl(api.admin.approvePro.path, { id });
+      const res = await fetch(url, { method: api.admin.approvePro.method, credentials: "include" });
+      if (!res.ok) throw new Error("Failed to approve");
+      return res.json();
+    },
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: [api.admin.getUser.path, id] });
+      queryClient.invalidateQueries({ queryKey: [api.admin.listUsers.path] });
+      toast({ title: "Approved", description: "This account now has Pro access.", variant: "success" });
+    },
+    onError: () => {
+      toast({ title: "Couldn't approve", description: "Something went wrong. Try again.", variant: "destructive" });
+    },
+  });
+}
+
+export function useAdminDismissProRequest() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const url = buildUrl(api.admin.dismissProRequest.path, { id });
+      const res = await fetch(url, { method: api.admin.dismissProRequest.method, credentials: "include" });
+      if (!res.ok) throw new Error("Failed to dismiss");
+      return res.json();
+    },
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: [api.admin.getUser.path, id] });
+      queryClient.invalidateQueries({ queryKey: [api.admin.listUsers.path] });
+      toast({ title: "Dismissed", description: "The request was cleared without granting Pro.", variant: "success" });
+    },
+    onError: () => {
+      toast({ title: "Couldn't dismiss", description: "Something went wrong. Try again.", variant: "destructive" });
+    },
+  });
+}
+
 export function useAdminEvents() {
   return useQuery({
     queryKey: [api.admin.listEvents.path],

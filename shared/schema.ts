@@ -17,12 +17,26 @@ export const users = pgTable("users", {
   resetTokenHash: text("reset_token_hash"),
   resetTokenExpiresAt: timestamp("reset_token_expires_at"),
   // Free accounts are capped at FREE_PROPERTY_LIMIT properties (see
-  // server/routes.ts); Pro is unlimited. No billing exists yet — Pro is
-  // self-serve and free during beta (Account page's "Upgrade" button,
-  // POST /api/account/upgrade), a deliberate, explicit choice over a
-  // manual-grant-only flow: it's low-friction AND doubles as a real
-  // signal of who wants more, before any billing work is ever built.
+  // server/routes.ts); Pro is unlimited, and (2026-09-10) gates access
+  // to the Mapbox-powered map tier too — see the Account tiers section
+  // in CLAUDE.md for the cost reasoning. No billing exists yet, and
+  // upgrading is no longer self-serve as of the same date: a user
+  // REQUESTS Pro (planRequestedAt below), an admin manually approves it
+  // (POST /api/account/upgrade sets the request; POST
+  // /api/admin/users/:id/approve-pro grants it) — a deliberate,
+  // explicit choice to curate who gets a real, cost-sensitive external
+  // dependency (Mapbox) during beta, not a payment gate.
   plan: text("plan", { enum: ["free", "pro"] }).default("free").notNull(),
+  // Null = no pending request. Set the moment a user asks for Pro
+  // (POST /api/account/upgrade); cleared either by approval (plan
+  // flips to "pro" at the same time) or by an admin dismissing the
+  // request without granting it. A user can be free with a pending
+  // request — plan alone doesn't capture that state, which is why this
+  // is a separate column rather than widening plan's enum to a third
+  // value: every existing plan === "pro" / !== "pro" check elsewhere in
+  // the app stays correct unchanged (a pending request is still "not
+  // pro" everywhere that matters — the property limit, Mapbox access).
+  planRequestedAt: timestamp("plan_requested_at"),
   // Gates /admin and the api.admin.* routes — checked server-side on
   // every admin route (server/adminRoutes.ts), never just hidden client-
   // side. False for everyone by default; there's no self-serve way to
@@ -163,9 +177,14 @@ export const events = pgTable("events", {
   // (2026-09-04) is the one admin_* event that's an ACTION, not a view —
   // targetUserId there points at a user row that's gone the instant
   // after the event is written; harmless, since targetUserId (like
-  // userId) carries no FK constraint to users.id.
+  // userId) carries no FK constraint to users.id. "pro_requested"
+  // (2026-09-10) fires when a user asks for Pro (userId = the
+  // requester); "admin_approved_pro"/"admin_dismissed_pro_request" are
+  // the admin's two possible responses to that request (userId = the
+  // admin, targetUserId = the requester) — the second and third
+  // admin_* ACTIONS after admin_deleted_user, same convention.
   type: text("type", {
-    enum: ["property_created", "project_created", "fence_line_created", "estimate_viewed", "account_created", "account_upgraded", "admin_viewed_users", "admin_viewed_user", "admin_viewed_project", "admin_deleted_user"],
+    enum: ["property_created", "project_created", "fence_line_created", "estimate_viewed", "account_created", "account_upgraded", "admin_viewed_users", "admin_viewed_user", "admin_viewed_project", "admin_deleted_user", "pro_requested", "admin_approved_pro", "admin_dismissed_pro_request"],
   }).notNull(),
   propertyId: integer("property_id"),
   projectId: integer("project_id"),

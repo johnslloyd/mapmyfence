@@ -18,15 +18,21 @@ function PlanCard() {
   const { data: properties } = useProperties();
   const upgrade = useUpgradeToPro();
   const isPro = user?.plan === "pro";
+  // A request is pending once planRequestedAt is set and hasn't been
+  // resolved into an actual "pro" plan yet — plan alone can't tell
+  // free-and-never-asked apart from free-and-waiting-on-review, which
+  // is exactly why planRequestedAt is its own column (see
+  // shared/schema.ts).
+  const isPending = !isPro && !!user?.planRequestedAt;
   const propertyCount = properties?.length ?? 0;
 
-  const handleUpgrade = async () => {
+  const handleRequest = async () => {
     try {
       const data = await upgrade.mutateAsync();
       // No dedicated "refresh the current user" call in useAuth — just
-      // merge the one field that actually changed, same shape the
-      // server itself just returned.
-      login({ ...user, plan: data.plan });
+      // merge the fields that actually changed, same shape the server
+      // itself just returned.
+      login({ ...user, plan: data.plan, planRequestedAt: data.planRequestedAt });
     } catch {
       // useUpgradeToPro already toasts the error.
     }
@@ -37,11 +43,15 @@ function PlanCard() {
       <CardHeader>
         <CardTitle className="text-lg flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" /> Plan
-          <Badge variant={isPro ? "default" : "secondary"} className="ml-1 capitalize">{user?.plan || "free"}</Badge>
+          <Badge variant={isPro ? "default" : "secondary"} className="ml-1 capitalize">
+            {isPro ? "pro" : isPending ? "Pending approval" : "free"}
+          </Badge>
         </CardTitle>
         <CardDescription>
           {isPro
             ? "Unlimited properties. Thanks for trying Pro early — it's free during beta."
+            : isPending
+            ? "Your request is with an admin for review — you'll be upgraded once it's approved."
             : `Free accounts can have up to ${FREE_PROPERTY_LIMIT} properties.`}
         </CardDescription>
       </CardHeader>
@@ -61,12 +71,20 @@ function PlanCard() {
               />
             </div>
           </div>
-          <p className="text-sm text-muted-foreground max-w-md mb-4">
-            Upgrade to Pro for unlimited properties — no payment info needed, it's free while PostPlotter is in beta.
-          </p>
-          <Button onClick={handleUpgrade} disabled={upgrade.isPending} className="gap-2">
-            <Sparkles className="w-4 h-4" /> {upgrade.isPending ? "Upgrading..." : "Upgrade to Pro — free during beta"}
-          </Button>
+          {isPending ? (
+            <p className="text-sm text-muted-foreground max-w-md">
+              Requested — no need to ask again, an admin has been notified.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground max-w-md mb-4">
+                Request Pro for unlimited properties and higher-resolution satellite imagery — no payment info needed, it's free while PostPlotter is in beta. An admin reviews each request.
+              </p>
+              <Button onClick={handleRequest} disabled={upgrade.isPending} className="gap-2">
+                <Sparkles className="w-4 h-4" /> {upgrade.isPending ? "Sending request..." : "Request Pro access"}
+              </Button>
+            </>
+          )}
         </CardContent>
       )}
     </Card>

@@ -403,6 +403,44 @@ export async function registerRoutes(
     }
   });
 
+  // The two possible responses to a pending Pro request (see
+  // POST /api/account/upgrade in authRoutes.ts, which sets it). Both
+  // real admin ACTIONS, not views — logged the same way admin_deleted_user
+  // already is.
+  app.post(api.admin.approvePro.path, isAdmin, async (req, res) => {
+    try {
+      const adminId = (req.user as any).id;
+      const targetId = req.params.id;
+      const targetUser = await storage.getUserById(targetId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      const updated = await storage.approveProUpgrade(targetId);
+      logEvent("admin_approved_pro", { userId: adminId, targetUserId: targetId });
+      res.json(updated);
+    } catch (err) {
+      console.error('Failed to approve Pro request', err);
+      res.status(500).json({ message: 'Failed to approve Pro request' });
+    }
+  });
+
+  app.post(api.admin.dismissProRequest.path, isAdmin, async (req, res) => {
+    try {
+      const adminId = (req.user as any).id;
+      const targetId = req.params.id;
+      const targetUser = await storage.getUserById(targetId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      const updated = await storage.dismissProRequest(targetId);
+      logEvent("admin_dismissed_pro_request", { userId: adminId, targetUserId: targetId });
+      res.json(updated);
+    } catch (err) {
+      console.error('Failed to dismiss Pro request', err);
+      res.status(500).json({ message: 'Failed to dismiss Pro request' });
+    }
+  });
+
   app.get(api.admin.getProject.path, isAdmin, async (req, res) => {
     try {
       const adminId = (req.user as any).id;

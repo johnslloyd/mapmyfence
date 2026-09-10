@@ -32,15 +32,18 @@ export const errorSchemas = {
 export const FREE_PROPERTY_LIMIT = 3;
 
 export const api = {
-  // No billing exists yet — self-serve, free during beta. See
-  // CLAUDE.md's "Account tiers" section and FREE_PROPERTY_LIMIT above
-  // for how `plan` actually gates property creation.
+  // No billing exists yet, and (2026-09-10) upgrading is no longer
+  // instant/self-serve — this REQUESTS Pro (sets planRequestedAt,
+  // emails every admin) rather than granting it; an admin approves via
+  // api.admin.approvePro below. See CLAUDE.md's "Account tiers" section
+  // and FREE_PROPERTY_LIMIT above for how `plan` actually gates
+  // property creation.
   account: {
     upgrade: {
       method: 'POST' as const,
       path: '/api/account/upgrade',
       responses: {
-        200: z.object({ plan: z.enum(['free', 'pro']) }),
+        200: z.object({ plan: z.enum(['free', 'pro']), planRequestedAt: z.string().nullable() }),
       },
     },
   },
@@ -100,6 +103,29 @@ export const api = {
       responses: {
         204: z.void(),
         400: errorSchemas.validation,
+        403: errorSchemas.notFound,
+        404: errorSchemas.notFound,
+      },
+    },
+    // The two possible responses to a pending Pro request (see
+    // account.upgrade above) — approve grants it (plan -> "pro"),
+    // dismiss clears the request without granting anything. Both are
+    // real admin ACTIONS, not views — audit-logged as
+    // admin_approved_pro/admin_dismissed_pro_request.
+    approvePro: {
+      method: 'POST' as const,
+      path: '/api/admin/users/:id/approve-pro',
+      responses: {
+        200: z.any(),
+        403: errorSchemas.notFound,
+        404: errorSchemas.notFound,
+      },
+    },
+    dismissProRequest: {
+      method: 'POST' as const,
+      path: '/api/admin/users/:id/dismiss-pro-request',
+      responses: {
+        200: z.any(),
         403: errorSchemas.notFound,
         404: errorSchemas.notFound,
       },

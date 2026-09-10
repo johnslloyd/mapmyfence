@@ -55,6 +55,18 @@ export interface IStorage {
   getProjectWithLines(id: number): Promise<ProjectWithLines | undefined>;
   // Real, permanent delete — the user row AND everything they own.
   deleteUserAndData(id: string): Promise<void>;
+
+  // Manual-approval Pro upgrade flow (2026-09-10) — see shared/schema.ts's
+  // planRequestedAt comment. The REQUEST side (setting planRequestedAt,
+  // notifying admins) lives directly in authRoutes.ts instead of here —
+  // that file already updates users.plan with raw `db` calls rather than
+  // through this interface (see its own POST /api/account/upgrade), so
+  // this only covers the ADMIN side, which already runs through
+  // storage via server/routes.ts's isAdmin-gated routes. approveProUpgrade
+  // grants it (plan -> "pro", request cleared); dismissProRequest clears
+  // the request without granting anything.
+  approveProUpgrade(id: string): Promise<any>;
+  dismissProRequest(id: string): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -230,6 +242,24 @@ export class DatabaseStorage implements IStorage {
       await tx.delete(properties).where(eq(properties.userId, id));
       await tx.delete(users).where(eq(users.id, id));
     });
+  }
+
+  async approveProUpgrade(id: string): Promise<any> {
+    const [updated] = await this.db
+      .update(users)
+      .set({ plan: "pro", planRequestedAt: null })
+      .where(eq(users.id, id))
+      .returning();
+    return stripSensitiveUserFields(updated);
+  }
+
+  async dismissProRequest(id: string): Promise<any> {
+    const [updated] = await this.db
+      .update(users)
+      .set({ planRequestedAt: null })
+      .where(eq(users.id, id))
+      .returning();
+    return stripSensitiveUserFields(updated);
   }
 
   // Three flat queries instead of one per user (or a SQL-level join) —

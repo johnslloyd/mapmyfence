@@ -56,6 +56,7 @@ export function AddPropertyDialog({
   const { data: properties } = useProperties({ enabled: isAuthenticated });
   const upgrade = useUpgradeToPro();
   const isAtLimit = isAuthenticated && user?.plan !== "pro" && (properties?.length ?? 0) >= FREE_PROPERTY_LIMIT;
+  const isProRequestPending = isAuthenticated && user?.plan !== "pro" && !!user?.planRequestedAt;
 
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
@@ -64,12 +65,12 @@ export function AddPropertyDialog({
   const handleUpgrade = async () => {
     try {
       const data = await upgrade.mutateAsync();
-      login({ ...user, plan: data.plan });
-      // Deliberately stay open — isAtLimit flips false on the next
-      // render (user.plan is now "pro"), so the dialog just turns into
-      // the normal create-property form in place. No reason to make
-      // them reopen it after they just cleared the reason it was
-      // blocked.
+      login({ ...user, plan: data.plan, planRequestedAt: data.planRequestedAt });
+      // Unlike the old instant self-serve flip, this does NOT clear
+      // isAtLimit — a request isn't a grant. The dialog stays open and
+      // isProRequestPending's branch below takes over in place, same
+      // "no reason to make them reopen it" reasoning as before, just
+      // landing on a waiting message instead of the create form.
     } catch {
       // useUpgradeToPro already toasts the error.
     }
@@ -136,21 +137,39 @@ export function AddPropertyDialog({
           // submission gets rejected — the old flow let someone fill
           // out the whole form and only found out it was pointless on
           // submit. See CLAUDE.md's "Account tiers" section.
-          <>
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-display flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-primary" /> You're at the free limit
-              </DialogTitle>
-              <DialogDescription>
-                Free accounts can have up to {FREE_PROPERTY_LIMIT} properties. Upgrade to Pro for unlimited — no payment info needed, it's free while PostPlotter is in beta.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex justify-end pt-4">
-              <Button onClick={handleUpgrade} disabled={upgrade.isPending} className="rounded-xl w-full sm:w-auto gap-2">
-                <Sparkles className="w-4 h-4" /> {upgrade.isPending ? "Upgrading..." : "Upgrade to Pro — free during beta"}
-              </Button>
-            </div>
-          </>
+          isProRequestPending ? (
+            // Already requested — a second click here would just spam
+            // admins with duplicate notifications for nothing. This
+            // replaces the old "upgrade morphs the dialog into the
+            // create form in place" behavior, since a REQUEST isn't a
+            // grant — there's no form to reveal yet.
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-display flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-primary" /> Request pending
+                </DialogTitle>
+                <DialogDescription>
+                  Your Pro access request is with an admin for review. You'll be able to add more properties as soon as it's approved.
+                </DialogDescription>
+              </DialogHeader>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-display flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-primary" /> You're at the free limit
+                </DialogTitle>
+                <DialogDescription>
+                  Free accounts can have up to {FREE_PROPERTY_LIMIT} properties. Request Pro for unlimited — no payment info needed, it's free while PostPlotter is in beta. An admin reviews each request.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex justify-end pt-4">
+                <Button onClick={handleUpgrade} disabled={upgrade.isPending} className="rounded-xl w-full sm:w-auto gap-2">
+                  <Sparkles className="w-4 h-4" /> {upgrade.isPending ? "Sending request..." : "Request Pro access"}
+                </Button>
+              </div>
+            </>
+          )
         ) : (
         <>
         <DialogHeader>

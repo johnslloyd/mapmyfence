@@ -279,18 +279,48 @@ authRouter.post("/api/account/change-password", authLimiter, async (req, res, ne
   }
 });
 
-// Self-serve, free during beta — no payment, just flips the flag. See
-// this table's `plan` column comment in shared/schema.ts for why this
-// was chosen over a manual-grant-only flow.
+// Manual approval, not self-serve (2026-09-10) — see this table's `plan`/
+// `planRequestedAt` column comments in shared/schema.ts for why this
+// replaced the old instant flip. Uses `db` directly, same as this
+// route already did before this change (and every other route in this
+// file) — the admin side of this flow (approve/dismiss) lives in
+// server/routes.ts instead, which goes through the storage layer, since
+// that's the file that already has it.
 authRouter.post(api.account.upgrade.path, async (req, res, next) => {
   try {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "You must be logged in to do that." });
     }
     const sessionUser = req.user as typeof users.$inferSelect;
-    await db.update(users).set({ plan: "pro" }).where(eq(users.id, sessionUser.id));
-    logEvent("account_upgraded", { userId: sessionUser.id });
-    res.json({ plan: "pro" });
+    if (sessionUser.plan === "pro") {
+      // Already Pro — nothing to request. Not an error; just hand back
+      // the current state so the client's UI stays correct either way.
+      return res.json({ plan: "pro", planRequestedAt: null });
+    }
+    const requestedAt = new Date();
+    await db.update(users).set({ planRequestedAt: requestedAt }).where(eq(users.id, sessionUser.id));
+    logEvent("pro_requested", { userId: sessionUser.id });
+
+    // Fire-and-forget, same as every other sendEmail call in this file —
+    // a slow/failed notification email should never block the request
+    // itself from registering. Queries users.isAdmin directly rather
+    // than a hand-maintained env var, so it can't drift from who's
+    // actually an admin.
+    db.select({ email: users.email }).from(users).where(eq(users.isAdmin, true)).then((admins) => {
+      if (admins.length === 0) return;
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const reviewUrl = `${origin}/admin/users/${sessionUser.id}`;
+      admins.forEach(({ email: adminEmail }) => {
+        sendEmail({
+          to: adminEmail,
+          subject: "PostPlotter: new Pro access request",
+          text: `${sessionUser.email} just requested Pro access.\n\nReview and approve or dismiss it here:\n${reviewUrl}`,
+          html: `<p><strong>${sessionUser.email}</strong> just requested Pro access.</p><p><a href="${reviewUrl}">Review and approve or dismiss it</a></p>`,
+        }).catch((err) => console.error("[email] Failed to notify admin of Pro request:", err));
+      });
+    }).catch((err) => console.error("[email] Failed to look up admins for Pro-request notification:", err));
+
+    res.json({ plan: sessionUser.plan, planRequestedAt: requestedAt.toISOString() });
   } catch (error) {
     next(error);
   }

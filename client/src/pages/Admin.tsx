@@ -6,15 +6,16 @@ import { useEffect, useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Shield, ArrowRight } from "lucide-react";
+import { Search, Shield, ArrowRight, Sparkles } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 
-// Read-only support/debugging + beta-usage-monitoring tool — see
-// CLAUDE.md's "Admin panel" section for the product reasoning (view-
-// only on purpose, gated server-side on users.isAdmin, every view
-// audit-logged). No edit affordances anywhere on this page or
-// AdminUserDetail.tsx — that was a deliberate scope line, not
-// something left out for time.
+// Started read-only (see CLAUDE.md's "Admin panel" section for the
+// original product reasoning: gated server-side on users.isAdmin, every
+// view audit-logged) — since grown two real edit actions, both genuinely
+// admin-only decisions rather than routine data entry: deleting a user
+// (AdminUserDetail.tsx) and approving/dismissing a Pro access request
+// (ProRequestBanner, same file). Still no bulk edits or anything that
+// touches a user's own project data directly.
 
 const EVENT_LABEL: Record<string, string> = {
   account_created: "Account created",
@@ -25,12 +26,16 @@ const EVENT_LABEL: Record<string, string> = {
   account_upgraded: "Upgraded to Pro",
   admin_viewed_users: "Viewed user list",
   admin_viewed_user: "Viewed a user",
+  pro_requested: "Requested Pro access",
+  admin_approved_pro: "Approved a Pro request",
+  admin_dismissed_pro_request: "Dismissed a Pro request",
 };
 
 function UsersTab() {
   const { data: users, isLoading } = useAdminUsers();
   const [search, setSearch] = useState("");
   const filtered = users?.filter((u: any) => u.email.toLowerCase().includes(search.toLowerCase()));
+  const pendingCount = users?.filter((u: any) => u.plan !== "pro" && u.planRequestedAt).length ?? 0;
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground py-10 text-center">Loading users...</div>;
@@ -38,6 +43,16 @@ function UsersTab() {
 
   return (
     <div className="space-y-4">
+      {/* The email notification (server/authRoutes.ts) links straight to
+          the requesting user's own detail page, so this isn't the only
+          way to find a pending request — just a quick-glance backstop
+          for browsing here directly instead. */}
+      {pendingCount > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <Sparkles className="w-4 h-4 text-primary shrink-0" />
+          {pendingCount} Pro {pendingCount === 1 ? "request" : "requests"} awaiting review.
+        </div>
+      )}
       <div className="flex items-center justify-between gap-4">
         <div className="relative max-w-sm w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -75,6 +90,11 @@ function UsersTab() {
                   <Badge variant={u.plan === "pro" ? "default" : "secondary"} className="capitalize text-[10px] h-5 font-normal">
                     {u.plan}
                   </Badge>
+                  {u.plan !== "pro" && u.planRequestedAt && (
+                    <Badge variant="outline" className="ml-1 text-[10px] h-5 font-normal gap-1 border-primary/40 text-primary">
+                      <Sparkles className="w-2.5 h-2.5" /> Pending
+                    </Badge>
+                  )}
                 </td>
                 <td className="px-4 py-2.5 font-mono">{u.propertyCount}</td>
                 <td className="px-4 py-2.5 font-mono">{u.projectCount}</td>
