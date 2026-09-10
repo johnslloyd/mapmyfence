@@ -1386,6 +1386,33 @@ available option rather than something demanding attention. The
 zero-lines case is unaffected — that's a different, correctly-prominent
 button (`NewProjectInstructions`'s own "Create a Fence Line").
 
+**Both marker icons redone the same day, direct feedback on the first
+pass's visual execution.** The plain `×`/`∟` characters (font glyphs,
+not drawn icons) read as thin and inconsistent, and the square-corner
+badge's blue wasn't a color this app's palette actually uses anywhere.
+Explored real alternatives first as a published side-by-side comparison
+(exact Lucide path data at real badge scale, on a satellite-imagery-
+toned ground) rather than describing options in prose — same "show,
+don't describe" approach this app's own logo-icon selection used
+originally. Landed on: Lucide's exact `X` path for delete (matches
+`lucide-react`'s own `x.js`, same "confirmed exact glyph, not hand-
+approximated" discipline the favicon was built with) and `CornerRightDown`
+for square-corner, recolored to this app's real ink navy. Both bumped
+from 18px to 26px; `iconAnchor` on each recalculated to preserve the
+same real gap above the point marker's pin and the same horizontal
+offset the 18px versions used, not just scaled proportionally.
+
+**A real bug caught live, not assumed correct**: the first attempt used
+`background:var(--primary)` directly, which resolved to fully
+transparent — checked via computed style, not eyeballed. This app's CSS
+variables store raw HSL *components* (`--primary: 218 55% 19%`), not
+complete color values (see the Brand section's token discipline) — a
+bare `var()` reference is invalid CSS and silently drops, the exact
+same shape of bug this file's `-border` token issue already hit once
+before. Fixed with `hsl(var(--primary))`; verified live afterward that
+the computed background resolved to `rgb(22, 41, 75)` — `#16294B`,
+the real token value, not a coincidence.
+
 ## Map editor polish + a real latent Tooltip bug (2026-08-29)
 
 Four separate pieces of direct user feedback after trying the gate

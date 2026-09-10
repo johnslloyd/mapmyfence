@@ -89,11 +89,18 @@ const editIcon = new Icon({
 // own pin rather than on top of it. Desktop-only by design (hover has
 // no touch equivalent); this was an explicit, deliberate tradeoff, not
 // an oversight — see the pin marker's own eventHandlers below.
+// 26px (up from an earlier 18px pass) with real Lucide glyph data — a
+// plain "×" character read as thin/inconsistent at a glance; this is
+// Lucide's exact X path (lucide-react's x.js), same "confirmed exact
+// glyph, not hand-approximated" discipline this app's favicon was built
+// with, not a redrawn approximation. iconAnchor scaled to keep the same
+// real gap above the point marker's own pin (12px) and the same 4px
+// horizontal offset the original 18px version used.
 const deletePointIcon = new DivIcon({
   className: "",
-  html: `<div style="background:#ef4444;color:white;border-radius:9999px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;font-weight:700;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);cursor:pointer;">×</div>`,
-  iconSize: [18, 18],
-  iconAnchor: [-4, 30],
+  html: `<div style="background:#ef4444;border-radius:9999px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></div>`,
+  iconSize: [26, 26],
+  iconAnchor: [-4, 38],
 });
 
 // Hover-only "square this corner" affordance — an interior vertex only
@@ -101,11 +108,24 @@ const deletePointIcon = new DivIcon({
 // just one). Anchored up-and-LEFT (mirrored from deletePointIcon's
 // up-and-right) so the two never overlap when both show on the same
 // hovered point. Same desktop-only-by-design reasoning as delete.
+//
+// Lucide's exact CornerRightDown path (lucide-react's corner-right-
+// down.js) — reads as "turn/adjust" more clearly than the plain "∟"
+// character the first pass used, which also rendered inconsistently
+// across fonts. `hsl(var(--primary))` (this app's own ink navy), not
+// the arbitrary blue the first pass used — ties the badge to the real
+// theme token instead of an unrelated hardcoded color. Needs the
+// `hsl()` wrapper, not a bare `var(--primary)` — this app's CSS
+// variables store raw HSL components ("218 55% 19%"), not complete
+// color values (see index.css); a bare `var()` here is invalid CSS and
+// silently resolves to transparent, the exact same class of bug this
+// file's `-border` token issue already hit once before, caught live by
+// checking computed background color, not assumed correct.
 const squareCornerIcon = new DivIcon({
   className: "",
-  html: `<div style="background:#3b82f6;color:white;border-radius:9999px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;font-weight:700;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);cursor:pointer;">∟</div>`,
-  iconSize: [18, 18],
-  iconAnchor: [22, 30],
+  html: `<div style="background:hsl(var(--primary));border-radius:9999px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 15 15 20 20 15"/><path d="M4 4h7a4 4 0 0 1 4 4v12"/></svg></div>`,
+  iconSize: [26, 26],
+  iconAnchor: [30, 38],
 });
 
 const postIcon = {
