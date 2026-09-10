@@ -2449,12 +2449,34 @@ and renders the boundary as a `<GeoJSON>` overlay.
 
 **Only Mississippi is wired up.** Tennessee and Arkansas were evaluated
 and explicitly not built yet:
-- **Tennessee**: the free statewide comptroller dataset (vector tile
-  service, not a queryable MapServer) excludes 9 self-maintained
-  counties — including Nashville/Davidson, Memphis/Shelby, Knoxville/Knox,
-  and Chattanooga/Hamilton, i.e. most of the state's population centers.
-  Would also need a vector-tile-capable Leaflet plugin (e.g.
-  `esri-leaflet-vector`), not a plain `TileLayer`.
+- **Tennessee — re-evaluated 2026-09-10, a real live option now exists,
+  deliberately skipped anyway.** A genuinely different, newer service
+  than what the original pass found: `Tennessee_Property_Boundaries_
+  Public_Use`, a public ArcGIS Online FeatureServer —
+  `https://services1.arcgis.com/YuVBSS7Y1of2Qud1/arcgis/rest/services/
+  Tennessee_Property_Boundaries_Public_Use/FeatureServer/0` — is a real,
+  live, queryable-by-point service, the same shape as Mississippi's, NOT
+  the vector-tile-only dataset the original research found (that
+  assessment may be stale, or this may be a newer offering — either
+  way, confirmed live, not assumed): tested against a real address in
+  Madison County (Jackson, TN) and got back a correct parcel (owner,
+  parcel ID, exact boundary) on a clean point-in-polygon hit.
+  - **Same coverage gap as originally documented, now confirmed by
+    name**: excludes Chester, Davidson (Nashville), Hamilton
+    (Chattanooga), Hickman, Knox (Knoxville), Montgomery, Rutherford,
+    Shelby (Memphis), and Williamson counties — 86 of 95 counties, but
+    the 9 excluded ones are the state's four largest metro areas.
+  - **The actual reason this wasn't built despite working**: the
+    service's own license states "This service is not intended for
+    commercial use" — a real legal question for a real product (even
+    a free-beta one), not something to quietly build on top of. Given
+    the coverage gap alone (excludes Nashville and Memphis, this app's
+    other test region) plus the licensing question, explicitly decided
+    to skip it for now rather than resolve the licensing question
+    just to ship a feature that still wouldn't cover this app's own
+    usual test city. Revisit if either changes — a real commercial-use-
+    cleared source gets evaluated, or Memphis/Nashville-specific access
+    opens up (see Shelby County note below, unchanged).
 - **Shelby County (Memphis) specifically**: checked directly, not just
   assumed — `gis.shelbycountytn.gov` is behind Cloudflare bot protection
   (confirmed: a real request gets Cloudflare's challenge page, not data),
