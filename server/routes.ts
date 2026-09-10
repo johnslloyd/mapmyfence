@@ -5,7 +5,7 @@ import { IStorage } from "./storage";
 import { api, FREE_PROPERTY_LIMIT } from "@shared/routes";
 import { z } from "zod";
 import { logEvent } from "./events";
-import { lookupParcel } from "./parcels";
+import { lookupParcel, ParcelServiceUnavailableError } from "./parcels";
 
 // Middleware to check if the user is authenticated
 const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
@@ -90,6 +90,13 @@ export async function registerRoutes(
       const result = await lookupParcel(parsed.data.lat, parsed.data.lng);
       res.json(result);
     } catch (err: any) {
+      if (err instanceof ParcelServiceUnavailableError) {
+        // Distinct from the generic 500 below — this is a known,
+        // named condition (the upstream service is down), not an
+        // unexpected server error, so it gets its own status and a
+        // message safe to show the user directly.
+        return res.status(503).json({ message: err.message });
+      }
       console.error('Failed to look up parcel', err);
       res.status(500).json({ message: err.message || 'Failed to look up parcel' });
     }

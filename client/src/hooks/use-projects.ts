@@ -272,12 +272,20 @@ export function useParcelLookup() {
     mutationFn: async ({ lat, lng }: { lat: number; lng: number }) => {
       const url = `${api.parcels.lookup.path}?lat=${lat}&lng=${lng}`;
       const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to look up property line");
+      if (!res.ok) {
+        // A 503 here carries a real, specific reason (the upstream MS
+        // service being unreachable, not "no parcel here" — see
+        // server/parcels.ts) — worth showing verbatim rather than a
+        // generic message, same as this app's other mutations that
+        // read a real server-provided message (e.g. useAdminDeleteUser).
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || "Failed to look up property line");
+      }
       return api.parcels.lookup.responses[200].parse(await res.json());
     },
     onError: (error) => {
       toast({
-        title: "Error",
+        title: "Couldn't look up property line",
         description: error.message,
         variant: "destructive",
       });

@@ -267,6 +267,11 @@ export const api = {
           z.object({ found: z.literal(false) }),
         ]),
         400: errorSchemas.validation,
+        // The upstream MS parcel service being unreachable — distinct
+        // from a 200 { found: false }, which means it was successfully
+        // checked and there's genuinely no parcel there. See
+        // server/parcels.ts's ParcelServiceUnavailableError.
+        503: errorSchemas.internal,
       },
     },
   },

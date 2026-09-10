@@ -23,6 +23,22 @@ export type ParcelLookupResult =
     }
   | { found: false };
 
+// Thrown by lookupParcel when the upstream service itself couldn't be
+// reached at all (both layers failed) — deliberately distinct from a
+// genuine, successful "checked, no parcel here" result. Found live
+// (2026-09-10): gis.mississippi.edu was completely unreachable (TLS
+// handshake completes, then the connection resets — not a 404/403, a
+// real outage of the whole host; a second host on the same
+// infrastructure, maris.mississippi.edu, failed identically, and the
+// one alternate URL that turned up in a search, www.maris.state.ms.us,
+// doesn't even resolve in DNS — a dead domain, not a live fallback).
+// Before this distinction existed, an outage like this silently
+// returned {found: false} — indistinguishable from a real "no parcel
+// at this point," which is exactly backwards for an app that already
+// has a stated policy (see CLAUDE.md's Before You Dig section) of never
+// silently guessing without saying so.
+export class ParcelServiceUnavailableError extends Error {}
+
 async function fetchWithTimeout(url: string): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -49,7 +65,10 @@ async function queryMsLayer(
   });
 
   const res = await fetchWithTimeout(`${MS_PARCELS_BASE}/${layerId}/query?${params}`);
-  if (!res.ok) return { found: false };
+  // A non-OK response from the service itself is "couldn't check," not
+  // "checked, no parcel here" — throwing (instead of resolving with
+  // found: false) lets lookupParcel below tell those two cases apart.
+  if (!res.ok) throw new Error(`MS parcel layer ${layerId} returned ${res.status}`);
 
   const data = await res.json();
   const feature = data?.features?.[0];
@@ -75,5 +94,21 @@ export async function lookupParcel(lat: number, lng: number): Promise<ParcelLook
       return result.value;
     }
   }
-  return { found: false };
+
+  // At least one layer resolved successfully (even if found: false) —
+  // a real, trustworthy answer: this point genuinely isn't on a parcel.
+  if (results.some((r) => r.status === "fulfilled")) {
+    return { found: false };
+  }
+
+  // BOTH layers rejected — the service itself couldn't be reached at
+  // all, not "checked, no parcel here." See ParcelServiceUnavailableError's
+  // own comment above.
+  console.error(
+    "MS parcel lookup: both layers failed —",
+    results.map((r) => (r.status === "rejected" ? r.reason?.message ?? r.reason : null)),
+  );
+  throw new ParcelServiceUnavailableError(
+    "Mississippi's parcel data service is currently unreachable. Try again later.",
+  );
 }

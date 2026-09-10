@@ -2472,6 +2472,39 @@ any other state that turns out to have the same kind of live, free,
 queryable service — check for that shape specifically before assuming a
 state's "open GIS data" is usable the same way.
 
+**`gis.mississippi.edu` is down (found 2026-09-10, reported as "the
+feature just stopped working")** — a real, external outage, not
+something any code change caused. Confirmed directly: the domain
+resolves in DNS, and a TLS handshake completes, but the connection
+resets immediately after on every attempt (both `curl` and a real
+browser engine) — not a 403/challenge page the way the retailer
+bot-blocking elsewhere in this file looks, a genuine dead origin.
+`maris.mississippi.edu`, a second host on the same infrastructure,
+fails identically. The one alternate URL a search turned up
+(`www.maris.state.ms.us`) doesn't even resolve in DNS anymore — a
+retired domain, not a live fallback. Nothing to fix on this app's side
+to bring it back; this is Mississippi's infrastructure, out of this
+app's control.
+
+**What WAS a real, fixable bug this surfaced**: `lookupParcel` used
+`Promise.allSettled` on both layers and only ever checked the
+FULFILLED results — when both layers rejected outright (this exact
+outage), it silently fell through to `{ found: false }`, identical to
+a genuine "checked, no parcel at this point." A real outage was
+indistinguishable from "you're just not on a parcel," which is
+backwards for an app with a stated policy elsewhere (see Before You
+Dig) of never silently guessing without saying so. Fixed: `queryMsLayer`
+now throws on a non-OK response instead of resolving `found: false`,
+and `lookupParcel` throws a new `ParcelServiceUnavailableError` when
+EVERY layer rejects — mapped to a real `503` in `server/routes.ts`
+(distinct from both the `200 {found:false}` genuine-no-parcel case and
+generic `500`s), with `useParcelLookup` (`use-projects.ts`) now
+surfacing that specific message in its error toast instead of a
+hardcoded generic one. Verified live: hit the endpoint directly during
+the real live outage and confirmed a `503` with the honest message,
+not a `200` — this fix is real and testable independent of whether/when
+Mississippi's service ever comes back.
+
 ## Deployment
 
 **Canonical target: the Hostinger VPS** (`srv1070754.hstgr.cloud`), run as a
