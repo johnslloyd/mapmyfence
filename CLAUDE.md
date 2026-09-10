@@ -1784,6 +1784,118 @@ a correctly-proportioned "1 / 3" progress bar.
   edges (1152px) on all three, not just the pages checked in the
   original pass.
 
+## Pro access: manual approval + Mapbox imagery (2026-09-10)
+
+Two changes together, both from the same conversation: the map's
+satellite imagery quality was flagged as the app's main remaining weak
+point (Esri's real resolution ceiling is z19 — see "Map layers" below),
+and Mapbox is a real fix for that, but it's a genuinely paid,
+usage-metered external service — not something to expose to every free
+signup while this app has no billing and no way yet to cap runaway
+cost. Direct user decision: gate Mapbox behind Pro, AND — while
+touching Pro at all — replace the old instant self-serve upgrade with
+manual admin approval, specifically so a real cost-sensitive dependency
+can be curated during beta rather than opened to anyone who clicks a
+button.
+
+**`users.plan` alone can't represent "asked, waiting on review"** — it's
+still just `free`/`pro` (existing `plan === "pro"` checks all over the
+app, e.g. `AddPropertyDialog`'s property-limit gate, stay correct
+unchanged). A new nullable `users.planRequestedAt` timestamp carries the
+pending state instead: null means "hasn't asked," non-null means "asked,
+not yet resolved," cleared either by approval (`plan` flips to `"pro"`
+at the same time) or by an admin dismissing the request without
+granting it. Added via the usual additive-nullable-column raw-SQL
+escape hatch (`script/migrations/2026-09-10-pro-request.ts`) — a new
+column on an EXISTING table, so the RLS-enabled-with-zero-policies state
+that table already has (see "Security settings" below) is completely
+unaffected.
+
+**The request side lives in `authRoutes.ts`, not through the storage
+layer** — that file already updated `users.plan` with raw `db` calls
+before this (see its own `POST /api/account/upgrade`), so the new
+"set `planRequestedAt`, then look up and email every admin" logic
+follows the same existing pattern rather than introducing a
+`storage`-layer dependency into a file that's never had one. Querying
+`users.isAdmin` directly (not a hand-maintained admin-email env var)
+means the notification list can't drift from who's actually an admin.
+The approve/dismiss side, by contrast, DOES go through
+`storage.approveProUpgrade`/`dismissProRequest` — those are called from
+`server/routes.ts`'s `isAdmin`-gated routes, which already have
+`storage` available, same as every other admin action.
+
+**The notification, exactly as asked for**: "an email that brings my
+admin account to the admin usage page with a view of the account that
+wants pro access" — `POST /api/admin/users/:id/approve-pro` and
+`.../dismiss-pro-request` are the two responses, and the email links
+directly to `/admin/users/:id` for the REQUESTING user (not a generic
+admin-panel link), landing an admin straight on `ProRequestBanner`
+(`AdminUserDetail.tsx`) — the account's email, how long ago they asked,
+and Approve/Dismiss buttons right there. `Admin.tsx`'s main user table
+also gets a lightweight "Pending" badge per row and a quick-glance
+"N Pro requests awaiting review" banner, for browsing directly instead
+of only ever arriving via email. Both admin actions are logged the same
+way `admin_deleted_user` already is (`admin_approved_pro`/
+`admin_dismissed_pro_request`, `userId` = the admin, `targetUserId` =
+the requester) — the second and third `admin_*` events that are
+ACTIONS, not views. `Admin.tsx`'s header comment ("no edit affordances
+anywhere on this page") was already stale before this — delete-user
+predates it — fixed to actually describe both real edit actions instead
+of pretending the page is still purely read-only.
+
+**Client side, the real behavior change**: `useUpgradeToPro`'s toast and
+both call sites (`Account.tsx`'s Plan card, `AddPropertyDialog`'s
+at-the-limit prompt) no longer treat a click as an instant grant.
+`AddPropertyDialog` in particular loses its old "the dialog morphs into
+the create-property form in place, no reopen" behavior from the
+original self-serve version — that specifically relied on `plan`
+flipping to `"pro"` synchronously, which no longer happens. It now has
+three real states instead of two: the normal create form, "you're at
+the limit, request Pro" (if never asked), and "request pending" (if
+`planRequestedAt` is set) — clicking Request stays in the dialog and
+swaps to the pending message in place, same "don't make them reopen it"
+spirit as before, just landing on a wait state instead of a ready form.
+
+**Mapbox imagery, the part that couldn't be verified against real
+tiles**: `MAPBOX_STYLE = "mapbox/satellite-streets-v12"` — Mapbox's own
+combined satellite-imagery-plus-street-labels style, picked so it
+replaces BOTH of Esri's current layers (imagery + a separate
+`World_Transportation` labels overlay) with one tile fetch, gated by a
+new `isPro` prop threaded from `Editor.tsx` (`user?.plan === "pro"`)
+into `MapEditorComponent`. Unlike every other tile source this app has
+ever added (see "Map layers" below — this file has a standing rule to
+fetch real tiles before trusting a service's name), **this one is
+built from Mapbox's public documentation only** — there was no access
+token available to test against while building it. `VITE_MAPBOX_TOKEN`
+being unset means `useMapboxImagery` is false regardless of `isPro`,
+so every account — Pro included — gets the existing free Esri stack
+today; confirmed live (a Pro-flagged test account's map genuinely
+requested Esri tiles, zero Mapbox requests, zero console errors).
+**Before trusting this in front of real users**: set `VITE_MAPBOX_TOKEN`,
+open a real Pro account's map, and check the actual tiles — confirm
+they're genuinely sharper than Esri's z19 ceiling, and correct
+`MAPBOX_NATIVE_ZOOM` (currently 22, from Mapbox's docs, not measured)
+if this app's usual test regions turn out to have a real ceiling below
+that. CSP (`server/index.ts` and its `client/index.html` mirror) already
+allows `https://api.mapbox.com` in `img-src`.
+
+Verified live end-to-end, the request/approval half fully (a real
+throwaway requester + a real throwaway admin, using direct API calls
+and the actual `AdminUserDetail`/`Admin.tsx` UI, not just
+typechecking): a request set `planRequestedAt` and fired the admin
+notification (logged to console locally, same as password reset,
+since local dev has no reason to carry a real `RESEND_API_KEY` — see
+Environment below) to every real admin in the database, including
+production ones, since local dev shares the same DB — worth remembering
+before testing this flow again locally. `ProRequestBanner` rendered
+the exact pending account/timestamp; Approve flipped the badge to
+"Pro" and cleared the banner; a second request, Dismissed, correctly
+returned to plain "Free" with no badge; `Admin.tsx`'s table showed the
+"Pending" badge and count banner correctly throughout; all three new
+event types recorded with the right `userId`/`targetUserId` shape,
+checked directly in the database. Every test account and its (zero)
+properties were deleted afterward.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up
@@ -2415,6 +2527,17 @@ private one — has to be flipped to Public once, in GitHub's Packages UI.
 `docker-compose.yml` points at that image; Hostinger's Docker Manager
 consumes it via **the raw GitHub URL**, not the repo page.
 
+**One build ARG, unlike every runtime env var above (2026-09-10)**:
+`VITE_MAPBOX_TOKEN` (see Account tiers' Mapbox writeup) has to be a
+GitHub Actions repo secret of that exact name, NOT a Docker Manager
+runtime env var — Vite bakes it into the compiled JS during `npm run
+build`, which happens inside this workflow's Docker build step, long
+before Hostinger ever runs the resulting image. `docker-publish.yml`
+passes it through as a `build-args` entry; the Dockerfile declares it
+as `ARG VITE_MAPBOX_TOKEN` right before the build stage's `npm run
+build`. Leaving the secret unset is safe — every account just gets the
+existing free Esri map, confirmed live.
+
 **Temporary sharing subdomain — `myyardmanager.johnlloyd.cloud`, via
 Traefik (Hostinger's reverse proxy) — added so testers don't need the
 VPS's raw IP.** Real gotcha, not obvious from Hostinger's own support
@@ -2645,6 +2768,12 @@ recorded the right admin as `userId` and the deleted id as
 `targetUserId` (with `targetUserEmail` correctly `null`, since that
 join has nothing left to resolve).
 
+**Approve/dismiss a Pro access request (2026-09-10) — the second and
+third admin actions that aren't read-only.** See the "Pro access:
+manual approval + Mapbox imagery" section (under Account tiers) for the
+full writeup — `ProRequestBanner` on this same page is where an admin
+actually acts on a request the notification email linked them to.
+
 ## Usage event logging
 
 `server/events.ts` has a `logEvent(type, {projectId, userId})` — local-only
@@ -2662,15 +2791,26 @@ points: `account_created`, `project_created`, `fence_line_created`,
   history in commit `0409042`. Never commit `.env` (it's gitignored now,
   keep it that way) — check `git status` before committing if you're ever
   touching env-related files.
-- `SESSION_SECRET` — falls back to a hardcoded default (`"secret_key"`) in
-  `server/index.ts` if unset. Set a real one in the VPS environment; don't
-  rely on the fallback outside local dev.
-- `RESEND_API_KEY` — **not set anywhere yet.** Used by `server/email.ts`
-  for password-reset emails. Without it, `sendEmail` logs to the server
-  console instead of sending — fine for local dev/testing (the reset flow
-  is fully testable this way), but means password reset silently reaches
-  no one until a real key is set. `EMAIL_FROM` (optional) overrides the
-  default `MapMyFence <onboarding@resend.dev>` sender.
+- `SESSION_SECRET` — **set as a real value on the VPS (2026-09-04)**,
+  alongside confirming TLS and flipping `cookie.secure` — see this file's
+  "Security settings" section. Still falls back to a hardcoded default
+  (`"secret_key"`) in `server/index.ts` for local dev only; don't rely on
+  that fallback anywhere real traffic reaches the app.
+- `RESEND_API_KEY` — **set, domain verified (2026-09-08).** Used by
+  `server/email.ts` for password-reset emails and (2026-09-10) the
+  Pro-request admin notification. Without it, `sendEmail` logs to the
+  server console instead of sending — still true for local dev, where
+  no key is set on purpose (keeps both flows fully testable without
+  live credentials). `EMAIL_FROM` (optional) overrides the default
+  `PostPlotter <onboarding@resend.dev>` sender.
+- `VITE_MAPBOX_TOKEN` — **not set anywhere yet.** A client-exposed env
+  var (Vite's `VITE_` prefix convention — the first one this project has
+  used; no `vite.config.ts` change needed for it to work) gating the
+  Pro-only Mapbox satellite imagery in `MapEditorComponent.tsx` — see
+  the "Account tiers" section's Mapbox writeup. Without it, EVERY
+  account (Pro included) falls back to the existing free Esri map,
+  confirmed live — a Pro account never sees a broken/blank map just
+  because this hasn't been set yet.
 
 ## Commands
 
