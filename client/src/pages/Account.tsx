@@ -1,15 +1,16 @@
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { useProperties, useUpgradeToPro } from "@/hooks/use-projects";
+import { useProperties, useUpgradeToPro, useMyOrganization, useUpdateMyOrganization } from "@/hooks/use-projects";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { KeyRound, Trash2, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { KeyRound, Trash2, Sparkles, Building2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { FREE_PROPERTY_LIMIT } from "@shared/routes";
 
@@ -91,6 +92,85 @@ function PlanCard() {
           )}
         </CardContent>
       )}
+    </Card>
+  );
+}
+
+// Business tier, Phase 1 (2026-09-10) — a member's own view of their
+// business's contact info, the fields shown on every quote it sends
+// (see CLAUDE.md's Phase 1 write-up). Renders nothing at all for an
+// account with no org membership — same silent-when-not-applicable
+// shape as PlanCard has no "you're not Pro" alarm, just a different
+// CTA. Only an admin member can actually edit (server-enforced, see PUT
+// /api/my-organization) — a plain member sees the same fields read-only
+// with a short note instead of a form, rather than a form that would
+// just 403 on submit.
+function BusinessCard() {
+  const { data: myOrg, isLoading } = useMyOrganization();
+  const updateOrg = useUpdateMyOrganization();
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+
+  // Sync local form state whenever the fetched org data changes (first
+  // load, or after a successful save) — same pattern as any form backed
+  // by server data with no separate "edit mode" toggle.
+  useEffect(() => {
+    if (myOrg) {
+      setName(myOrg.name);
+      setPhone(myOrg.phone || "");
+      setEmail(myOrg.email || "");
+    }
+  }, [myOrg]);
+
+  if (isLoading || !myOrg) return null;
+
+  const isAdmin = myOrg.role === "admin";
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateOrg.mutate({ name: name.trim(), phone: phone.trim() || null, email: email.trim() || null });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-primary" /> Business
+        </CardTitle>
+        <CardDescription>
+          {isAdmin
+            ? "Shown on every quote your business sends — see it live on Editor's \"Send Quote\" panel."
+            : "Your business's info, shown on every quote it sends. Only an admin can edit this."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isAdmin ? (
+          <form onSubmit={handleSave} className="grid gap-4 max-w-sm">
+            <div className="grid gap-2">
+              <Label htmlFor="business-name">Business name</Label>
+              <Input id="business-name" value={name} onChange={(e) => setName(e.target.value)} required />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="business-phone">Phone</Label>
+              <Input id="business-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(555) 867-5309" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="business-email">Email</Label>
+              <Input id="business-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="contact@yourbusiness.com" />
+            </div>
+            <Button type="submit" disabled={updateOrg.isPending || !name.trim()} className="w-fit">
+              {updateOrg.isPending ? "Saving..." : "Save"}
+            </Button>
+          </form>
+        ) : (
+          <div className="text-sm space-y-1 max-w-sm">
+            <div className="font-medium">{myOrg.name}</div>
+            {myOrg.phone && <div className="text-muted-foreground">{myOrg.phone}</div>}
+            {myOrg.email && <div className="text-muted-foreground">{myOrg.email}</div>}
+          </div>
+        )}
+      </CardContent>
     </Card>
   );
 }
@@ -238,6 +318,7 @@ function AccountContent() {
         <p className="text-muted-foreground text-sm mt-1">{user?.email}</p>
       </div>
       <PlanCard />
+      <BusinessCard />
       <ChangePasswordCard />
       <DeleteAccountCard />
     </div>

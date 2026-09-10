@@ -19,6 +19,7 @@ import Account from "./pages/Account";
 import Admin from "./pages/Admin";
 import AdminUserDetail from "./pages/AdminUserDetail";
 import Privacy from "./pages/Privacy";
+import QuoteView from "./pages/QuoteView";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 
@@ -33,6 +34,11 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/privacy" component={Privacy} />
+      {/* Business tier, Phase 1 — the one route meant to be opened with
+          NO account at all (a customer following a quote email's link).
+          A plain Route, not ProtectedRoute: there's no auth check to
+          even be a no-op passthrough for. See QuoteView.tsx. */}
+      <Route path="/quotes/:token" component={QuoteView} />
       {/* Account itself enforces the auth check (redirects to /login) —
           not a passthrough like ProtectedRoute below, since unlike the
           editor's deliberate guest access, there's no guest-meaningful

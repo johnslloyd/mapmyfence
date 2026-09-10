@@ -522,3 +522,92 @@ export function useUpgradeToPro() {
     },
   });
 }
+
+// ============================================
+// BUSINESS TIER, PHASE 1 — a member's own view of their business
+// (distinct from the platform-admin-only api.admin.organizations.* CRUD
+// used by Admin.tsx) plus the quote-send flow. See CLAUDE.md's Phase 1
+// write-up for the full reasoning.
+// ============================================
+
+export type MyOrganization = {
+  id: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  role: "admin" | "member";
+};
+
+export function useMyOrganization(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: [api.myOrganization.get.path],
+    queryFn: async () => {
+      const res = await fetch(api.myOrganization.get.path, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch your business");
+      return (await res.json()) as MyOrganization | null;
+    },
+    ...options,
+  });
+}
+
+export function useUpdateMyOrganization() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: { name?: string; phone?: string | null; email?: string | null }) => {
+      const validated = api.myOrganization.update.input.parse(data);
+      const res = await fetch(api.myOrganization.update.path, {
+        method: api.myOrganization.update.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validated),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to update your business");
+      }
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.myOrganization.get.path] });
+      toast({ title: "Saved", description: "Your business info has been updated.", variant: "success" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useCreateQuote(projectId: number | undefined) {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: { customerName?: string; customerEmail: string }) => {
+      if (!projectId) throw new Error("No project");
+      const validated = api.quotes.create.input.parse(data);
+      const url = buildUrl(api.quotes.create.path, { id: projectId });
+      const res = await fetch(url, {
+        method: api.quotes.create.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validated),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to send quote");
+      }
+      return (await res.json()) as { quote: any; publicUrl: string; emailSent: boolean };
+    },
+    onSuccess: (data) => {
+      if (data.emailSent) {
+        toast({ title: "Quote sent", description: `The quote was emailed to your customer.`, variant: "success" });
+      } else {
+        toast({ title: "Quote created, email didn't send", description: "Share the link with your customer directly.", variant: "destructive" });
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+}

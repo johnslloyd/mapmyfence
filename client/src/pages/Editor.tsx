@@ -1,7 +1,7 @@
 import { Layout } from "@/components/Layout";
 import { LatLng } from "leaflet";
 import { useRoute, useLocation } from "wouter";
-import { useProject, useCreateFenceLine, useDeleteFenceLine, useUpdateFenceLine, useEstimates, useCreateGate, useDeleteGate } from "@/hooks/use-projects";
+import { useProject, useCreateFenceLine, useDeleteFenceLine, useUpdateFenceLine, useEstimates, useCreateGate, useDeleteGate, useMyOrganization, useCreateQuote, type MyOrganization } from "@/hooks/use-projects";
 import { MapEditorComponent } from "@/components/MapEditorComponent";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,9 @@ import { NewProjectInstructions } from "@/components/NewProjectInstructions";
 import { EditFenceLineCard } from "@/components/EditFenceLineCard";
 import { NewFenceLineCard } from "@/components/NewFenceLineCard";
 import { STORE_LABELS, MATERIAL_LABELS, consolidateMaterials } from "@/lib/estimates";
-import { ClipboardCheck, ShieldAlert } from "lucide-react";
+import { ClipboardCheck, ShieldAlert, Send, Copy, Check } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 type UiState = "HIDDEN" | "INSTRUCTIONS" | "DRAWING" | "SIDEBAR" | "EDITING";
 
@@ -36,8 +38,171 @@ function defaultLineName(address: string | null | undefined) {
   return address ? `New Fence at ${address}` : "New Fence Line";
 }
 
-function MaterialEstimates({ projectId, isGuest }: { projectId: number; isGuest: boolean }) {
+// Business tier, Phase 1 (2026-09-10) — a plain, stateless trigger
+// button, not a self-contained Dialog. Real bug caught live: this used
+// to own the Dialog (open/result state) directly, nested inside
+// MaterialEstimates → EditorSidebar. `EditorSidebar` (below) is defined
+// INLINE inside `Editor`'s render body — a pre-existing pattern this
+// component didn't create — so it gets a brand-new function identity on
+// every Editor re-render, and React treats `<EditorSidebar/>` as a
+// different element type each time, fully UNMOUNTING and remounting
+// everything inside it (silently discarding any local state, even
+// mid-async-action). `Editor` itself calls `useToast()` for its own
+// unrelated actions, so ANY toast firing ANYWHERE (including this
+// dialog's own "Quote sent" success toast) re-renders `Editor`, which
+// remounts the whole sidebar the INSTANT the quote finishes sending —
+// wiping the dialog's `result` state right as it was set, before the
+// user ever saw the copyable link. Reproduced live: the network tab
+// showed a real 201 and the toast fired, but the dialog itself vanished
+// back to its closed, initial state every time.
+//
+// Real fix, not a workaround: the actual Dialog (SendQuoteDialog below)
+// is lifted OUT of this remount-prone subtree entirely and rendered
+// once from Editor's own top-level return (a stable component instance
+// — Editor itself never remounts, only this inline-defined child does)
+// — the same place SignUpToSaveModal already lives. This trigger button
+// is the only piece that stays nested inside MaterialEstimates; it's
+// pure and stateless (just an onClick callback), so remounting it
+// changes nothing observable.
+function SendQuoteTrigger({ myOrg, onClick }: { myOrg: MyOrganization | null | undefined; onClick: () => void }) {
+  if (!myOrg) return null;
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center justify-center gap-2 w-full rounded-md border border-primary bg-primary text-primary-foreground text-sm font-medium py-2 hover:bg-primary/90 transition-colors"
+    >
+      <Send className="w-4 h-4" /> Send Quote to Customer
+    </button>
+  );
+}
+
+// Rendered once from Editor's stable top-level return — see
+// SendQuoteTrigger's comment above for why this can't live nested
+// inside EditorSidebar/MaterialEstimates. `open`/`onOpenChange` are
+// controlled from Editor's own state for the same reason.
+function SendQuoteDialog({ projectId, open, onOpenChange }: { projectId: number; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { data: myOrg } = useMyOrganization();
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [result, setResult] = useState<{ publicUrl: string; emailSent: boolean } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const createQuote = useCreateQuote(projectId);
+
+  const reset = () => {
+    setCustomerName("");
+    setCustomerEmail("");
+    setResult(null);
+    setCopied(false);
+  };
+
+  const invalid = !customerEmail.trim();
+
+  const handleSend = async () => {
+    try {
+      const data = await createQuote.mutateAsync({
+        customerName: customerName.trim() || undefined,
+        customerEmail: customerEmail.trim(),
+      });
+      setResult({ publicUrl: data.publicUrl, emailSent: data.emailSent });
+    } catch {
+      // useCreateQuote already toasts the error.
+    }
+  };
+
+  if (!myOrg) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => { onOpenChange(next); if (!next) reset(); }}>
+      <DialogContent className="sm:max-w-[425px] rounded-2xl">
+        {result ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="text-xl font-display">
+                {result.emailSent ? "Quote sent" : "Quote created"}
+              </DialogTitle>
+              <DialogDescription>
+                {result.emailSent
+                  ? `Emailed to ${customerEmail}. They can view it — no account needed — at this link:`
+                  : "The email couldn't be sent — share this link with your customer directly:"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex items-center gap-2">
+              <Input readOnly value={result.publicUrl} className="font-mono text-xs" />
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(result.publicUrl);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </Button>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => onOpenChange(false)}>Done</Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="text-xl font-display">Send Quote to Customer</DialogTitle>
+              <DialogDescription>
+                A linear-foot, bottom-line quote from {myOrg.name} — no itemized materials list, no login required to view it.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 pt-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="quote-customer-name">Customer name (optional)</Label>
+                <Input id="quote-customer-name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Jane Homeowner" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="quote-customer-email">Customer email</Label>
+                <Input id="quote-customer-email" type="email" required value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="jane@example.com" />
+              </div>
+            </div>
+            <DialogFooter>
+              {/* Real bug caught live, not a hypothetical: a native
+                  `disabled` attribute that flips true mid-click (the
+                  usual isPending guard against double-submit) blurs the
+                  button the instant it disables — a disabled element
+                  can't hold focus. Radix's Dialog FocusScope sees focus
+                  jump to <body> (outside the dialog) and treats that as
+                  an outside-interaction, silently closing the dialog
+                  before the mutation even resolves; the "Quote sent"
+                  toast still fires (the request genuinely succeeds),
+                  but the dialog's own result view — the actual copyable
+                  link — never gets a chance to render. Reproduced with
+                  a real send, confirmed via a real 201 in the network
+                  log. Fixed by never toggling the native `disabled`
+                  attribute at all: `aria-disabled` + `pointer-events-
+                  none` blocks the click and reads correctly to screen
+                  readers, without ever blurring a focused element. */}
+              <Button
+                onClick={() => { if (invalid || createQuote.isPending) return; handleSend(); }}
+                aria-disabled={invalid || createQuote.isPending}
+                className={cn("gap-2", (invalid || createQuote.isPending) && "opacity-50 pointer-events-none")}
+              >
+                <Send className="w-4 h-4" /> {createQuote.isPending ? "Sending..." : "Send Quote"}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MaterialEstimates({ projectId, isGuest, onOpenSendQuote }: { projectId: number; isGuest: boolean; onOpenSendQuote: () => void }) {
   const { data: estimates, isLoading, error } = useEstimates(projectId);
+  // Same React Query cache entry SendQuoteDialog reads (Editor's stable
+  // top level) — calling the hook again here is free, not a second
+  // fetch, and is what decides whether the trigger button renders at
+  // all. See SendQuoteTrigger's own comment for why the ACTUAL dialog
+  // isn't nested here anymore.
+  const { data: myOrg } = useMyOrganization({ enabled: !isGuest });
   // Homeowners shop at one store, not a mix — the server returns one
   // complete option per store (sorted cheapest-first); this just tracks
   // which one is currently shown. Falls back to the cheapest whenever the
@@ -138,6 +303,7 @@ function MaterialEstimates({ projectId, isGuest }: { projectId: number; isGuest:
         from {STORE_LABELS[active.store] || active.store}. Prices are based on
         current material listings and do not include taxes, delivery, or labor.
       </div>
+      {!isGuest && <SendQuoteTrigger myOrg={myOrg} onClick={onOpenSendQuote} />}
       <Link
         href={`/editor/${projectId}/shopping-list${isGuest ? "?guest=true" : ""}`}
         className="flex items-center justify-center gap-2 w-full rounded-md border border-primary/30 text-primary text-sm font-medium py-2 hover:bg-primary/5 transition-colors"
@@ -175,6 +341,10 @@ export default function Editor() {
   const [isDrawing, setIsDrawing] = useState(false);
 
   const [showSignUpModal, setShowSignUpModal] = useState(false);
+  // Business tier, Phase 1 — lives here (Editor's own stable top-level
+  // state), not inside EditorSidebar/MaterialEstimates — see
+  // SendQuoteTrigger's comment for the real remount bug this avoids.
+  const [sendQuoteOpen, setSendQuoteOpen] = useState(false);
   const [hasTriedSavingPendingLine, setHasTriedSavingPendingLine] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
   const [editingLine, setEditingLine] = useState<any | null>(null);
@@ -544,7 +714,7 @@ export default function Editor() {
                 <ClipboardList className="w-4 h-4" />
                 Material Estimates
               </h4>
-              <MaterialEstimates projectId={project.id} isGuest={isGuest} />
+              <MaterialEstimates projectId={project.id} isGuest={isGuest} onOpenSendQuote={() => setSendQuoteOpen(true)} />
             </div>
           </TabsContent>
           <TabsContent value="details" className="p-4">
@@ -683,6 +853,9 @@ export default function Editor() {
         propertyId={project.property.id}
         returnTo={`/editor/${project.id}`}
       />
+      {!isGuest && (
+        <SendQuoteDialog projectId={project.id} open={sendQuoteOpen} onOpenChange={setSendQuoteOpen} />
+      )}
     </Layout>
   );
 }

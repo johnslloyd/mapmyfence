@@ -2164,6 +2164,176 @@ this is API/DB-only, run by a platform admin), the 10-seat cap, the
 `isAdmin`→"Staff" rename, and both claim-direction flows described
 above.
 
+## Business accounts — Phase 1: the quote-send-accept core loop (2026-09-10)
+
+The actual hypothesis the whole business-tier plan exists to test — can
+a solo pro send a customer a real, linked, bottom-line quote — built
+the same day as Phase 0, per the plan's own explicit sequencing
+(Phase 1 doesn't need any team/roster UI at all; a single-person
+business already exercises the whole loop). Direct scope call from the
+user: items 1–5 of the plan (linear-foot/bottom-line view, snapshot
+pricing, business contact fields, email, public no-login link) — the
+accept button (item 6) explicitly punted for now.
+
+**Schema** (`shared/schema.ts`): `organizations` gained `phone`/`email`
+(nullable text — the business's own contact info, shown on every quote
+it sends) via the additive-column raw-SQL escape hatch. New `quotes`
+table (`script/migrations/2026-09-10-quotes.ts`, RLS enabled) —
+deliberately a snapshot, not a live join, for both price AND branding:
+`totalLinearFeet`/`totalCost` are frozen at send time (same "don't let
+a later change silently alter what was promised" reasoning as
+everywhere else `snapshot` appears in this file), and so are
+`businessName`/`businessPhone`/`businessEmail` — a business editing its
+own contact info later shouldn't retroactively change what an already-
+sent quote displays. `tokenHash` (never the raw token) is the exact
+`users.resetTokenHash` pattern applied to a quote's public link instead
+of a login credential. `createdByUserId` is a plain, unconstrained
+`text` column, same convention as `events.userId` — a quote is a
+historical record, not something that should cascade or block on a
+later account change. No `acceptedAt`/status tracking at all yet — a
+nullable column is cheap to add later (see Database migrations below),
+so there's no cost to waiting until it's actually needed.
+
+**Deliberately did NOT add `projects.organizationId`.** The `quotes`
+row itself carries `organizationId` directly — nothing in Phase 1 needs
+"list every project this business has touched," only "who sent this
+particular quote," so the narrower attachment point is what actually
+got built. (An earlier draft of the Phase 0 write-up forward-referenced
+a `projects.organizationId` column that was never built — that stale
+comment is now corrected in `organizations`' own schema comment to
+describe what's actually there.)
+
+**No new "create a property for a customer" flow.** A business rep
+just uses their own account normally — draw a property/project the
+same way any Pro user does (their org membership already grants Pro
+automatically, see Phase 0) — and generates a quote off an existing
+project. The "customer never needs an account" part is entirely about
+the PUBLIC LINK (below), not about the property having no owner in the
+DB; the DIY-user-hands-off-to-a-business and business-quotes-an-
+unclaimed-customer flows are both still explicitly deferred, per the
+plan.
+
+**Server** (`server/routes.ts`, `shared/routes.ts`'s new
+`api.myOrganization.*`/`api.quotes.*`): `GET`/`PUT /api/my-organization`
+— a member's own view of their business, distinct from
+`api.admin.organizations.*`'s platform-Staff-only CRUD from Phase 0.
+Gated on real org membership (`storage.getUserOrganizations`), not
+`users.isAdmin`; `PUT` additionally requires the caller's own
+membership `role === "admin"` (checked server-side, 403 otherwise) —
+editing contact info shown on every sent quote gets the same care as a
+roster change, not a casual profile edit any member can make.
+`POST /api/projects/:id/quotes` is ownership-gated the same way
+`GET .../estimates` already is (`storage.getProject(id, userId)`), 400s
+if the project has zero linear feet drawn or if no store can currently
+price everything it needs, then snapshots the CURRENT cheapest-store
+`calculateEstimate` result (no new pricing logic — the exact same real
+cost this app already computes, just presented as $/ft + a bottom
+line instead of an itemized list; no markup/labor added, per the
+plan's own literal Phase 1 scope) and emails it via the existing
+`sendEmail`/Resend plumbing. `GET /api/quotes/public/:token` is the one
+route in this entire app meant to be reachable with NO session at
+all — same shape as `/api/reset-password`'s token-redeem route — and
+returns only what a customer needs (business branding + the two
+numbers), nothing else.
+
+**A "first/only org" simplification, stated explicitly**: both
+`GET /api/my-organization` and quote creation just take
+`getUserOrganizations(userId)[0]` — real multi-org membership is
+already representable in the schema (Phase 0), but nothing in Phase 1
+needs a picker for it. Flagged as a real, deliberate simplification
+in both the shared contract's own comment and here, not an oversight.
+
+**Client**: `Account.tsx` gained a `BusinessCard` (same silent-when-
+not-applicable pattern as `PlanCard` — renders nothing for an account
+with no org) — an admin member gets a real edit form; a plain member
+sees the same fields read-only, since the server would 403 on their
+submit anyway. `Editor.tsx`'s `MaterialEstimates` panel gained a "Send
+Quote to Customer" trigger, shown only when the signed-in user belongs
+to an org. New `client/src/pages/QuoteView.tsx` at `/quotes/:token` —
+the public page, reusing `AuthLayout` (the same nav-free header
+Login/Register already use, since a customer here has no PostPlotter
+account to have a nav for) — deliberately just the linear-foot/
+bottom-line numbers and business contact info, no itemized materials
+list and no Accept button yet.
+
+**A real bug found and fixed live, not hypothetical — worth documenting
+in full since it's a genuinely subtle, reusable lesson for this
+codebase specifically.** The first version of the "Send Quote" dialog
+owned its own `open`/`result` state directly, nested inside
+`MaterialEstimates` → `EditorSidebar`. Verified live: the quote email
+sent correctly (a real 201, the email logged with the right content),
+but the dialog itself visually vanished back to its closed, initial
+state the INSTANT the request succeeded — before the user ever saw the
+copyable public link, even though the toast ("Quote sent") displayed
+correctly. Root cause, found by adding temporary diagnostic logging
+rather than guessing: **`EditorSidebar` is defined INLINE inside
+`Editor`'s render body** (`const EditorSidebar = () => (...)`) — a
+pre-existing pattern in this file, not something this feature
+introduced. Every time `Editor` re-renders, `EditorSidebar` gets a
+BRAND NEW function identity, and React's reconciliation treats
+`<EditorSidebar/>` as a different element type each time — it doesn't
+diff the children, it fully UNMOUNTS the old subtree and mounts a fresh
+one, silently discarding any local state inside it (even mid-async-
+action). `Editor` itself calls `useToast()` for its own, unrelated
+actions — so ANY toast firing ANYWHERE, including the quote dialog's
+own success toast, re-renders `Editor`, which remounts the entire
+sidebar the moment the mutation resolves, wiping the dialog's `result`
+state right as it was set.
+
+**The fix is NOT a workaround — the Dialog was lifted out of the
+remount-prone subtree entirely.** `SendQuoteDialog` (the actual
+Radix `Dialog`, `open`/`onOpenChange` fully controlled via props) now
+renders once from `Editor`'s own stable top-level return, the same
+place `SignUpToSaveModal` already lives — `Editor` itself never
+remounts (only its inline-defined child does), so state stored at that
+level survives any number of toast-triggered re-renders. The only
+piece still nested inside `MaterialEstimates` is `SendQuoteTrigger`, a
+deliberately stateless button (an `onClick` callback prop) — remounting
+a stateless component changes nothing observable. `EditorSidebar`
+itself was NOT refactored to fix its own root cause (wrapping it in
+`useCallback` with a fully-correct dependency list was judged riskier
+than this narrower, self-contained fix, given how large and
+closure-heavy that pre-existing function is) — flagged here explicitly
+as a real, latent bug class other stateful components nested under
+`EditorSidebar`/`MaterialEstimates` could hit the same way, not just
+this one.
+
+**A second, smaller, real bug caught in the same pass**: the dialog's
+"Send Quote" button used a native `disabled={isPending}` attribute to
+block double-submit — disabling an element that currently holds
+keyboard focus force-blurs it, and Radix's Dialog `FocusScope` can
+treat focus landing outside the dialog as a real outside-interaction
+and auto-dismiss. Fixed by never toggling the native `disabled`
+attribute at all: `aria-disabled` + `pointer-events-none` styling
+blocks the click and still reads correctly to assistive tech, without
+ever forcing a focused element to blur.
+
+Verified live end-to-end, with BOTH bugs actually reproduced first
+(not assumed) and confirmed fixed after: registered four throwaway
+accounts (a business owner + a second member, a platform Staff
+account, and a plain DIY user with no org), created a real org via
+Phase 0's admin routes, drew a real fence line, and confirmed —
+`GET`/`PUT /api/my-organization` correctly scoped to the caller's own
+org and role; a quote against a zero-length project correctly 400s;
+sending a real quote returns a real snapshot (linear feet, bottom-line
+cost, business branding) and a working public link; the email (logged
+to console locally, no `RESEND_API_KEY` set — see Environment) carries
+the right subject/body/link; `GET /api/quotes/public/:token` returns
+the right fields for a valid token and a clean 404 for a bogus one; a
+plain DIY account (no org) gets a real 403 attempting to send a quote;
+a non-admin member gets a 403 editing business contact info; and, after
+both fixes above, the "Send Quote" dialog correctly stays open showing
+the real copyable link after a successful send, with a working
+copy-to-clipboard button and a "Done" that closes cleanly. All four
+test accounts, their properties, and the test organization were
+deleted afterward; `npm run build` re-confirmed clean.
+
+**Still deferred, per the plan**: the accept button/timestamp (this
+session's own explicit scope cut), any sent/viewed/accepted status
+view, and everything already flagged as out-of-scope for the whole
+plan (scheduling, invoicing, payments, cross-company property history,
+DIY→business handoff, a business directory/marketplace).
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up
