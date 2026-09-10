@@ -767,6 +767,47 @@ repeat that pattern:
   checking any time a genuinely new table is added, the same way the
   `session`-table migration prompt is a recurring thing to remember (see
   Database migrations below).
+- **`anon`/`authenticated` table grants: revoked on every table
+  (2026-09-09), same session as the RLS fix above.** A second, related
+  gap Supabase's advisor flagged separately (as
+  "table is visible in the GraphQL schema" — pg_graphql lists a table
+  in its schema based on table-level GRANTs, independent of RLS, so a
+  table can still be schema-*discoverable* even with RLS fully denying
+  actual rows): every one of the 11 public tables had Supabase's
+  project-default grant of FULL privileges (`SELECT, INSERT, UPDATE,
+  DELETE, TRUNCATE, REFERENCES, TRIGGER`) to both `anon` AND
+  `authenticated`, not just `SELECT` — 11 tables × 2 roles is exactly
+  where "22 warnings" in the dashboard came from. This is Supabase's own
+  default project bootstrap (a Supabase-native app is expected to run
+  as `anon`/`authenticated` via its client library and rely on RLS
+  policies as the actual gate) — not a mistake introduced by this
+  codebase, just a default that doesn't fit an app that never uses
+  those roles at all.
+
+  Fixed with `revoke all privileges on public.<name> from anon,
+  authenticated` on all 11 tables (not just revoking `SELECT` — those
+  write privileges were equally real, RLS-with-no-policies already
+  blocked them in practice but removing the grant outright is
+  correct defense-in-depth, not just quieting the warning). Verified
+  live afterward: a real login attempt against `postplotter.com`
+  returned the normal app-level `400 Incorrect password` (not a 500),
+  proving the `users` table read still worked correctly through the
+  app's own `postgres`-role connection.
+
+  **Also fixed at the source, not just per-table**: Supabase's project
+  had a standing `ALTER DEFAULT PRIVILEGES` rule (checked directly via
+  `pg_default_acl`) that auto-grants `anon`/`authenticated` full
+  privileges on any NEW table the `postgres` role ever creates in
+  `public` — meaning this exact gap would have silently reappeared on
+  every future migration otherwise. Ran `alter default privileges for
+  role postgres in schema public revoke all on tables from anon,
+  authenticated` once, so a new table created via this app's normal
+  raw-SQL migration escape hatch (see Database migrations below) starts
+  with zero `anon`/`authenticated` privilege instead of the platform's
+  broad default. RLS itself is still NOT covered by that default fix
+  (Postgres has no "default RLS status" concept) — a new table still
+  needs `enable row level security` explicitly, per the note just
+  above.
 - If a security-related change is the only way you can find to fix a bug,
   stop and say so explicitly rather than making the change — there's almost
   always a root cause underneath.
