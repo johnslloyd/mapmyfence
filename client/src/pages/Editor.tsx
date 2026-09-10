@@ -526,8 +526,17 @@ export default function Editor() {
                   </div>
                 </Card>
               ))}
-              <Button className="w-full gap-2" onClick={handleStartDrawing}>
-                <Plus className="w-4 h-4" /> New Fence Line
+              {/* Deliberately NOT styled as a primary CTA (2026-09-10) —
+                  this only ever renders once at least one line already
+                  exists (the SIDEBAR state requires existingLines.length
+                  > 0; a brand-new project's first line uses
+                  NewProjectInstructions' own, correctly-prominent button
+                  instead). A second fence line is the uncommon case, not
+                  the expected next action, so this reads as a quiet,
+                  available option rather than something competing for
+                  attention with the lines already listed above it. */}
+              <Button variant="outline" size="sm" className="w-full gap-2 text-muted-foreground font-normal" onClick={handleStartDrawing}>
+                <Plus className="w-3.5 h-3.5" /> Add another fence line
               </Button>
             </div>
             <div className="p-4 space-y-4 border-t">

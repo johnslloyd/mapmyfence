@@ -1301,6 +1301,91 @@ not just the class being present), the pill text updates correctly at
 line (a real two-point line placed via simulated clicks came back with a
 correct computed length).
 
+## "Square this corner" — fixing up an off-angle vertex after drawing (2026-09-10)
+
+Real, common problem: getting an exact 90° corner by eye while clicking on a
+satellite image is genuinely hard, and this app had zero help for it — a
+corner is whatever angle you happened to click. Several approaches were
+discussed (live snap-while-drawing with a mouse-tracked preview; silent
+post-click correction; an explicit toggle "square mode" reusing the gate-
+placement pattern) — landed on the simplest, safest one to start: an
+explicit, after-the-fact fix-up tool in the existing edit mode, not a
+change to the live drawing flow at all.
+
+**Same hover-affordance pattern as the existing delete-point ×**
+(`MapEditorComponent.tsx`) — a small blue "∟" badge, hover-only, desktop-
+only by design (same reasoning as delete: hover has no touch equivalent).
+Only appears on INTERIOR vertices (index > 0 and < last), since squaring
+needs two adjacent segments to form a corner at all — an endpoint only
+has one. Anchored up-and-LEFT of the point (mirrored from delete's
+up-and-right) so the two never overlap on the same hovered point.
+
+**Real design decision: which point moves.** Clicking "square this
+corner" at vertex V moves ONLY the point AFTER V — it swings around V
+until the outgoing segment is exactly perpendicular to the incoming one,
+at the SAME distance from V it already was (only the bearing changes,
+not the length). V and the point before it never move. Deliberately
+one-sided rather than splitting the correction across both neighbors,
+so clicking has a predictable effect: "the shape up through this point
+is trusted; the next point swings into a right angle from here," not two
+points moving at once for one click. Of the two possible perpendicular
+directions, picks whichever is closer to the corner's CURRENT outgoing
+direction, so a near-90° corner snaps to exactly 90° without flipping to
+the opposite side of the incoming segment.
+
+**Real local-planar geometry, not a naive lat/lng slope comparison** —
+same reasoning this file already applies elsewhere (`handleUpdateLine`'s
+length recompute, `PropertySatelliteImage`'s aspect math): a degree of
+longitude is shorter than a degree of latitude by `cos(latitude)`, so
+treating raw `(lat, lng)` deltas as a square grid computes the wrong
+angle away from the equator. `squareCorner()` converts to a local
+Cartesian frame scaled by `cos(latitude)` first, does ordinary 2D vector
+rotation there, then converts back — correct at fence-line scale (tens
+to low hundreds of feet), same as every other "local, small-scale, real-
+consequence geometry" calculation in this file, as opposed to the actual
+distance/pricing math elsewhere, which correctly uses
+`LatLng.distanceTo()` instead of this approximation.
+
+Existing gates needed no special handling at all — unlike point
+*deletion* (which merges two segments and has to shift/block gates by
+`segmentIndex`), squaring never changes segment topology or count, only
+vertex positions. A gate's `segmentIndex`/`position` stay fully valid;
+its rendered marker just follows the segment's new endpoint automatically
+(same "derive, don't duplicate" reasoning gate rendering already used).
+
+Verified live end-to-end, not just typechecked: created a real 3-point
+line with a deliberately non-square corner (computed independently at
+-70.46°), clicked the new affordance, and confirmed via a direct
+database read afterward — new angle exactly -90.0°, the untouched
+point-to-vertex distance preserved to 9 decimal places, and the corner
+stayed on the same side (didn't flip to the opposite perpendicular).
+
+**A real testing-environment gotcha hit and resolved while verifying
+this, not a bug in the app**: `FitBoundsOnLoad`'s `requestAnimationFrame`
+callback never fires while the Browser pane tab is backgrounded
+(`document.hidden === true`) — genuine browser behavior (rAF is throttled
+to near-never for hidden pages), not something `tabs_select` alone
+fixes if the whole pane itself isn't actively rendered. Looked exactly
+like a real regression at first (map stuck at the DEFAULT_ZOOM=4
+fallback) until isolated with `document.hidden` and confirmed fixed by
+forcing a real render (a `computer` screenshot action) before checking
+map state. Worth remembering for any future live-testing of code that
+runs inside `requestAnimationFrame`/similar visibility-gated APIs in
+this environment specifically — take a screenshot (or otherwise force
+the pane to actually render) before trusting a "the map never updated"
+observation.
+
+**Same conversation, a small related de-emphasis**: the sidebar's "New
+Fence Line" button (`Editor.tsx`, the Lines tab) only ever renders once
+at least one line already exists, so it's always semantically "add a
+SECOND line" — an uncommon case, not the expected next action, but it
+was styled as a full-width primary CTA competing with the real lines
+listed just above it. Changed to `variant="outline"`, smaller, muted
+text, and reworded to "Add another fence line" so it reads as a quiet,
+available option rather than something demanding attention. The
+zero-lines case is unaffected — that's a different, correctly-prominent
+button (`NewProjectInstructions`'s own "Create a Fence Line").
+
 ## Map editor polish + a real latent Tooltip bug (2026-08-29)
 
 Four separate pieces of direct user feedback after trying the gate

@@ -96,6 +96,18 @@ const deletePointIcon = new DivIcon({
   iconAnchor: [-4, 30],
 });
 
+// Hover-only "square this corner" affordance — an interior vertex only
+// (needs two adjacent segments to form a corner at all; an endpoint has
+// just one). Anchored up-and-LEFT (mirrored from deletePointIcon's
+// up-and-right) so the two never overlap when both show on the same
+// hovered point. Same desktop-only-by-design reasoning as delete.
+const squareCornerIcon = new DivIcon({
+  className: "",
+  html: `<div style="background:#3b82f6;color:white;border-radius:9999px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;font-weight:700;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);cursor:pointer;">∟</div>`,
+  iconSize: [18, 18],
+  iconAnchor: [22, 30],
+});
+
 const postIcon = {
   path: "M-1,-1 L1,-1 L1,1 L-1,1 Z",
   fillColor: "white",
@@ -140,6 +152,77 @@ function projectFraction(p1: LatLng, p2: LatLng, click: LatLng): number {
   if (lenSq === 0) return 0.5;
   const t = ((click.lng - p1.lng) * dx + (click.lat - p1.lat) * dy) / lenSq;
   return Math.min(1, Math.max(0, t));
+}
+
+// "Square this corner" (2026-09-10) — moves ONLY the point AFTER the
+// vertex (`next`), swinging it around the vertex so the outgoing
+// segment becomes exactly perpendicular to the incoming one, at the
+// SAME distance from the vertex it already was (only its bearing
+// changes, not its length). `prev` and the vertex itself never move —
+// deliberately one-sided rather than splitting the correction across
+// both neighbors, so the effect of clicking is predictable: "the shape
+// up through this point is trusted; the next point swings into a right
+// angle from here," not two points moving at once for one click.
+//
+// Real, local-planar geometry, not a naive lat/lng slope comparison —
+// same reasoning this app already applies elsewhere (see
+// handleUpdateLine's length recompute, PropertySatelliteImage's aspect
+// math): a degree of longitude is shorter than a degree of latitude by
+// cos(latitude), so treating raw (lat, lng) deltas as a square grid
+// would compute the wrong angle away from the equator. Correcting by
+// cos(latitude) turns this into flat, ordinary 2D vector math, which is
+// exactly what's needed at fence-line scale (tens to low hundreds of
+// feet — nowhere near where Earth's curvature itself would matter,
+// unlike this file's actual distance/pricing calculations, which
+// correctly use LatLng.distanceTo() instead of this local
+// approximation).
+//
+// Two perpendicular directions always exist (rotate the incoming
+// bearing +90° or -90°); picks whichever is closer to the corner's
+// CURRENT outgoing direction, so a near-square corner snaps to exactly
+// 90° without flipping to the opposite side of the incoming segment.
+function squareCorner(
+  prev: { lat: number; lng: number },
+  vertex: { lat: number; lng: number },
+  next: { lat: number; lng: number },
+): { lat: number; lng: number } {
+  const cosLat = Math.cos((vertex.lat * Math.PI) / 180);
+  // Local planar (x, y) relative to the vertex — degrees, not meters,
+  // but degrees scaled so a unit of x and a unit of y represent the
+  // same real-world distance, which is all vector/angle math needs.
+  const toXY = (p: { lat: number; lng: number }) => ({
+    x: (p.lng - vertex.lng) * cosLat,
+    y: p.lat - vertex.lat,
+  });
+
+  const prevXY = toXY(prev);
+  const nextXY = toXY(next);
+  const nextDist = Math.hypot(nextXY.x, nextXY.y);
+  if (nextDist === 0) return next; // degenerate (shouldn't happen) — leave it alone
+
+  // Direction of travel arriving AT the vertex (prev -> vertex), i.e.
+  // the reverse of prevXY (which points vertex -> prev).
+  const inLen = Math.hypot(prevXY.x, prevXY.y);
+  if (inLen === 0) return next; // degenerate coincident points — nothing to be perpendicular to
+  const dirIn = { x: -prevXY.x / inLen, y: -prevXY.y / inLen };
+
+  // The two candidate perpendicular directions (rotate dirIn by ±90°).
+  const rotA = { x: -dirIn.y, y: dirIn.x };
+  const rotB = { x: dirIn.y, y: -dirIn.x };
+
+  // Pick whichever candidate the CURRENT outgoing direction is already
+  // closer to (larger dot product with the current, unnormalized
+  // nextXY — direction only, magnitude doesn't affect which is larger),
+  // so a near-90° corner snaps without flipping sides.
+  const dotA = rotA.x * nextXY.x + rotA.y * nextXY.y;
+  const dotB = rotB.x * nextXY.x + rotB.y * nextXY.y;
+  const chosen = dotA >= dotB ? rotA : rotB;
+
+  const newXY = { x: chosen.x * nextDist, y: chosen.y * nextDist };
+  return {
+    lat: vertex.lat + newXY.y,
+    lng: vertex.lng + newXY.x / cosLat,
+  };
 }
 
 const GATE_LABEL: Record<string, string> = { single: "Single Gate", double: "Double Gate" };
@@ -191,7 +274,7 @@ function GateMarker({ gate, points }: { gate: { type: string; segmentIndex: numb
   );
 }
 
-function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineClick, onEndpointClick, onDeletePoint, gates = [], placingGate, onSegmentClick }: { points: any[], color: string, weight: number, isEditing?: boolean, onPointDragEnd?: (index: number, newLatLng: LatLng) => void, onLineClick?: () => void, onEndpointClick?: (index: number) => void, onDeletePoint?: (index: number) => void, gates?: { type: string; segmentIndex: number; position: number }[], placingGate?: boolean, onSegmentClick?: (segmentIndex: number, latlng: LatLng) => void }) {
+function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineClick, onEndpointClick, onDeletePoint, onSquareCorner, gates = [], placingGate, onSegmentClick }: { points: any[], color: string, weight: number, isEditing?: boolean, onPointDragEnd?: (index: number, newLatLng: LatLng) => void, onLineClick?: () => void, onEndpointClick?: (index: number) => void, onDeletePoint?: (index: number) => void, onSquareCorner?: (index: number) => void, gates?: { type: string; segmentIndex: number; position: number }[], placingGate?: boolean, onSegmentClick?: (segmentIndex: number, latlng: LatLng) => void }) {
   // Hover-only delete-point affordance (desktop only — see
   // deletePointIcon's own comment). Tracked here, not per-Marker state,
   // since only one point can be hovered at a time.
@@ -278,6 +361,22 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
               interactive={true}
               eventHandlers={{
                 click: () => onDeletePoint(idx),
+                mouseover: () => setHoveredIdx(idx),
+                mouseout: () => setHoveredIdx((current) => (current === idx ? null : current)),
+              }}
+            />
+          )}
+          {/* "Square this corner" affordance — interior vertices only
+              (idx 0 and the last point are endpoints, with only one
+              adjacent segment, so there's no corner to square there).
+              Same hover-only, desktop-only-by-design pattern as delete. */}
+          {isEditing && onSquareCorner && hoveredIdx === idx && idx > 0 && idx < points.length - 1 && (
+            <Marker
+              position={[p.lat, p.lng]}
+              icon={squareCornerIcon}
+              interactive={true}
+              eventHandlers={{
+                click: () => onSquareCorner(idx),
                 mouseover: () => setHoveredIdx(idx),
                 mouseout: () => setHoveredIdx((current) => (current === idx ? null : current)),
               }}
@@ -634,6 +733,24 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
     onLineUpdate({ ...editingLine, coordinates: newCoords });
   };
 
+  // "Square this corner" — index is an interior vertex (FenceLine's own
+  // hover affordance only renders this for one); moves ONLY index+1,
+  // see squareCorner()'s own comment for why. Same shape as
+  // handlePointDragEnd above — a pure coordinate change, so it's
+  // handled directly here rather than forwarded up to Editor.tsx the
+  // way gate placement/point deletion are (those need extra bookkeeping
+  // — segmentIndex shifting, gate blocking — that only Editor.tsx owns;
+  // this doesn't touch segment topology at all, so there's nothing for
+  // it to coordinate with).
+  const handleSquareCorner = (index: number) => {
+    const coords = editingLine.coordinates;
+    if (index <= 0 || index >= coords.length - 1) return; // defensive — FenceLine already only offers this for interior points
+    const newNext = squareCorner(coords[index - 1], coords[index], coords[index + 1]);
+    const newCoords = [...coords];
+    newCoords[index + 1] = { ...newCoords[index + 1], lat: newNext.lat, lng: newNext.lng };
+    onLineUpdate({ ...editingLine, coordinates: newCoords });
+  };
+
   const handleGateSegmentClick = (segmentIndex: number, latlng: LatLng) => {
     if (!editingLine) return;
     const p1 = new LatLng(editingLine.coordinates[segmentIndex].lat, editingLine.coordinates[segmentIndex].lng);
@@ -760,6 +877,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
              onPointDragEnd={handlePointDragEnd}
              onEndpointClick={handleEndpointClick}
              onDeletePoint={onDeletePoint}
+             onSquareCorner={handleSquareCorner}
              gates={editingLine.gates || []}
              placingGate={!!placingGateType}
              onSegmentClick={handleGateSegmentClick}
