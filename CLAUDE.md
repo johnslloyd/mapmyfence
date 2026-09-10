@@ -2334,6 +2334,125 @@ view, and everything already flagged as out-of-scope for the whole
 plan (scheduling, invoicing, payments, cross-company property history,
 DIY→business handoff, a business directory/marketplace).
 
+## Business accounts — Phase 2: team features (2026-09-10)
+
+**Built ahead of the plan's own stated gate** — Phase 2 was explicitly
+sequenced as "only once a pilot business asks" (see the plan doc), and
+no pilot exists yet. Direct instruction from the user to build it
+anyway, acknowledged before starting. Covers the plan's four Phase 2
+line items: roster self-service (invite/remove/promote/demote), the
+10-seat cap, logo upload, and a quotes rollup — the last one honestly
+scoped down, see below.
+
+**No new business-facing UI existed anywhere before this** — Phase 0
+was deliberately API/DB-only (platform-Staff-run), and Phase 1 only
+ever added a read/edit CARD for business contact info
+(`Account.tsx`'s `BusinessCard`), never a roster view. New
+`client/src/pages/Business.tsx` at `/business` is the first roster-
+management screen in the app, self-enforcing its own auth + "not in a
+business yet" empty state the same way `Account.tsx`/`Admin.tsx` do.
+Reachable via a new "My Business" item in `Layout.tsx`'s account
+dropdown, shown only when `useMyOrganization()` returns non-null (the
+same cached query `Account.tsx`'s `BusinessCard` and `Editor.tsx`'s
+`SendQuoteTrigger` already read — this is its third call site, still
+one fetch). Business.tsx deliberately does NOT duplicate contact-info
+editing (name/phone/email) — that stays exactly where Phase 1 put it,
+on `Account.tsx`; this page is scoped to what's actually NEW.
+
+**Roster self-service** (`server/routes.ts`'s new
+`api.myOrganization.{listMembers,addMember,updateMemberRole,
+removeMember}`, `shared/routes.ts`): mirrors `api.admin.*
+OrganizationMember` (Phase 0) 1:1 in shape and reuses the exact same
+storage methods (`addOrganizationMember`/`removeOrganizationMember`/
+`updateOrganizationMemberRole`, including `LastAdminError`/
+`DuplicateMemberError`) — the only real difference is HOW the target
+org is resolved: the caller's own membership
+(`getUserOrganizations(userId)[0]`) instead of a raw `:id` a platform
+Staff account supplies. A plain member (or a member of a different
+business) can never reach another org's roster through these routes.
+Add/remove/role-change are admin-gated (403 for a plain member); the
+new **`ORG_SEAT_LIMIT = 10`** constant (`shared/routes.ts`, same
+shared-constant-server-enforced pattern as `FREE_PROPERTY_LIMIT`) is
+checked before every add, matching the plan's stated v1 cap.
+
+**Logo upload** (`organizations.logoData`, `quotes.businessLogoData`,
+both new nullable `text` columns via the usual additive-column raw-SQL
+escape hatch, `script/migrations/2026-09-10-phase2-logo.ts`): stored as
+a base64 data URI directly in Postgres, not a real object-storage
+service. Explicit, documented tradeoff — this app has no file-upload
+subsystem anywhere else (satellite imagery is FETCHED from Esri, never
+uploaded) and no S3/Cloudinary account exists; adding one just for a
+small logo would be a new external dependency for a nice-to-have,
+inconsistent with this app's habit of calling external services
+directly rather than accumulating client libraries/accounts. A new
+`ORG_LOGO_MAX_CHARS = 375_000` constant caps it well under Postgres's
+comfort zone; the actual size discipline happens CLIENT-SIDE first
+(`Business.tsx`'s `resizeImageToDataUrl` — a canvas-based resize to
+200×200 before upload), so the server cap is a backstop, not the
+primary control. `quotes.businessLogoData` is a SEPARATE snapshot,
+same "freeze what was actually sent" reasoning as `businessName`/
+`businessPhone`/`businessEmail` from Phase 1 — a business later
+changing or removing its logo shouldn't retroactively alter an
+already-sent quote. `QuoteView.tsx` (the public, no-login page) now
+shows it next to the business name/contact block when present.
+
+**A real bug caught live, not assumed correct**: the first version of
+`storage.getUserOrganizations` — the method EVERYTHING business-facing
+reads from (`GET /api/my-organization`, quote creation, the new roster
+routes) — used an explicit column-list `.select({...})` that predated
+`logoData` existing and was never updated when the column was added.
+Verified live: `PUT /api/my-organization` correctly saved a real logo
+(confirmed in its own response), but the very next quote sent from the
+same org came back with `businessLogoData: null` — the write worked,
+the READ path that route depends on for snapshotting was silently
+dropping the column. Fixed by adding `logoData: organizations.logoData`
+to that select list; re-verified the next quote's snapshot picked it up
+correctly. Worth remembering as a category: this app's storage layer
+has several explicit-column-list selects (not `select()` with no
+args) specifically to shape a joined response — any of them is a
+candidate for this exact "added a column, forgot to add it to every
+existing explicit select" gap the next time a table gains a field.
+
+**The quotes rollup is honestly scoped down from what the plan
+describes.** The plan's Phase 2 line item is "sent/viewed/accepted
+rollup across a team" — but viewed/accepted tracking doesn't exist at
+all (that data hangs off the accept button, which Phase 1 explicitly
+cut). `api.myOrganization.listQuotes` / `storage.getOrganizationQuotes`
+and `Business.tsx`'s "Sent Quotes" section are deliberately just
+**sent** — customer, project, amount, sender, date — with the section's
+own subtitle saying so directly ("Just 'sent' for now — viewed/accepted
+tracking isn't built yet") rather than presenting a partial rollup as
+the full thing. `getOrganizationQuotes` LEFT JOINs `users` for the
+sender's email (not INNER) — `quotes.createdByUserId` is deliberately
+unconstrained (see quotes' own schema comment), so a quote from a
+since-deleted account must still show up in its business's own rollup,
+just with a blank sender.
+
+Verified live end-to-end: registered two throwaway accounts (an org
+admin + a second member) plus nine more to genuinely fill every seat,
+confirmed the self-service add/promote/demote/remove routes behave
+identically to Phase 0's admin-only versions (including the
+last-admin invariant blocking a demote/remove that would leave zero
+admins, and permitting it once a second admin exists) and that the
+seat cap genuinely blocks an 11th add with a clear message; uploaded a
+real small PNG as a logo through the actual UI flow (not just the API)
+and confirmed it rendered on `Business.tsx`, and — after the bug fix
+above — on a freshly-sent quote's snapshot AND on that quote's real
+public `QuoteView.tsx` page; sent three quotes and confirmed the "Sent
+Quotes" table showed the right customer/project/amount/sender/date for
+each; removed a team member through the real `AlertDialog` confirm
+flow (not just the API) and watched the seat count and roster update
+live. All twelve test accounts, their properties/quotes, and the test
+organization were deleted afterward; `npm run build` re-confirmed
+clean.
+
+**Deferred past this pass, not part of the plan's own Phase 2 either**:
+the accept button/status tracking (still Phase 1's own cut, which is
+WHY the quotes rollup can't be the full three-state view yet), and
+everything the plan already marks out of scope entirely (scheduling,
+invoicing, payments, cross-company property history, DIY→business
+handoff, a business directory/marketplace).
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up

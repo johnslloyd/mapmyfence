@@ -535,7 +535,29 @@ export type MyOrganization = {
   name: string;
   phone: string | null;
   email: string | null;
+  logoData: string | null;
   role: "admin" | "member";
+};
+
+export type OrganizationMemberWithEmail = {
+  id: number;
+  organizationId: number;
+  userId: string;
+  role: "admin" | "member";
+  createdAt: string;
+  email: string;
+};
+
+export type OrganizationQuote = {
+  id: number;
+  projectId: number;
+  projectName: string;
+  customerName: string | null;
+  customerEmail: string;
+  totalLinearFeet: number;
+  totalCost: number;
+  createdAt: string;
+  createdByEmail: string | null;
 };
 
 export function useMyOrganization(options: { enabled?: boolean } = {}) {
@@ -555,7 +577,7 @@ export function useUpdateMyOrganization() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: { name?: string; phone?: string | null; email?: string | null }) => {
+    mutationFn: async (data: { name?: string; phone?: string | null; email?: string | null; logoData?: string | null }) => {
       const validated = api.myOrganization.update.input.parse(data);
       const res = await fetch(api.myOrganization.update.path, {
         method: api.myOrganization.update.method,
@@ -609,5 +631,115 @@ export function useCreateQuote(projectId: number | undefined) {
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
+  });
+}
+
+// ============================================
+// BUSINESS TIER, PHASE 2 — roster self-service + the sent-quotes
+// rollup. See CLAUDE.md's Phase 2 write-up.
+// ============================================
+
+export function useOrganizationMembers(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: [api.myOrganization.listMembers.path],
+    queryFn: async () => {
+      const res = await fetch(api.myOrganization.listMembers.path, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch your team");
+      return (await res.json()) as OrganizationMemberWithEmail[];
+    },
+    ...options,
+  });
+}
+
+export function useAddOrganizationMember() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: { email: string; role: "admin" | "member" }) => {
+      const validated = api.myOrganization.addMember.input.parse(data);
+      const res = await fetch(api.myOrganization.addMember.path, {
+        method: api.myOrganization.addMember.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validated),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to add team member");
+      }
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.myOrganization.listMembers.path] });
+      toast({ title: "Added", description: "They now have Pro access as part of your team.", variant: "success" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useUpdateOrganizationMemberRole() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: "admin" | "member" }) => {
+      const url = buildUrl(api.myOrganization.updateMemberRole.path, { userId });
+      const res = await fetch(url, {
+        method: api.myOrganization.updateMemberRole.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to update role");
+      }
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.myOrganization.listMembers.path] });
+      toast({ title: "Saved", description: "Their role has been updated.", variant: "success" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useRemoveOrganizationMember() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const url = buildUrl(api.myOrganization.removeMember.path, { userId });
+      const res = await fetch(url, { method: api.myOrganization.removeMember.method, credentials: "include" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to remove team member");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.myOrganization.listMembers.path] });
+      toast({ title: "Removed", description: "They're off the team roster.", variant: "success" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useOrganizationQuotes(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: [api.myOrganization.listQuotes.path],
+    queryFn: async () => {
+      const res = await fetch(api.myOrganization.listQuotes.path, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch sent quotes");
+      return (await res.json()) as OrganizationQuote[];
+    },
+    ...options,
   });
 }

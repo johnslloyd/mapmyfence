@@ -16,6 +16,7 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Account from "./pages/Account";
+import Business from "./pages/Business";
 import Admin from "./pages/Admin";
 import AdminUserDetail from "./pages/AdminUserDetail";
 import Privacy from "./pages/Privacy";
@@ -44,6 +45,10 @@ function Router() {
           editor's deliberate guest access, there's no guest-meaningful
           version of this page. */}
       <Route path="/account" component={Account} />
+      {/* Same self-enforced auth pattern as /account — Business.tsx
+          also self-enforces a "not part of a business" state, since
+          that's not really a 404 or a 403, just an honest empty state. */}
+      <Route path="/business" component={Business} />
       {/* Same self-enforced pattern as /account, not ProtectedRoute —
           Admin.tsx/AdminUserDetail.tsx redirect non-admins themselves.
           The real gate is server-side (server/routes.ts's `isAdmin`

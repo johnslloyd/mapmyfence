@@ -34,6 +34,7 @@ function useQuoteView(token: string | undefined) {
         businessName: string;
         businessPhone: string | null;
         businessEmail: string | null;
+        businessLogoData: string | null;
         totalLinearFeet: number;
         totalCost: number;
         createdAt: string;
@@ -98,9 +99,14 @@ export default function QuoteView() {
           <p className="text-xs text-muted-foreground">
             Materials cost only — doesn't include labor, delivery, or taxes unless your contractor tells you otherwise. Reach out to them directly with any questions.
           </p>
-          {(quote.businessPhone || quote.businessEmail) && (
+          {(quote.businessPhone || quote.businessEmail || quote.businessLogoData) && (
             <div className="border-t pt-4 space-y-2 text-sm">
-              <div className="font-medium">{quote.businessName}</div>
+              <div className="flex items-center gap-2">
+                {quote.businessLogoData && (
+                  <img src={quote.businessLogoData} alt={`${quote.businessName} logo`} className="w-8 h-8 rounded-md object-contain border border-border shrink-0" />
+                )}
+                <div className="font-medium">{quote.businessName}</div>
+              </div>
               {quote.businessPhone && (
                 <a href={`tel:${quote.businessPhone}`} className="flex items-center gap-2 text-muted-foreground hover:text-primary">
                   <Phone className="w-3.5 h-3.5" /> {quote.businessPhone}

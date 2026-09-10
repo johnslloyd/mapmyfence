@@ -1,11 +1,11 @@
 import { Link, useLocation } from "wouter";
-import { Crosshair, FolderKanban, Menu, X, LogOut, User as UserIcon, Sparkles, Shield } from "lucide-react";
+import { Crosshair, FolderKanban, Menu, X, LogOut, User as UserIcon, Sparkles, Shield, Building2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { AddPropertyDialog } from "./AddPropertyDialog";
 import { PageHeader } from "./PageHeader";
 import { useAuth } from "@/hooks/use-auth";
-import { useProperties } from "@/hooks/use-projects";
+import { useProperties, useMyOrganization } from "@/hooks/use-projects";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import {
@@ -32,6 +32,11 @@ export function Layout({ children }: LayoutProps) {
   // Only fetches when authenticated — the endpoint 401s for guests, and
   // there'd be nothing to show them here anyway.
   const { data: properties } = useProperties({ enabled: isAuthenticated });
+  // Business tier, Phase 2 — same cache entry Account.tsx's BusinessCard
+  // and Editor.tsx's SendQuoteTrigger already read; gates the "My
+  // Business" nav item, so a plain DIY/Pro account never sees a dead
+  // link to a page that would just tell them they're not in a business.
+  const { data: myOrg } = useMyOrganization({ enabled: isAuthenticated });
 
   const closeLoginModal = () => setLoginModalOpen(false);
 
@@ -172,6 +177,14 @@ export function Layout({ children }: LayoutProps) {
                       <Link href="/admin" className="cursor-pointer">
                         <Shield className="mr-2 h-4 w-4" />
                         <span>Admin</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {myOrg && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/business" className="cursor-pointer">
+                        <Building2 className="mr-2 h-4 w-4" />
+                        <span>My Business</span>
                       </Link>
                     </DropdownMenuItem>
                   )}
