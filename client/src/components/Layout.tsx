@@ -140,7 +140,7 @@ export function Layout({ children }: LayoutProps) {
                         the dropdown's own "Pro" Badge right below keeps
                         Sparkles since it sits next to the actual word
                         "Pro" there, not standing in for it alone. */}
-                    {user?.plan === "pro" && (
+                    {user?.isPro && (
                       <span
                         className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center w-4 h-4 rounded-full bg-primary ring-2 ring-card"
                         title="Pro"
@@ -155,7 +155,7 @@ export function Layout({ children }: LayoutProps) {
                     <div className="flex flex-col space-y-1">
                       <div className="flex items-center gap-1.5">
                         <p className="text-sm font-medium leading-none">My Account</p>
-                        {user?.plan === "pro" && (
+                        {user?.isPro && (
                           <Badge variant="default" className="h-4 px-1.5 text-[10px] font-normal gap-0.5">
                             <Sparkles className="w-2.5 h-2.5" /> Pro
                           </Badge>

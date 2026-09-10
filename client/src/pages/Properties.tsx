@@ -30,7 +30,9 @@ export default function Properties() {
   const { user } = useAuth();
   const deleteProperty = useDeleteProperty();
   const propertyCount = properties?.length ?? 0;
-  const isPro = user?.plan === "pro";
+  // isPro (not a raw plan check) — Pro via a business membership counts
+  // the same as personally-approved Pro, see server/auth.ts.
+  const isPro = user?.isPro;
 
   // Search removed for now (2026-08-30) — pulled the whole filter UI
   // and its own "no results match your search" empty state rather than

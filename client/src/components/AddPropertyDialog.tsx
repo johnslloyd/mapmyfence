@@ -55,7 +55,10 @@ export function AddPropertyDialog({
   // Layout.tsx's nav.
   const { data: properties } = useProperties({ enabled: isAuthenticated });
   const upgrade = useUpgradeToPro();
-  const isAtLimit = isAuthenticated && user?.plan !== "pro" && (properties?.length ?? 0) >= FREE_PROPERTY_LIMIT;
+  // isPro, not a raw plan check — a business's members are Pro
+  // automatically while on the roster (2026-09-10), not just
+  // personally-approved accounts. See server/auth.ts's isEffectivelyPro.
+  const isAtLimit = isAuthenticated && !user?.isPro && (properties?.length ?? 0) >= FREE_PROPERTY_LIMIT;
   const isProRequestPending = isAuthenticated && user?.plan !== "pro" && !!user?.planRequestedAt;
 
   const isControlled = controlledOpen !== undefined;

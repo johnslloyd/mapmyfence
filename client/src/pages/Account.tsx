@@ -17,7 +17,11 @@ function PlanCard() {
   const { user, login } = useAuth();
   const { data: properties } = useProperties();
   const upgrade = useUpgradeToPro();
-  const isPro = user?.plan === "pro";
+  // isPro, not a raw plan check — a business membership grants Pro too
+  // (2026-09-10), so there's no reason to nag someone to personally
+  // request it if their business already covers them. See
+  // server/auth.ts's isEffectivelyPro.
+  const isPro = user?.isPro;
   // A request is pending once planRequestedAt is set and hasn't been
   // resolved into an actual "pro" plan yet — plan alone can't tell
   // free-and-never-asked apart from free-and-waiting-on-review, which

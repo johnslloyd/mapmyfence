@@ -641,7 +641,10 @@ export default function Editor() {
             placingGateType={placingGateType}
             onGatePlaced={handleGatePlaced}
             onDeletePoint={handleDeletePoint}
-            isPro={user?.plan === "pro"}
+            // isPro, not a raw plan check — Pro via a business
+            // membership unlocks Mapbox imagery too (2026-09-10). See
+            // server/auth.ts's isEffectivelyPro.
+            isPro={!!user?.isPro}
           />
 
           {/* Mobile Menu Trigger */}

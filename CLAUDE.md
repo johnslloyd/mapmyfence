@@ -2026,6 +2026,144 @@ event types recorded with the right `userId`/`targetUserId` shape,
 checked directly in the database. Every test account and its (zero)
 properties were deleted afterward.
 
+## Business accounts — Phase 0: the org/member data-model foundation (2026-09-10)
+
+First concrete piece of a multi-round product-strategy conversation
+about adapting PostPlotter (today: DIY homeowners only) for small
+fencing companies/contractors — a full account model, property/project
+ownership semantics, and a build-order backlog were worked out in
+conversation and written up as one planning doc before any code
+changed (the artifact from that session, if it still exists, has the
+full reasoning). This section is Phase 0 from that plan: the org/member
+schema and admin-only CRUD, with no business-facing UI at all yet — an
+admin manages rosters directly via API/DB today, same "ship the
+foundation, defer the UI" shape as the lawn-care vertical's schema-only
+groundwork above.
+
+**The account/ownership model, decided explicitly before building, for
+context on why Phase 0 looks the way it does:**
+- **One account per person, no separate logins.** Free → Pro (already
+  existed, see "Account tiers"/"Pro access" above) → an org membership,
+  which grants Pro automatically for as long as you're on the roster —
+  not a separate account type, not a personal upgrade.
+- **A property is never owned by a business** — only by a homeowner (if
+  claimed) or unclaimed (`properties.userId` was already nullable). A
+  **project**, not the property, is what a business actually attaches
+  to; the business is a rollup/branding layer, not an owner. Neither
+  direction of "customer claims a business-initiated project" nor "DIY
+  user hands off to a business" is built — both explicitly deferred,
+  not a pilot priority.
+- **No shadow/dormant accounts are ever auto-created.** A homeowner who
+  never signs up stays exactly that; claiming reuses the existing
+  guest-claim-at-signup mechanic, never an email/address auto-match
+  (deliberately, for privacy and reliability).
+- **An org can have more than one admin but must always have at least
+  one** — enforced in application code, not a DB constraint, same
+  "guard the invariant in app code" convention gate-blocks-point-
+  deletion already established. The many small-business org admins are
+  the common case this naming needs to serve, not the one platform-
+  level `isAdmin` — see the naming note below.
+- Per-seat billing is a stated future direction, which is *why*
+  membership is modeled as real, individually countable rows from day
+  one rather than a headcount column. A 10-seat cap is planned but NOT
+  enforced yet — Phase 0 scope stopped at the data model + invariants.
+
+**Schema** (`shared/schema.ts`): `organizations` (`id`, `name`,
+`createdAt`) and `organizationMembers` (`organizationId`, `userId`,
+`role: "admin" | "member"`, `createdAt`, with a composite
+`unique(organizationId, userId)` — one membership row per person per
+org). Added via the established raw-SQL-via-`pool` escape hatch
+(`script/migrations/2026-09-10-organizations.ts`, both tables) — same
+"brand new, non-destructive table" reasoning as `yardBoundaries`/
+`gates` — and this migration is the first to proactively include
+`ALTER TABLE ... ENABLE ROW LEVEL SECURITY` for its own new tables
+right alongside the `CREATE TABLE`, rather than that being a later
+follow-up fix (see "Security settings" for why this matters — the RLS-
+enabled-zero-policies state).
+
+**Naming, deliberately**: `users.isAdmin` (the single platform-level
+role — currently just the user themselves) and an org's `"admin"`
+membership role are two different concepts that happen to share a
+word. Not renamed yet — flagged as a real, separate, optional future
+cleanup (recommended direction: rename the platform role to something
+like "Staff") rather than done incidentally here, since the many real
+org admins this feature is FOR should get the plain, obvious word.
+
+**`isUserPro` / `isEffectivelyPro` — the same check, implemented twice
+on purpose.** "Is this person Pro" now means `plan === "pro"` OR "has
+any org membership" — but this app has two established, deliberately
+separate data-access conventions (`server/routes.ts` always goes
+through the `storage` abstraction; `server/auth.ts`/`authRoutes.ts`
+always use raw `db` calls). Rather than force one file to reach into
+the other's convention, the check exists twice, once per file, each
+matching its own file's existing pattern: `storage.isUserPro(userId)`
+and `auth.ts`'s exported `isEffectivelyPro(user)`. Every property-limit
+/Pro-gating call site that used to read `user.plan === "pro"` directly
+now goes through one of these two instead (`server/routes.ts`'s
+property-creation limit check now calls `storage.isUserPro`, with a
+comment pointing at this section) — an admin-approval-workflow display
+(e.g. `Admin.tsx`'s "Pending" badge, which is genuinely about the raw
+request state, not effective access) intentionally still reads the raw
+`plan`/`planRequestedAt` fields instead.
+
+**Client `user` object gained a computed `isPro: boolean`** (server-
+computed at the source — `GET /api/user`, register, and login all
+return it now) alongside the existing raw `plan` field. Client code was
+audited call-site by call-site to pick the right one: `isPro` for
+actual feature-gating (`AddPropertyDialog`'s limit check, `Layout.tsx`'s
+Pro badge/avatar corner, `Properties.tsx`'s usage pill, `Account.tsx`'s
+`PlanCard`, `Editor.tsx`'s Mapbox-imagery gate), raw `plan` where the
+admin-approval-workflow display genuinely means "what did they
+personally request," not "do they currently have access."
+
+**`LastAdminError` / `DuplicateMemberError`** (`server/storage.ts`) —
+both follow this app's established "named, exported `Error` subclass,
+caught specifically in the route handler before falling through to the
+generic 500" convention (`ParcelServiceUnavailableError` is the
+original of this pattern). `removeOrganizationMember` and
+`updateOrganizationMemberRole` both pre-check the target's role against
+the org's current admin count and throw `LastAdminError` rather than
+letting the removal/demotion happen and leave zero admins.
+`addOrganizationMember` pre-checks for an existing membership row and
+throws `DuplicateMemberError` rather than letting the composite unique
+constraint's Postgres 23505 fall through uncaught — **this exact gap
+was caught live during verification**: the first version relied on the
+DB constraint alone, and a duplicate-add request returned a bare
+generic 500 ("Failed to add organization member") instead of a real,
+friendly 400. Fixed by adding the same pre-check-in-application-code
+shape the other two methods already used, rather than catching the raw
+Postgres exception — consistent with this codebase's stated preference
+for guarding invariants explicitly rather than parsing DB error codes.
+
+**Admin routes, all `isAdmin`-gated** (`server/routes.ts`,
+`shared/routes.ts`'s `api.admin.*`): list/get/create organizations,
+add/remove a member, update a member's role. `createOrganization` and
+`addOrganizationMember` both take an email (not a raw userId) and
+resolve it via a new `storage.getUserByEmail` — a 404 with a clear,
+actionable message ("...they need to sign up for a free PostPlotter
+account first") when no account exists, matching this app's existing
+honest-error-message discipline rather than silently no-op'ing or
+auto-creating anything (see the no-shadow-accounts decision above).
+
+Verified live end-to-end via a real curl sequence (three throwaway
+accounts, one granted platform admin): org creation; membership
+granting `isPro` automatically and the property-limit gate genuinely
+respecting it; `isPro` immediately reverting to `false` on removal;
+the last-admin invariant blocking both removal and demotion of a sole
+admin, and permitting either once a second admin exists; org listing
+with correct per-org member counts; the duplicate-add case (after the
+fix above) returning a clean 400; a create-org request for a
+nonexistent email returning the real 404; and a non-staff account
+correctly getting a 403 from every admin org route. All test accounts,
+their properties, and the test organization were deleted afterward
+(`npm run build` also re-confirmed clean after these changes).
+
+**Deferred, per the build-order plan, not part of Phase 0**: any
+business-facing UI (an org admin's own dashboard/roster page — today
+this is API/DB-only, run by a platform admin), the 10-seat cap, the
+`isAdmin`→"Staff" rename, and both claim-direction flows described
+above.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up
