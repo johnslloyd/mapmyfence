@@ -962,10 +962,19 @@ export async function registerRoutes(
         totalLinearFeet: quote.totalLinearFeet,
         totalCost: quote.totalCost,
         createdAt: quote.createdAt,
+        // `name`/`length` and `gates[].type` (2026-09-11) — added
+        // alongside the switch to a real, read-only MapEditorComponent
+        // view (QuotePlanView.tsx). Phase 5's original diagram-only
+        // version only needed coordinates + gate position; the real
+        // map's own GateMarker needs `type` to size a single vs. double
+        // gate's span correctly, and name/length are shown as plain
+        // context text next to the map.
         fenceLines: (project?.fenceLines || []).map((line) => ({
           id: line.id,
+          name: line.name,
+          length: line.length,
           coordinates: line.coordinates.map((c) => ({ lat: c.lat, lng: c.lng })),
-          gates: line.gates.map((g) => ({ segmentIndex: g.segmentIndex, position: g.position })),
+          gates: line.gates.map((g) => ({ type: g.type, segmentIndex: g.segmentIndex, position: g.position })),
         })),
       });
     } catch (err: any) {

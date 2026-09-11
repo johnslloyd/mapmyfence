@@ -2722,6 +2722,59 @@ diagram with the right total length and gate count; and the
 already-tested empty-geometry case above. Test data deleted
 afterward; `npm run build` re-confirmed clean.
 
+**Follow-up, same day: `/quotes/:token/plan` upgraded from a bigger
+diagram to the REAL interactive map.** Direct follow-up ask — the
+abstract diagram above wasn't enough; the customer should land on the
+actual satellite view with their actual fence line drawn on it,
+read-only. Same route, same link from `QuoteView.tsx`, only the
+destination changed.
+
+**No stripped-down clone of `MapEditorComponent` was needed.** Every
+real edit affordance in it (dragging a point, the hover delete-point/
+square-corner buttons, gate placement) is already gated behind
+`isEditing`/`editingLine` matching a specific line — see `FenceLine`'s
+own render logic. Passing `editingLine={null}` and leaving every
+mutation callback at its default no-op means NOTHING in there ever
+turns on; what's left is exactly a real, pannable/zoomable, non-
+editable map with the actual line/gates rendered via `existingLines`
+(the same `{id, coordinates, gates}` shape Phase 5's diagram version
+already fetched — the server route just needed `gates[].type` added,
+which `GateMarker` needs to size a single vs. double gate's span, plus
+`name`/`length` for display).
+
+**The one thing that DIDN'T become correct for free**: the map's
+persistent bottom status bar has a hardcoded fallback message,
+`"Select a line to edit or create a new one"` — written for an editing
+context (a sidebar to select a line into, a drawing flow to start)
+that genuinely doesn't exist on this page. Fixed with a new, narrowly-
+scoped `readOnly?: boolean` prop on `MapEditorComponent` that changes
+ONLY that one string (to `"Viewing only — pan and zoom to look
+around"`) — not a broader read-only mode, since nothing else needed
+one. Existing call sites (`Editor.tsx`) are unaffected — the prop
+defaults to `false`.
+
+**Two more deliberate choices, stated explicitly rather than left
+implicit**: `isPro` is hardcoded `false` for this view regardless of
+the sending business's real plan — this is the one page in the entire
+app a stranger can open with no login and no rate limit of its own, so
+it never requests Mapbox tiles, only the free Esri stack, keeping an
+anonymous public page from being able to run up a business's (or the
+platform's) paid Mapbox usage. And a small "View only" badge card
+(business name, total length, gate count) floats over the map — the
+one thing this page adds beyond a bare `MapEditorComponent`, so a
+customer arriving with zero context doesn't wonder whether they can
+click around and change something.
+
+Verified live: registered a fresh test business, drew a real 3-point
+fence line and placed a real gate on it, sent a quote, and confirmed
+`/quotes/:token/plan` renders the actual satellite imagery with the
+real line, point markers, real per-segment distance tooltips, and the
+gate marker all present — and, critically, that
+`.leaflet-marker-draggable` matches zero elements on the page,
+confirming dragging is genuinely disabled, not just visually
+suggested to be. Test data deleted afterward; `npm run build`
+re-confirmed clean.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up

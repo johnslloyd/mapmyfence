@@ -848,7 +848,13 @@ export type PublicQuote = {
   totalLinearFeet: number;
   totalCost: number;
   createdAt: string;
-  fenceLines: { id: number; coordinates: { lat: number; lng: number }[]; gates: { segmentIndex: number; position: number }[] }[];
+  fenceLines: {
+    id: number;
+    name: string;
+    length: number | null;
+    coordinates: { lat: number; lng: number }[];
+    gates: { type: string; segmentIndex: number; position: number }[];
+  }[];
 };
 
 export function usePublicQuote(token: string | undefined) {

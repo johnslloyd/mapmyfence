@@ -519,9 +519,23 @@ interface MapEditorProps {
   // VITE_MAPBOX_TOKEN is set) fall through to the existing Esri stack
   // unchanged, never a broken/blank map.
   isPro?: boolean;
+  // QuotePlanView.tsx (2026-09-11) — a customer's read-only view of
+  // their own fence plan, no login, reusing this component AS-IS
+  // rather than a stripped-down clone: every real edit affordance here
+  // (dragging, hover delete-point/square-corner, gate placement) is
+  // already gated behind `isEditing`/`editingLine` matching a specific
+  // line, so passing `editingLine={null}` and no callbacks already
+  // makes everything else correctly inert with zero new code. The ONE
+  // thing that doesn't automatically become correct on its own is the
+  // persistent bottom status bar's default text ("Select a line to
+  // edit or create a new one") — written for an editing context that
+  // genuinely doesn't exist on that page (there's no sidebar to select
+  // a line INTO, no drawing flow to start). This is the only thing
+  // `readOnly` changes.
+  readOnly?: boolean;
 }
 
-export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSaving, existingLines = [], isMobile, selectedLineId = null, onLineSelect = () => {}, editingLine = null, onLineUpdate = () => {}, isDrawing = false, onCancelDrawing = () => {}, controlsPosition = 'left', placingGateType = null, onGatePlaced = () => {}, onDeletePoint = () => {}, isPro = false }: MapEditorProps) {
+export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSaving, existingLines = [], isMobile, selectedLineId = null, onLineSelect = () => {}, editingLine = null, onLineUpdate = () => {}, isDrawing = false, onCancelDrawing = () => {}, controlsPosition = 'left', placingGateType = null, onGatePlaced = () => {}, onDeletePoint = () => {}, isPro = false, readOnly = false }: MapEditorProps) {
   // A Pro account with no token set yet (VITE_MAPBOX_TOKEN unset —
   // see the migration/env-setup note in CLAUDE.md) still gets the
   // normal free Esri map, never a broken one.
@@ -982,6 +996,8 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
             : points.length === 1
             ? "Click to add your next post"
             : "Click to add another post, or click your first post again to finish"
+          : readOnly
+          ? "Viewing only — pan and zoom to look around"
           : "Select a line to edit or create a new one"}
       </div>
 
