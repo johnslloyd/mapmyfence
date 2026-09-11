@@ -9,7 +9,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useParcelLookup } from "@/hooks/use-projects";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
-import { Label } from "@/components/ui/label";
 
 const iconUrl = "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png";
 const iconRetinaUrl = "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-2x.png";
@@ -791,10 +790,6 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
 
   const DesktopContent = () => (
     <div className="space-y-4">
-      <div className="space-y-2 pb-3 border-b">
-        <Label className="text-xs">Search Address</Label>
-        <AddressSearchInput value={address} onValueChange={setAddress} onSearch={onManualSearch} isSearching={isSearching} />
-      </div>
       <div className="bg-secondary/50 rounded-lg p-3 text-center border border-border/50">
         <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Total Length</span>
         <div className="text-2xl font-mono font-bold text-foreground">{totalDistance.toFixed(1)} <span className="text-base text-muted-foreground">ft</span></div>
@@ -925,15 +920,23 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
         </Card>
       )}
 
-      {/* Persistent geocode-failure guidance. Suppressed while the "New
-          Fence Line" card above is showing — it already has its own
-          address search box, so a second one here would just be
-          redundant clutter. This is the case that used to strand a user:
-          a project created with an address that doesn't geocode landed
-          them on a map with only a transient toast and (before the
-          DEFAULT_CENTER fix above) no way to even interact with the map,
-          let alone fix the address, before clicking into drawing mode. */}
-      {geocodeIssue && !isDrawing && (
+      {/* Persistent geocode-failure guidance. This is the case that used
+          to strand a user: a project created with an address that
+          doesn't geocode landed them on a map with only a transient
+          toast and (before the DEFAULT_CENTER fix above) no way to even
+          interact with the map, let alone fix the address.
+          Deliberately NOT suppressed while the "New Fence Line" card is
+          showing (2026-09-11) — that card used to have its own
+          redundant address search box (removed: a property's address
+          is already entered once at creation, asking again here made
+          no sense), which is what the suppression existed for in the
+          first place. Without that box, drawing mode has no other way
+          to fix a bad address, so this banner staying up is what
+          prevents the exact stranding this was built to fix. Screen
+          position keeps them from visually colliding regardless (this
+          banner is top-center; the New Fence Line card is anchored
+          top-left/top-right). */}
+      {geocodeIssue && (
         <Card className="absolute top-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-md bg-panel/95 text-panel-foreground backdrop-blur shadow-xl border-border/50 rounded-lg p-4 space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-start gap-2">

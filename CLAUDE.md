@@ -1413,6 +1413,35 @@ before. Fixed with `hsl(var(--primary))`; verified live afterward that
 the computed background resolved to `rgb(22, 41, 75)` — `#16294B`,
 the real token value, not a coincidence.
 
+**A redundant second address search removed (2026-09-11).** Direct
+feedback: a property's address is already entered once, at creation —
+clicking "Create a Fence Line" then offered a SECOND "Search Address"
+field in the New Fence Line card, asking the same question again for
+no reason. Removed that field entirely from `DesktopContent()`'s
+render (it was never in `MobileContent()` to begin with — only the
+desktop card had it); the underlying `address`/`setAddress`/
+`onManualSearch`/`isSearching` state is untouched, since the
+`geocodeIssue` retry banner still genuinely needs it.
+
+**That removal surfaced a real, related gap the old comment had
+papered over**: the `geocodeIssue` banner (the one that lets a user
+retry a bad address after the AUTOMATIC geocode fails) was suppressed
+with `!isDrawing` specifically because "the New Fence Line card already
+has its own address search box, so a second one here would be
+redundant." With that box now gone, keeping the suppression would have
+left someone with a genuinely bad address and NO way to fix it once
+they clicked into drawing mode — the exact stranding this banner was
+originally built to prevent (see the Failed-geocode-dead-end section
+under "API convention" above). Removed the `!isDrawing` condition too,
+so the retry banner now stays up regardless of drawing state — the two
+UI elements don't visually collide anyway (this banner is top-center;
+the New Fence Line card is anchored top-left/top-right).
+
+Verified live: registered a fresh test property with a real, correctly-
+geocoding address, opened the editor, clicked "Create a Fence Line,"
+and confirmed the New Fence Line card goes straight from its header to
+Total Length/action buttons — no address field at all.
+
 ## Map editor polish + a real latent Tooltip bug (2026-08-29)
 
 Four separate pieces of direct user feedback after trying the gate
