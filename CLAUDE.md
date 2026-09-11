@@ -2775,6 +2775,15 @@ confirming dragging is genuinely disabled, not just visually
 suggested to be. Test data deleted afterward; `npm run build`
 re-confirmed clean.
 
+**Second follow-up, 2026-09-11: the "View only" badge card overlapped
+Leaflet's own zoom control.** Reported with a screenshot — the card
+sat `top-4 left-4`, the exact corner Leaflet renders its default `+`/
+`-` zoom buttons in by default, so the two collided. One-line fix:
+moved the card to `top-4 right-4`, leaving the zoom control the only
+thing in the top-left corner. Verified live with a real quote/plan
+page: the card now sits fully clear of the zoom control at any
+viewport width tested.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up
@@ -3793,6 +3802,67 @@ list without a manual refresh; expanding an existing business's row
 showed its real roster with working invite/promote/demote/remove
 controls. Test accounts and businesses created for this were deleted
 afterward; `npm run build` re-confirmed clean.
+
+**Click through an activity-feed event to the real map (2026-09-11).**
+Direct ask: "when I see someone mapped a fence, let me click on a link
+to get this view" — referring to the real, read-only satellite map
+just built for the customer-facing quote plan page (Business accounts
+Phase 5's follow-up, above), not `AdminUserDetail.tsx`'s existing
+abstract `PlanThumbnail` dialog.
+
+**Zero new server routes or schema needed** — `GET /api/admin/projects/
+:id` (`useAdminProject`, already fetched by `AdminUserDetail.tsx`'s own
+project dialog) already returns the full `ProjectWithLines` shape
+(fence lines with real `coordinates`, `gates` including `type`, plus
+the parent `property`'s `address`/`userId`), and `GET /api/admin/events`
+(`useAdminEvents`) already returns each event's raw `projectId` field —
+this was purely additive client-side work.
+
+New `client/src/pages/AdminProjectMapView.tsx` at
+`/admin/projects/:id/map` (registered in `App.tsx`, same self-enforced
+auth+`isAdmin` redirect pattern as `Admin.tsx`/`AdminUserDetail.tsx` —
+`ProtectedRoute` is a no-op passthrough, the real gate is server-side).
+Same "no stripped-down clone of `MapEditorComponent` needed" reasoning
+as the quote plan page: `editingLine={null}` + no mutation callbacks
+already makes it correctly inert, and the existing `readOnly` prop
+handles the one status-bar string that doesn't become correct for
+free. `isPro` is hardcoded `false` here too, same reasoning as the
+public quote page — an admin's own map view has no reason to spend a
+business's/the platform's paid Mapbox usage either. Unlike the public,
+no-login quote view, this page is authenticated and wrapped in the
+real `Layout` (nav included, not a bare header) — an admin should be
+able to get back to the rest of the admin panel normally, not land on
+an isolated page with no way out but the browser's back button. A
+small "Admin view only" badge card (project name/address/total length/
+gate count, plus a "View account" link straight to the property
+owner's `AdminUserDetail` page) floats top-right, and a "Back to Admin"
+link floats top-left — deliberately not the same top-left slot the
+badge card used on the quote page before its own fix above, so this
+new page never had the zoom-control overlap bug to begin with.
+
+**The link itself, added in two places**: `Admin.tsx`'s `ActivityTab`
+event rows now show a "View map →" link whenever the event carries a
+`projectId` — deliberately not scoped to just the literal
+`fence_line_created` event the user named, since `project_created`/
+`estimate_viewed`/`admin_viewed_project` events all carry the same
+`projectId` and would reasonably want the same "go see the real thing"
+link, at no extra cost. `AdminUserDetail.tsx`'s existing project dialog
+(the one showing the abstract `PlanThumbnail`) also gained a "View real
+map →" link below its diagram, pointing at the same route — a natural,
+low-risk extension since the exact same page now serves that entry
+point too, not something the user asked for directly.
+
+Verified live end-to-end: created a real throwaway business/property/
+fence line, confirmed the Activity tab's "Fence line drawn" event for
+that account showed a working "View map →" link resolving to the
+correct project id; opened it and confirmed real satellite imagery, the
+actual drawn line with correct per-segment distance tooltips, the badge
+card and back-link both rendering correctly positioned, and
+`.leaflet-marker-draggable` matching zero elements (genuinely
+non-draggable, not just visually suggested to be); separately opened
+`AdminUserDetail.tsx`'s project dialog for the same account and
+confirmed its new "View real map →" link resolves to the identical
+route. Test data deleted afterward; `npm run build` re-confirmed clean.
 
 ## Usage event logging
 

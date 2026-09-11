@@ -19,6 +19,7 @@ import Account from "./pages/Account";
 import Business from "./pages/Business";
 import Admin from "./pages/Admin";
 import AdminUserDetail from "./pages/AdminUserDetail";
+import AdminProjectMapView from "./pages/AdminProjectMapView";
 import Privacy from "./pages/Privacy";
 import QuoteView from "./pages/QuoteView";
 import QuotePlanView from "./pages/QuotePlanView";
@@ -58,6 +59,7 @@ function Router() {
           "Admin panel" section. */}
       <Route path="/admin" component={Admin} />
       <Route path="/admin/users/:id" component={AdminUserDetail} />
+      <Route path="/admin/projects/:id/map" component={AdminProjectMapView} />
       <ProtectedRoute path="/properties" component={Properties} />
       <ProtectedRoute path="/properties/:id" component={PropertyOverview} />
       {/* Redirect-like behavior for bare /editor */}

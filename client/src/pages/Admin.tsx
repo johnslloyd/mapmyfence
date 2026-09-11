@@ -170,6 +170,21 @@ function ActivityTab() {
               <span className="font-medium shrink-0">{EVENT_LABEL[e.type] || e.type}</span>
               {e.userEmail && <span className="text-muted-foreground truncate">— {e.userEmail}</span>}
               {e.targetUserEmail && <span className="text-muted-foreground truncate">&rarr; {e.targetUserEmail}</span>}
+              {/* Direct ask (2026-09-11): "when I see someone mapped a
+                  fence, let me click through to see it." Shown for any
+                  event carrying a projectId (fence_line_created,
+                  project_created, estimate_viewed, admin_viewed_project)
+                  since they'd all reasonably want the same "go see the
+                  real thing" link, not just the one event type asked
+                  about — same data, same route, no extra cost to
+                  covering all of them. Links to the real, read-only
+                  satellite map (AdminProjectMapView.tsx), not just
+                  AdminUserDetail's existing abstract-diagram dialog. */}
+              {e.projectId && (
+                <Link href={`/admin/projects/${e.projectId}/map`} className="text-xs text-primary hover:underline shrink-0">
+                  View map &rarr;
+                </Link>
+              )}
             </div>
             <span className="text-xs text-muted-foreground font-mono shrink-0" title={format(new Date(e.createdAt), "PPpp")}>
               {formatDistanceToNow(new Date(e.createdAt), { addSuffix: true })}

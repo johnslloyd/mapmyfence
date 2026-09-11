@@ -117,8 +117,11 @@ export default function QuotePlanView() {
         />
         {/* A small, unmissable badge that this is a view, not the real
             editor — a customer landing here with no context shouldn't
-            wonder whether they can click around and change something. */}
-        <div className="absolute top-4 left-4 z-30">
+            wonder whether they can click around and change something.
+            top-RIGHT, not top-left (2026-09-11 fix) — Leaflet's own
+            zoom control renders top-left by default and this card was
+            overlapping it. */}
+        <div className="absolute top-4 right-4 z-30">
           <Card className="bg-panel/95 backdrop-blur shadow-xl border-border/50 rounded-lg py-2 px-3">
             <div className="flex items-center gap-2 mb-1">
               <Badge variant="outline" className="gap-1 text-[10px] h-5 font-normal">

@@ -282,8 +282,17 @@ function AdminProjectDialog({ projectId, onOpenChange }: { projectId: number | n
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-5">
-              <div className="w-full aspect-[160/116] rounded-lg overflow-hidden border border-border bg-panel shrink-0">
-                <PlanThumbnail fenceLines={project.fenceLines || []} />
+              <div className="shrink-0 space-y-1.5">
+                <div className="w-full aspect-[160/116] rounded-lg overflow-hidden border border-border bg-panel">
+                  <PlanThumbnail fenceLines={project.fenceLines || []} />
+                </div>
+                {/* This diagram is a rough illustration, not to scale —
+                    see planPreview.tsx's own comment. The real map
+                    (2026-09-11, same page AdminUserDetail links to now)
+                    shows the actual satellite imagery and drawn line. */}
+                <Link href={`/admin/projects/${project.id}/map`} className="block text-center text-xs text-primary hover:underline">
+                  View real map &rarr;
+                </Link>
               </div>
               <div className="flex flex-col justify-center gap-3">
                 <div className="flex gap-6">
