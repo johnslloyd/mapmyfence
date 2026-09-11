@@ -2637,6 +2637,62 @@ renders at its real stored resolution, centered, on a real sent
 quote's public page. Test data deleted afterward; `npm run build`
 re-confirmed clean.
 
+## Business accounts — Phase 5: a plan diagram on the quote (2026-09-10)
+
+Direct request: reuse "the same diagram from the property page list"
+(`PlanThumbnail`/`buildPlanPreview`, already shared by `Properties.tsx`
+and `PropertyOverview.tsx`) on a sent quote, linking to a bigger,
+still no-login "view only version." One real scoping question settled
+before building: does that view-only page show a bigger version of
+the SAME abstract diagram, or the real interactive satellite map
+read-only? Went with the former — a bigger render of the identical
+diagram, not a new capability (a stripped-down public
+`MapEditorComponent` was the meaningfully bigger alternative,
+explicitly deferred).
+
+**The real gap**: `GET /api/quotes/public/:token` never returned any
+geometry at all — deliberately minimal through Phase 1–4 (just
+branding + totals). It now also returns each fence line's
+`coordinates`/`gates`, exactly the shape `PlanThumbnail` already
+expects — no new transformation needed client-side. Reads the
+project's **current** fence lines via `storage.getProjectWithLines
+(quote.projectId)`, not a per-quote snapshot the way price/branding
+are — a real, deliberate tradeoff: snapshotting geometry too would
+mean a new schema shape (a coordinates array or a whole quote-scoped
+fence-line table) for a diagram that essentially never changes once a
+customer's actually been quoted. If a business genuinely redraws a
+project after sending, the diagram simply reflects that — same
+"derive, don't duplicate" spirit gate rendering already uses
+elsewhere, just applied one level up. Verified live: deleted the fence
+line behind an already-sent quote and confirmed the quote page
+degrades cleanly (the "View fence plan" link disappears entirely,
+price/branding still correct) rather than crashing or showing a
+broken diagram.
+
+**One fetch, shared.** `usePublicQuote` (moved out of `QuoteView.tsx`
+and into `use-projects.ts` so a second page could use it) keeps the
+same query key for a given token — navigating from the quote to its
+plan page is a cache hit, not a second network round trip for
+identical data.
+
+**New `QuotePlanView.tsx`** at `/quotes/:token/plan` — same token, same
+`AuthLayout` shell as `QuoteView.tsx`, a bigger frame around the exact
+same `PlanThumbnail`, total length and gate count alongside it (data
+already on hand, not derived from the diagram itself), a "Back to
+quote" link, and an honest disclaimer that this is a rough shape
+diagram, not the real satellite view it was actually planned on —
+matching this app's established discipline of never letting a
+simplified illustration be mistaken for the real, to-scale thing.
+
+Verified live end-to-end: confirmed the public API response actually
+carries real fence-line coordinates for a sent quote; the inline
+diagram on `QuoteView.tsx` renders the real drawn shape (a real 3-point
+L-shaped test line, not a placeholder); clicking through to
+`/quotes/:token/plan` shows a correctly bigger version of the same
+diagram with the right total length and gate count; and the
+already-tested empty-geometry case above. Test data deleted
+afterward; `npm run build` re-confirmed clean.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up

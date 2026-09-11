@@ -936,6 +936,22 @@ export async function registerRoutes(
       if (!quote) {
         return res.status(404).json({ message: "This quote link isn't valid." });
       }
+      // Phase 5 (2026-09-10) — the plan diagram, added to the public
+      // response so both QuoteView.tsx (a small thumbnail) and
+      // QuotePlanView.tsx (its bigger, dedicated page) can share one
+      // fetch/cache entry rather than two round trips for the same
+      // token. Deliberately reads the project's CURRENT fence lines,
+      // not a per-quote snapshot the way price/branding are — a
+      // schema change (storing geometry on the quote itself) felt
+      // like real overreach for a diagram that essentially never
+      // changes once a customer's actually been quoted; if a fence
+      // gets redrawn after sending, the diagram simply reflects that,
+      // same "derive, don't duplicate" spirit as this app's gate
+      // rendering already uses elsewhere. `getProjectWithLines` has no
+      // ownership check of its own (same one the admin project-detail
+      // route already relies on) — safe here because the token itself
+      // is the access control, not a userId match.
+      const project = await storage.getProjectWithLines(quote.projectId);
       res.json({
         customerName: quote.customerName,
         businessName: quote.businessName,
@@ -946,6 +962,11 @@ export async function registerRoutes(
         totalLinearFeet: quote.totalLinearFeet,
         totalCost: quote.totalCost,
         createdAt: quote.createdAt,
+        fenceLines: (project?.fenceLines || []).map((line) => ({
+          id: line.id,
+          coordinates: line.coordinates.map((c) => ({ lat: c.lat, lng: c.lng })),
+          gates: line.gates.map((g) => ({ segmentIndex: g.segmentIndex, position: g.position })),
+        })),
       });
     } catch (err: any) {
       console.error('Failed to get public quote', err);

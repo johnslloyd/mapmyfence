@@ -828,3 +828,41 @@ export function useQuotePreview(projectId: number | undefined, options: { enable
     enabled: !!projectId && (options.enabled ?? true),
   });
 }
+
+// ============================================
+// BUSINESS TIER, PHASE 5 — the public, no-login quote fetch. Shared by
+// QuoteView.tsx (the quote card, a small plan thumbnail) and
+// QuotePlanView.tsx (its bigger, dedicated plan page) — same token,
+// same query key, so navigating between them is cache-shared rather
+// than a second round trip for identical data. See CLAUDE.md's Phase
+// 5 write-up.
+// ============================================
+
+export type PublicQuote = {
+  customerName: string | null;
+  businessName: string;
+  businessPhone: string | null;
+  businessEmail: string | null;
+  businessLogoData: string | null;
+  includesTeardown: boolean;
+  totalLinearFeet: number;
+  totalCost: number;
+  createdAt: string;
+  fenceLines: { id: number; coordinates: { lat: number; lng: number }[]; gates: { segmentIndex: number; position: number }[] }[];
+};
+
+export function usePublicQuote(token: string | undefined) {
+  return useQuery({
+    queryKey: [api.quotes.getPublic.path, token],
+    queryFn: async () => {
+      if (!token) return null;
+      const url = buildUrl(api.quotes.getPublic.path, { token });
+      const res = await fetch(url);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error("Failed to load quote");
+      return (await res.json()) as PublicQuote;
+    },
+    enabled: !!token,
+    retry: false,
+  });
+}

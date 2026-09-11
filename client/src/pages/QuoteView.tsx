@@ -1,9 +1,9 @@
-import { useRoute } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import { api, buildUrl } from "@shared/routes";
+import { useRoute, Link } from "wouter";
+import { usePublicQuote } from "@/hooks/use-projects";
 import { AuthLayout } from "@/components/AuthLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PlanThumbnail } from "@/lib/planPreview";
 import { Phone, Mail } from "lucide-react";
 import { format } from "date-fns";
 import NotFound from "./not-found";
@@ -20,35 +20,10 @@ import NotFound from "./not-found";
 // view, not what a contractor hands a customer) and no Accept button
 // yet (explicitly deferred past this first slice, see CLAUDE.md's
 // Phase 1 write-up).
-function useQuoteView(token: string | undefined) {
-  return useQuery({
-    queryKey: [api.quotes.getPublic.path, token],
-    queryFn: async () => {
-      if (!token) return null;
-      const url = buildUrl(api.quotes.getPublic.path, { token });
-      const res = await fetch(url);
-      if (res.status === 404) return null;
-      if (!res.ok) throw new Error("Failed to load quote");
-      return (await res.json()) as {
-        customerName: string | null;
-        businessName: string;
-        businessPhone: string | null;
-        businessEmail: string | null;
-        businessLogoData: string | null;
-        includesTeardown: boolean;
-        totalLinearFeet: number;
-        totalCost: number;
-        createdAt: string;
-      };
-    },
-    enabled: !!token,
-    retry: false,
-  });
-}
 
 export default function QuoteView() {
   const [, params] = useRoute("/quotes/:token");
-  const { data: quote, isLoading, isError } = useQuoteView(params?.token);
+  const { data: quote, isLoading, isError } = usePublicQuote(params?.token);
 
   if (isLoading) {
     return (
@@ -118,6 +93,30 @@ export default function QuoteView() {
               </div>
             )}
           </div>
+          {/* Business tier, Phase 5 (2026-09-10) — the same abstract
+              plan diagram Properties.tsx/PropertyOverview.tsx already
+              use, reused here rather than rebuilt a third time. Reads
+              the project's CURRENT fence lines (not a quote-time
+              snapshot the way price/branding are) — see the public
+              route's own comment on that tradeoff. Links to a bigger,
+              dedicated, still no-login version of the exact same
+              diagram — not the live interactive map — for a closer
+              look, same "same diagram, just bigger" scope as asked
+              for. */}
+          {quote.fenceLines.length > 0 && (
+            <Link
+              href={`/quotes/${params?.token}/plan`}
+              className="group block rounded-xl border border-border overflow-hidden hover:border-primary/50 transition-colors"
+            >
+              <div className="h-40 bg-secondary/30">
+                <PlanThumbnail fenceLines={quote.fenceLines} />
+              </div>
+              <div className="px-3 py-2 text-xs font-medium text-primary flex items-center justify-between bg-card">
+                View fence plan
+                <span className="group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+              </div>
+            </Link>
+          )}
           <p className="text-xs text-muted-foreground">
 This is {quote.businessName}'s own price. Reach out to them directly with any questions about what it includes.
           </p>

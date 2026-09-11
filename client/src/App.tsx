@@ -21,6 +21,7 @@ import Admin from "./pages/Admin";
 import AdminUserDetail from "./pages/AdminUserDetail";
 import Privacy from "./pages/Privacy";
 import QuoteView from "./pages/QuoteView";
+import QuotePlanView from "./pages/QuotePlanView";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 
@@ -40,6 +41,7 @@ function Router() {
           A plain Route, not ProtectedRoute: there's no auth check to
           even be a no-op passthrough for. See QuoteView.tsx. */}
       <Route path="/quotes/:token" component={QuoteView} />
+      <Route path="/quotes/:token/plan" component={QuotePlanView} />
       {/* Account itself enforces the auth check (redirects to /login) —
           not a passthrough like ProtectedRoute below, since unlike the
           editor's deliberate guest access, there's no guest-meaningful
