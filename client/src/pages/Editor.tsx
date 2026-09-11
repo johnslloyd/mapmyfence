@@ -1,7 +1,7 @@
 import { Layout } from "@/components/Layout";
 import { LatLng } from "leaflet";
 import { useRoute, useLocation } from "wouter";
-import { useProject, useCreateFenceLine, useDeleteFenceLine, useUpdateFenceLine, useEstimates, useCreateGate, useDeleteGate, useMyOrganization, useCreateQuote, type MyOrganization } from "@/hooks/use-projects";
+import { useProject, useCreateFenceLine, useDeleteFenceLine, useUpdateFenceLine, useEstimates, useCreateGate, useDeleteGate, useMyOrganization, useCreateQuote, useQuotePreview, type MyOrganization } from "@/hooks/use-projects";
 import { MapEditorComponent } from "@/components/MapEditorComponent";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import NotFound from "./not-found";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { SignUpToSaveModal } from "@/components/SignUpToSaveModal";
@@ -211,14 +211,13 @@ function SendQuoteDialog({ projectId, open, onOpenChange }: { projectId: number;
   );
 }
 
-function MaterialEstimates({ projectId, isGuest, onOpenSendQuote }: { projectId: number; isGuest: boolean; onOpenSendQuote: () => void }) {
+// The DIY itemized materials list — unchanged from before Phase 4,
+// just extracted into its own component so MaterialEstimates can
+// switch between this and QuotePreviewView. Still the real Lowe's/
+// Home Depot cost via calculateEstimate; nothing about how this is
+// computed changed, only that it's no longer the only view.
+function MaterialsListView({ projectId }: { projectId: number }) {
   const { data: estimates, isLoading, error } = useEstimates(projectId);
-  // Same React Query cache entry SendQuoteDialog reads (Editor's stable
-  // top level) — calling the hook again here is free, not a second
-  // fetch, and is what decides whether the trigger button renders at
-  // all. See SendQuoteTrigger's own comment for why the ACTUAL dialog
-  // isn't nested here anymore.
-  const { data: myOrg } = useMyOrganization({ enabled: !isGuest });
   // Homeowners shop at one store, not a mix — the server returns one
   // complete option per store (sorted cheapest-first); this just tracks
   // which one is currently shown. Falls back to the cheapest whenever the
@@ -319,6 +318,133 @@ function MaterialEstimates({ projectId, isGuest, onOpenSendQuote }: { projectId:
         from {STORE_LABELS[active.store] || active.store}. Prices are based on
         current material listings and do not include taxes, delivery, or labor.
       </div>
+    </div>
+  );
+}
+
+// Business tier, Phase 4 (2026-09-10) — what an org member sees by
+// default instead of the DIY materials list: their OWN rate-based
+// price (server-computed by the exact same calculateQuotePricing a
+// real send uses — see GET /api/projects/:id/quote-preview), not the
+// real Lowe's/Home Depot material cost. Deliberately doesn't total in
+// teardown — that's only ever decided at send time, in
+// SendQuoteDialog's own checkbox — previewing it here would show a
+// number the business hasn't actually chosen to charge yet.
+function QuotePreviewView({ projectId }: { projectId: number }) {
+  const { data: preview, isLoading, error } = useQuotePreview(projectId);
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
+        <p className="text-sm">Calculating your quote...</p>
+      </div>
+    );
+  }
+
+  if (error || !preview) {
+    return (
+      <div className="text-center py-10 text-destructive border-2 border-dashed border-destructive rounded-lg">
+        <p className="text-sm">Error calculating your quote.</p>
+      </div>
+    );
+  }
+
+  if (preview.totalLinearFeet === 0) {
+    return (
+      <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
+        <p className="text-sm">Draw a fence line to see your quote.</p>
+      </div>
+    );
+  }
+
+  if (preview.missingRates.length > 0) {
+    return (
+      <div className="text-center py-8 border-2 border-dashed rounded-lg space-y-2 px-4">
+        <p className="text-sm text-muted-foreground">Set your rate to see your quote price:</p>
+        <ul className="text-sm font-medium">
+          {preview.missingRates.map((m) => (
+            <li key={`${m.material}-${m.height}`}>{m.label} at {m.height} ft</li>
+          ))}
+        </ul>
+        <Link href="/business" className="text-xs text-primary underline underline-offset-2 inline-block pt-1">
+          Set your pricing &rarr;
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-between items-center font-bold">
+        <span>Customer Price:</span>
+        <span>${preview.totalCost.toFixed(2)}</span>
+      </div>
+      <div className="text-sm text-muted-foreground text-right -mt-2">
+        {preview.totalLinearFeet.toFixed(0)} ft &middot; ${preview.pricePerFoot.toFixed(2)}/ft
+      </div>
+      {preview.teardownRatePerFoot != null && (
+        <p className="text-xs text-muted-foreground">
+          + ${preview.teardownRatePerFoot.toFixed(2)}/ft if teardown of an existing fence is included — choose that when you send the quote.
+        </p>
+      )}
+      <div className="text-xs text-muted-foreground pt-2 border-t">
+        This is YOUR price to the customer, from your own rate sheet — not the real material cost. Switch to Materials List to see what you'd actually buy.
+      </div>
+    </div>
+  );
+}
+
+function MaterialEstimates({ projectId, isGuest, onOpenSendQuote }: { projectId: number; isGuest: boolean; onOpenSendQuote: () => void }) {
+  // Same React Query cache entry SendQuoteDialog reads (Editor's stable
+  // top level) — calling the hook again here is free, not a second
+  // fetch, and is what decides whether the trigger button renders at
+  // all. See SendQuoteTrigger's own comment for why the ACTUAL dialog
+  // isn't nested here anymore.
+  const { data: myOrg } = useMyOrganization({ enabled: !isGuest });
+  const hasOrg = !isGuest && !!myOrg;
+
+  // Free/DIY: materials only, no toggle at all (see MaterialEstimates'
+  // own call site — a plain Pro account with no business has no rate
+  // sheet to preview, so it gets the same materials-only view a free
+  // account does, not a broken/empty "quote" tab). An org member
+  // defaults to the quote view the FIRST time membership loads, then
+  // leaves it alone — a manual switch back to Materials List should
+  // stick, not get clobbered by this same effect re-firing on an
+  // unrelated re-render.
+  const [view, setView] = useState<"quote" | "materials">("materials");
+  const defaultSetRef = useRef(false);
+  useEffect(() => {
+    if (hasOrg && !defaultSetRef.current) {
+      setView("quote");
+      defaultSetRef.current = true;
+    }
+  }, [hasOrg]);
+
+  return (
+    <div className="space-y-4">
+      {hasOrg && (
+        <div className="inline-flex rounded-lg border border-border p-0.5 bg-secondary/30 text-sm">
+          <button
+            type="button"
+            onClick={() => setView("quote")}
+            className={cn("px-3 py-1 rounded-md font-medium transition-colors", view === "quote" ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground")}
+          >
+            Customer Quote
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("materials")}
+            className={cn("px-3 py-1 rounded-md font-medium transition-colors", view === "materials" ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground")}
+          >
+            Materials List
+          </button>
+        </div>
+      )}
+      {hasOrg && view === "quote" ? (
+        <QuotePreviewView projectId={projectId} />
+      ) : (
+        <MaterialsListView projectId={projectId} />
+      )}
       {!isGuest && <SendQuoteTrigger myOrg={myOrg} onClick={onOpenSendQuote} />}
       <Link
         href={`/editor/${projectId}/shopping-list${isGuest ? "?guest=true" : ""}`}

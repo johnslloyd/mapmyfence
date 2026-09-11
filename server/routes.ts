@@ -8,18 +8,7 @@ import { logEvent } from "./events";
 import { lookupParcel, ParcelServiceUnavailableError } from "./parcels";
 import { sendEmail } from "./email";
 import crypto from "crypto";
-
-// Same labels client/src/lib/estimates.ts's MATERIAL_LABELS already
-// uses for the DIYer-facing badges — duplicated here rather than
-// imported (client code isn't reachable from the server bundle) purely
-// for the missing-rate error message in POST /api/projects/:id/quotes,
-// so "set your rate for X" reads like this app's own vocabulary
-// instead of a raw material value.
-const MATERIAL_LABELS: Record<string, string> = {
-  wood_pine: "Pine",
-  wood_cedar: "Cedar",
-  wood_pine_cedar_picket: "Pine (Cedar Pickets)",
-};
+import { calculateQuotePricing } from "./quotePricing";
 
 // Middleware to check if the user is authenticated
 const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
@@ -816,11 +805,6 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Project not found" });
       }
 
-      const totalLinearFeet = project.fenceLines.reduce((acc, line) => acc + (line.length || 0), 0);
-      if (totalLinearFeet === 0) {
-        return res.status(400).json({ message: "Draw at least one fence line before sending a quote." });
-      }
-
       // Phase 3 — the quote's bottom line is now the BUSINESS'S OWN
       // rate per (material, height), not calculateEstimate's real
       // Lowe's/Home Depot material cost (that's still what the DIYer's
@@ -829,31 +813,19 @@ export async function registerRoutes(
       // Lowe's receipt; now they don't get PostPlotter's computed
       // retail cost either — they get their own price. See
       // organizationRates' shared/schema.ts comment for the full
-      // reasoning.
-      //
-      // Deliberately does NOT fall back to a "close enough" material
-      // (unlike the DIY estimate's legacy-value-defaults-to-cedar
-      // behavior) — an unset or unrecognized (material, height) blocks
-      // the quote with a specific, actionable message rather than
-      // guessing at what a business would charge for it.
+      // reasoning. calculateQuotePricing is the SAME function
+      // GET /api/projects/:id/quote-preview uses below, so the number
+      // a Pro/org member previews in their sidebar before sending can
+      // never drift from what actually gets charged.
       const rates = await storage.getOrganizationRates(org.id);
-      const rateFor = (material: string | null, height: number | null) => {
-        const h = Math.round(height ?? 0);
-        return rates.find((r) => r.material === material && r.height === h)?.ratePerFoot;
-      };
-      const missing = new Set<string>();
-      let materialSubtotal = 0;
-      for (const line of project.fenceLines) {
-        const rate = rateFor(line.material, line.height);
-        if (rate === undefined) {
-          missing.add(`${MATERIAL_LABELS[line.material || ""] || line.material || "that material"} at ${Math.round(line.height ?? 0)} ft`);
-        } else {
-          materialSubtotal += rate * (line.length || 0);
-        }
+      const { totalLinearFeet, materialSubtotal, missingRates } = calculateQuotePricing(project.fenceLines, rates);
+      if (totalLinearFeet === 0) {
+        return res.status(400).json({ message: "Draw at least one fence line before sending a quote." });
       }
-      if (missing.size > 0) {
+      if (missingRates.length > 0) {
+        const labels = missingRates.map((m) => `${m.label} at ${m.height} ft`);
         return res.status(400).json({
-          message: `Set your rate for ${Array.from(missing).join(", ")} on your Business page before sending this quote.`,
+          message: `Set your rate for ${labels.join(", ")} on your Business page before sending this quote.`,
         });
       }
 
@@ -904,6 +876,49 @@ export async function registerRoutes(
       }
       console.error('Failed to create quote', err);
       res.status(500).json({ message: 'Failed to create quote' });
+    }
+  });
+
+  // Business tier, Phase 4 (2026-09-10) — a READ-ONLY preview of what
+  // POST .../quotes above would actually charge, for the editor
+  // sidebar's "Customer Quote" view (Editor.tsx's MaterialEstimates) —
+  // an org member sees this by default instead of the DIY materials
+  // list, without sending anything or touching the database. Uses the
+  // exact same calculateQuotePricing function the real send does, so
+  // the previewed number can never drift from what a customer is
+  // actually charged. Deliberately does NOT include teardown — that's
+  // opted into per-quote only at send time (see Editor.tsx's
+  // SendQuoteDialog), so previewing it here would show a number the
+  // business hasn't actually decided to charge yet.
+  app.get(api.quotes.getPreview.path, isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const projectId = Number(req.params.id);
+
+      const orgs = await storage.getUserOrganizations(userId);
+      const org = orgs[0];
+      if (!org) {
+        return res.status(403).json({ message: "This preview requires being part of a business." });
+      }
+
+      const project = await storage.getProject(projectId, userId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const rates = await storage.getOrganizationRates(org.id);
+      const { totalLinearFeet, materialSubtotal, missingRates } = calculateQuotePricing(project.fenceLines, rates);
+
+      res.json({
+        totalLinearFeet,
+        totalCost: materialSubtotal,
+        pricePerFoot: totalLinearFeet > 0 ? materialSubtotal / totalLinearFeet : 0,
+        missingRates,
+        teardownRatePerFoot: org.teardownRatePerFoot,
+      });
+    } catch (err: any) {
+      console.error('Failed to get quote preview', err);
+      res.status(500).json({ message: 'Failed to load quote preview' });
     }
   });
 

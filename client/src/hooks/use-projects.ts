@@ -799,3 +799,32 @@ export function useSetOrganizationRates() {
     },
   });
 }
+
+// ============================================
+// BUSINESS TIER, PHASE 4 — a read-only preview of what sending a quote
+// would actually charge (the same calculateQuotePricing the real send
+// uses server-side), powering Editor.tsx's "Customer Quote" sidebar
+// view. See CLAUDE.md's Phase 4 write-up.
+// ============================================
+
+export type QuotePreview = {
+  totalLinearFeet: number;
+  totalCost: number;
+  pricePerFoot: number;
+  missingRates: { material: string; height: number; label: string }[];
+  teardownRatePerFoot: number | null;
+};
+
+export function useQuotePreview(projectId: number | undefined, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: [api.quotes.getPreview.path, projectId],
+    queryFn: async () => {
+      if (!projectId) return null;
+      const url = buildUrl(api.quotes.getPreview.path, { id: projectId });
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load quote preview");
+      return (await res.json()) as QuotePreview;
+    },
+    enabled: !!projectId && (options.enabled ?? true),
+  });
+}

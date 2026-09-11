@@ -81,7 +81,23 @@ export default function QuoteView() {
   return (
     <AuthLayout>
       <Card className="w-full max-w-md rounded-2xl">
-        <CardHeader>
+        <CardHeader className="text-center items-center">
+          {/* Large and centered, like a letterhead — was a small 32px
+              icon tucked into the contact block near the bottom;
+              direct feedback that a business's branding deserved more
+              prominence than that. Sized to 200px (the same cap
+              Business.tsx's upload already resizes to client-side
+              before it's ever stored, see resizeImageToDataUrl), so
+              this renders at up to the image's real stored resolution
+              rather than stretching a smaller logo past its actual
+              size. */}
+          {quote.businessLogoData && (
+            <img
+              src={quote.businessLogoData}
+              alt={`${quote.businessName} logo`}
+              className="max-w-[200px] max-h-[200px] object-contain mb-2"
+            />
+          )}
           <CardDescription className="font-mono text-xs uppercase tracking-wide">
             Fence quote &middot; {format(new Date(quote.createdAt), "MMM d, yyyy")}
           </CardDescription>
@@ -105,14 +121,9 @@ export default function QuoteView() {
           <p className="text-xs text-muted-foreground">
 This is {quote.businessName}'s own price. Reach out to them directly with any questions about what it includes.
           </p>
-          {(quote.businessPhone || quote.businessEmail || quote.businessLogoData) && (
+          {(quote.businessPhone || quote.businessEmail) && (
             <div className="border-t pt-4 space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                {quote.businessLogoData && (
-                  <img src={quote.businessLogoData} alt={`${quote.businessName} logo`} className="w-8 h-8 rounded-md object-contain border border-border shrink-0" />
-                )}
-                <div className="font-medium">{quote.businessName}</div>
-              </div>
+              <div className="font-medium">{quote.businessName}</div>
               {quote.businessPhone && (
                 <a href={`tel:${quote.businessPhone}`} className="flex items-center gap-2 text-muted-foreground hover:text-primary">
                   <Phone className="w-3.5 h-3.5" /> {quote.businessPhone}

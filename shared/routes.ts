@@ -390,6 +390,21 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    // Phase 4 (2026-09-10) — a read-only preview of what `create` above
+    // would actually charge, using the exact same pricing function
+    // server-side. Powers Editor.tsx's "Customer Quote" sidebar view —
+    // shown by default to an org member instead of the DIY materials
+    // list, with a toggle back to materials for their own planning.
+    // Deliberately excludes teardown (opted into only at send time).
+    getPreview: {
+      method: 'GET' as const,
+      path: '/api/projects/:id/quote-preview',
+      responses: {
+        200: z.any(), // { totalLinearFeet, totalCost, pricePerFoot, missingRates, teardownRatePerFoot }
+        403: errorSchemas.notFound,
+        404: errorSchemas.notFound,
+      },
+    },
   },
   // A property is just an address — name/address/description, no type,
   // no status. See CLAUDE.md's "Property / Project restructure" section.

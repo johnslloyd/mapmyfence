@@ -2562,6 +2562,81 @@ real 403 from `PUT /api/my-organization/rates`. Test accounts, the
 test organization, and its rates were deleted afterward; `npm run
 build` re-confirmed clean.
 
+## Business accounts — Phase 4: quote-first editor view + a real letterhead logo (2026-09-10)
+
+Two direct pieces of feedback after using Phase 3's rate sheet for
+real: the logo on a sent quote was small (32px) and tucked into the
+bottom contact block instead of reading as a letterhead, and the
+editor's sidebar only ever showed the DIY materials list — an org
+member planning a customer quote had no way to see what they'd
+actually be charging without leaving the editor and opening the Send
+Quote dialog.
+
+**Logo: large and centered, not small and low.** `QuoteView.tsx`
+(the public quote page) moves the logo out of the bottom contact block
+and renders it centered at the TOP of the card, capped at
+`max-w-[200px] max-h-[200px]` — matching, not exceeding, the real
+resolution `Business.tsx`'s upload already resizes to client-side
+(`resizeImageToDataUrl`'s `maxDim=200`) before it's ever stored, so
+this shows the logo at up to its real stored size rather than
+stretching a smaller one past its actual resolution. The old inline
+32px copy next to the business name in the contact block is gone —
+one prominent placement, not two competing ones.
+
+**Editor sidebar: a real "Customer Quote" view, not just materials.**
+`Editor.tsx`'s `MaterialEstimates` gains a toggle — but ONLY for an
+org member (`useMyOrganization()`, the same cached query
+`SendQuoteTrigger`/`Account.tsx`'s `BusinessCard` already read): a free
+or personally-Pro-but-not-in-a-business account still sees exactly the
+materials list it always has, no toggle at all. This is a deliberate
+narrowing of "if pro" from the literal request — a personally-approved
+Pro account with no business has no rate sheet (`organizationRates`
+lives on an org, not a user), so a "quote view" for that account would
+have nothing to show; gating on real org membership is what "pro"
+actually needs to mean here for the toggle to do anything useful.
+
+For an org member, the "Customer Quote" view is the default (set the
+FIRST time org membership loads, via a ref-guarded effect — not on
+every render — so a manual switch back to "Materials List" sticks
+rather than getting silently reset). It shows this business's own
+rate-based price (`useQuotePreview`, a new **read-only** query hitting
+`GET /api/projects/:id/quote-preview`) — the exact same number sending
+a real quote would charge, computed by the exact same function.
+Deliberately excludes teardown from the preview total (teardown is
+opted into per-quote only inside `SendQuoteDialog`'s own checkbox at
+send time — showing it baked into a preview would imply a charge the
+business hasn't actually decided to add yet), though the rate is
+still surfaced as a note ("+ $X/ft if teardown is included..."). A
+project with an unrated (material, height) combination shows the same
+honest blocking message a real send would return ("Set your rate for
+Cedar at 8 ft..." + a link to `/business`), never a silently-wrong
+partial total.
+
+**Real de-duplication, not a second copy of the pricing logic.** The
+missing-rate/total-cost math that used to live inline inside
+`POST /api/projects/:id/quotes` moved into a new
+`server/quotePricing.ts` (`calculateQuotePricing`), used by BOTH that
+route and the new preview route — the number a member sees in their
+sidebar can never drift from what a real send actually charges, since
+both paths call the identical function. `MATERIAL_LABELS` (for naming
+a missing material in plain English) moved into that same file for the
+same reason, out of `server/routes.ts`.
+
+Verified live end-to-end: confirmed via `GET .../quote-preview` and
+then the real rendered sidebar that a rated project shows the exact
+right customer price and $/ft; added a second fence line in an
+UNrated material/height and confirmed the sidebar correctly switched to
+the blocking "Set your rate..." message (not a wrong partial total,
+even though the raw API response's own `totalCost` field is a partial
+sum under the hood — the client keys off `missingRates.length`, never
+displays that field when any are missing); toggled between "Customer
+Quote" and "Materials List" both directions and confirmed each showed
+its own genuinely different, correct numbers (a rate-based $3,900 vs.
+Lowe's real $1,933.94 for the same line); confirmed the letterhead logo
+renders at its real stored resolution, centered, on a real sent
+quote's public page. Test data deleted afterward; `npm run build`
+re-confirmed clean.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up
