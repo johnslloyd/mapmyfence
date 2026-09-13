@@ -2994,6 +2994,78 @@ its docked column — the fix is known, just deferred) and item 4 (an
 explicit "+ Extend from Start/End" button pair in `EditFenceLineCard`,
 replacing the current bare, ambiguous click-an-endpoint trigger).
 
+## Map editor discoverability, part two — a wider click target, and staying in edit mode across a drag (2026-09-14)
+
+Two more direct pieces of feedback, both in the same "make the map
+editor's real behavior match what it looks like it should do" vein as
+part one above.
+
+**1. Selecting a line required an unreasonably precise click.** A
+Leaflet SVG `Polyline`'s click target is exactly as wide as its
+rendered stroke — 3px here — so clicking a line to select it meant
+landing within about 1.5px of the actual path. Fixed with a standard
+Leaflet technique rather than just thickening the visible line (which
+would've changed how it looks at rest, not just how forgiving it is to
+click): each segment now renders an INVISIBLE second `Polyline` at the
+same position with `weight: 20, opacity: 0`, carrying every event
+handler (click, hover, and the placing-a-gate segment click), while
+the visible line (now `interactive={false}`) is purely decorative.
+`opacity: 0` still receives pointer events — Leaflet doesn't set
+`pointer-events: none` on interactive layers — so this is a real ~20px
+hit band, invisible but fully clickable. Verified live: a click 9px
+from the actual rendered line (six times the old ~1.5px tolerance)
+correctly selects it.
+
+**2. Moving a point exited edit mode, every time.** Reported as "it
+resets the line and goes back to being uneditable" — real and
+reproducible: `handleUpdateLine` (`Editor.tsx`) is the ONE function
+both the auto-save-on-every-tweak call sites (drag a point, delete a
+point, square a corner — none of which have a separate "save" step)
+AND the explicit "Save Changes" button call, and it unconditionally
+exited editing (`setSelectedLineId(null)`, `setUiState("SIDEBAR")`,
+a toast) on every successful save regardless of which kind it was.
+Dragging one point meant getting kicked back to the line list and
+having to re-click the line to adjust another point.
+
+Fixed with one new parameter: `handleUpdateLine(line, exitAfterSave =
+false)`. Every auto-save call site (`MapEditorComponent`'s
+`onPointDragEnd`/`onSquareCorner`, `handleDeletePoint`) already calls
+it with just one argument, so they now default to staying in edit
+mode — persisting the change, but never leaving. Only
+`EditFenceLineCard`'s "Save Changes" button passes `true`, since
+that's the one moment that's actually supposed to mean "I'm done."
+The success toast is now conditional on `exitAfterSave` too — firing
+one on every single drag would've read as noise once the line stays
+open for more edits; staying in edit mode is itself the signal that
+nothing's final yet.
+
+**A real verification lesson, worth recording alongside part one's**:
+scripting a Leaflet marker drag through to a full commit stayed
+inconsistent in this environment even with the `setView`-centering
+technique part one found — sometimes the visual drag tracked correctly
+but the server commit never fired, seemingly at random. Rather than
+keep chasing that specific flakiness, verification split into two
+reliable, independent checks instead: (a) `exitAfterSave` defaulting
+`false` was confirmed directly by reading every auto-save call site
+(none pass a second argument), and by observing editing stay open
+across several drag attempts regardless of whether that particular
+drag's commit actually landed; (b) the "Save Changes" button path was
+verified with a plain click (far more reliable to simulate than a
+drag) — confirmed a real `PUT /api/fence-lines/:id → 200 OK`, then a
+direct read of the panel's rendered text confirming it swapped back to
+the sidebar view. Between the two, both branches of the new
+conditional are independently confirmed even though a single, clean
+drag-to-commit-while-staying-open run couldn't be reproduced on
+demand. Also re-encountered this file's own documented stale-console-
+replay gotcha TWICE while chasing what first looked like a real crash
+(`Cannot read properties of undefined (reading 'baseVal')`, complete
+with a component stack trace) — both times a genuinely fresh tab
+showed zero errors, confirming it was replayed old noise, not a
+regression.
+
+`npm run check` and `npm run build` both clean; test account/property
+deleted afterward.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up

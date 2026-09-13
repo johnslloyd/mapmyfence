@@ -349,13 +349,21 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
             illustration (accent fill, primary border/text, mono font)
             rather than plain white shadowed text, so a "run" reads as a
             deliberate, named piece of the fence, not a generic label. */}
+        {/* Invisible, much-wider "hit area" polyline (2026-09-14) — direct
+            feedback that clicking a line to select it required an
+            unreasonably precise click, since a real Leaflet SVG path's
+            click target is exactly as wide as its visible stroke (3px,
+            here). Rather than thickening the visible line itself (which
+            would change its look at rest, not just its click tolerance),
+            a separate transparent line with a much larger `weight` carries
+            every event handler instead — a standard Leaflet technique for
+            widening a thin line's hit-test area without touching its
+            appearance. `opacity: 0` still receives pointer events (Leaflet
+            doesn't set `pointer-events: none` on interactive layers), so
+            this is invisible but fully clickable/hoverable. */}
         <Polyline
           positions={[p1, p2]}
-          pathOptions={
-            placingGate
-              ? { color: "#f59e0b", weight: weight + 2, dashArray: "8 6" }
-              : { color, weight: isHovered && !isEditing ? weight + 3 : weight }
-          }
+          pathOptions={{ color: "#000", weight: 20, opacity: 0 }}
           eventHandlers={
             placingGate && onSegmentClick
               ? { click: (e: any) => onSegmentClick(i, e.latlng) }
@@ -365,6 +373,15 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
                   mouseout: () => setIsHovered(false),
                 }
           }
+        />
+        <Polyline
+          positions={[p1, p2]}
+          pathOptions={
+            placingGate
+              ? { color: "#f59e0b", weight: weight + 2, dashArray: "8 6" }
+              : { color, weight: isHovered && !isEditing ? weight + 3 : weight }
+          }
+          interactive={false}
         >
           <Tooltip position={midPoint} permanent direction="center" className="bg-transparent border-none shadow-none">
             <span className="inline-block rounded px-2 py-0.5 font-mono text-xs font-semibold bg-accent/95 text-primary border border-primary shadow-sm">

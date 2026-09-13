@@ -610,7 +610,18 @@ export default function Editor() {
     }
   };
 
-  const handleUpdateLine = async (line: any) => {
+  // `exitAfterSave` (2026-09-14, direct feedback): this one function
+  // serves two very different moments — a quick in-place tweak (drag a
+  // point, delete a point, square a corner, all auto-saved immediately
+  // with no separate "Save" step) and the explicit "Save Changes"
+  // button, which really does mean "I'm done." Both used to exit
+  // editing mode unconditionally on success, so every single drag
+  // silently kicked the line back to read-only, forcing a re-click to
+  // keep adjusting it. Now only an EXPLICIT save (the button) exits;
+  // every auto-save call site (MapEditorComponent's onPointDragEnd/
+  // onSquareCorner, handleDeletePoint below) just persists and stays
+  // in edit mode, since none of those are "I'm done" moments.
+  const handleUpdateLine = async (line: any, exitAfterSave = false) => {
     if (!line || !project) return;
     // Great-circle distance via Leaflet's LatLng.distanceTo (matches how
     // MapEditorComponent computes length while drawing) — NOT a flat
@@ -637,9 +648,15 @@ export default function Editor() {
         material: line.material,
         height: line.height,
       });
-      toast({ title: "Success", description: "Fence line updated.", variant: "success" });
-      setSelectedLineId(null);
-      setUiState("SIDEBAR");
+      if (exitAfterSave) {
+        toast({ title: "Success", description: "Fence line updated.", variant: "success" });
+        setSelectedLineId(null);
+        setUiState("SIDEBAR");
+      }
+      // Silent otherwise (2026-09-14) — a toast on every single drag
+      // would read as noise once the line stays open for more edits;
+      // staying in edit mode is itself the signal that nothing's final
+      // yet.
     } catch (error: any) {
       console.error("Failed to update line", error);
       toast({ title: 'Error', description: error?.message || 'Failed to update fence line', variant: 'destructive' });

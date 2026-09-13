@@ -131,7 +131,7 @@ export function EditFenceLineCard({
 
         <div className="flex gap-2">
           <Button
-            onClick={() => handleUpdateLine(editingLine)}
+            onClick={() => handleUpdateLine(editingLine, true)}
             disabled={updateLineMutation.isPending}
             className="flex-1"
           >
