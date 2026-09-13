@@ -6,7 +6,7 @@ import { MapEditorComponent } from "@/components/MapEditorComponent";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, ArrowLeft, Save, Menu, Camera, ClipboardList, Plus } from "lucide-react";
+import { Trash2, ArrowLeft, Save, PanelLeftOpen, Camera, ClipboardList, Plus } from "lucide-react";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -967,12 +967,20 @@ export default function Editor() {
             isPro={!!user?.isPro}
           />
 
-          {/* Mobile Menu Trigger */}
-          <div className="md:hidden absolute top-4 left-4 z-30">
+          {/* Mobile Menu Trigger — moved to top-RIGHT (2026-09-14, direct
+              feedback) from top-left, where it sat directly on top of
+              Leaflet's own default zoom controls. Also swapped its icon
+              from a plain hamburger (`Menu`) — identical to Layout.tsx's
+              own, unrelated mobile nav toggle in the header, despite
+              opening a completely different thing (this project's
+              fence-line sidebar, not the account nav) — to `PanelLeftOpen`,
+              which actually depicts the interaction: a panel opening
+              from the left, matching this Sheet's own `side="left"`. */}
+          <div className="md:hidden absolute top-4 right-4 z-30">
             <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
               <SheetTrigger asChild>
                 <Button size="icon" variant="secondary" className="shadow-md h-10 w-10 rounded-full" aria-label="Open project menu">
-                  <Menu className="h-5 w-5" />
+                  <PanelLeftOpen className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="p-0 w-[85vw] sm:w-[400px]">

@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useParcelLookup } from "@/hooks/use-projects";
+import { GATE_LABEL, GATE_WIDTH_FEET } from "@/lib/gates";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 
@@ -343,14 +344,15 @@ function squareCorner(
   };
 }
 
-const GATE_LABEL: Record<string, string> = { single: "Single Gate", double: "Double Gate" };
-// Real-world opening widths, not arbitrary pixel sizes — a single gate
-// is a standard 3-4ft walk-through opening, a double gate (two hinged
-// leaves) is roughly double that. Used to size the gate's visual span
-// as an actual fraction of the segment's real length (via
-// LatLng.distanceTo(), same as every other real distance in this app),
-// so it reads as genuinely wider on the map, not just a bigger icon.
-const GATE_WIDTH_FEET: Record<string, number> = { single: 4, double: 8 };
+// GATE_LABEL/GATE_WIDTH_FEET moved to lib/gates.ts (2026-09-14) — this
+// file's own copy was a duplicate of EditFenceLineCard.tsx's, and the
+// same real-world opening widths (a single gate's standard 3-4ft
+// walk-through opening, a double gate roughly double that) now also
+// surface on that card's "+ Add" buttons, not just here. Used below to
+// size the gate's visual span as an actual fraction of the segment's
+// real length (via LatLng.distanceTo(), same as every other real
+// distance in this app), so it reads as genuinely wider on the map,
+// not just a bigger icon.
 
 function GateMarker({ gate, points }: { gate: { type: string; segmentIndex: number; position: number }, points: any[] }) {
   const p1 = points[gate.segmentIndex];

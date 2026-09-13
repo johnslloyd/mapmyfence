@@ -1213,6 +1213,33 @@ auto-navigates with zero added friction, confirming the common case is
 unaffected. `npm run check` and `npm run build` both clean; test
 accounts/properties deleted afterward.
 
+## Mobile menu trigger: moved off the zoom controls, given a real icon (2026-09-14)
+
+Direct feedback: at mobile widths, `Editor.tsx`'s own floating "open
+the project sidebar" button sat at `top-4 left-4` — the exact corner
+Leaflet renders its default zoom `+`/`-` controls in, so the two
+collided (the same shape of bug already fixed once for
+`QuotePlanView.tsx`'s "View only" badge, and again for this same
+page's Before You Dig banner). Moved to `top-4 right-4`, a corner
+nothing else claims on mobile (the desktop-only floating/docked right
+panel is `hidden md:block`).
+
+**Also swapped its icon**, per the same feedback: it used a plain
+`Menu` (hamburger) icon — identical to `Layout.tsx`'s own, completely
+unrelated mobile nav toggle in the header (that one opens the account
+nav; this one opens this project's fence-line sidebar) — genuinely
+confusing to have the same glyph mean two different things one scroll
+apart. Swapped for `PanelLeftOpen`, which actually depicts the real
+interaction (a panel opening from the left) and matches this button's
+own `SheetContent side="left"`.
+
+Verified live on a real 375px mobile viewport: the trigger now sits
+clear of the zoom controls, opens the correct sidebar content, and
+renders the new icon — re-confirmed on a genuinely fresh tab after a
+same-tab check briefly showed stale `ReferenceError`s from this file's
+own documented HMR-replay gotcha, not a real regression. `npm run
+check` and `npm run build` both clean.
+
 ## Gates on wooden fences — single/double, placed not drawn (2026-08-29)
 
 Real gap identified during a pre-VPS-push strategy review: the BOM had
@@ -1310,6 +1337,23 @@ groups both under a "GATES" section with working Lowe's product links
 `client/src/lib/estimates.ts` — anticipated but never populated until
 now), deleted the double gate and confirmed the estimate dropped back
 to exactly one hardware kit with the cane bolt gone.
+
+**The "+ Single Gate"/"+ Double Gate" buttons now say how wide each
+one actually is (2026-09-14).** Direct feedback — nothing on the
+buttons themselves said what "single" vs. "double" meant size-wise
+before you placed one; `GATE_WIDTH_FEET` (the real 4ft/8ft opening
+widths the map marker is ALREADY sized to, see `GateMarker` above) had
+never been surfaced anywhere in the UI, only used internally for the
+rendered span. Buttons now read "+ Single Gate (4 ft)" / "+ Double
+Gate (8 ft)"; the list of already-placed gates in the sidebar gained
+the same suffix ("Single Gate — 4 ft"). While in there, pulled
+`GATE_LABEL` (which `EditFenceLineCard.tsx` and `MapEditorComponent.tsx`
+had each separately defined, byte-for-byte identical) and
+`GATE_WIDTH_FEET` into a new shared `client/src/lib/gates.ts`, so both
+files read the same real numbers instead of two copies that could
+silently drift apart. Verified live: a real gate placement flow still
+worked end-to-end (placed a single gate, confirmed it listed correctly
+with its width); `npm run check` and `npm run build` both clean.
 
 ## First-fence-line onboarding clarity (2026-09-10)
 

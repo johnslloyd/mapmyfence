@@ -5,8 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { DoorOpen, X, Trash2 } from "lucide-react";
-
-const GATE_LABEL: Record<string, string> = { single: "Single Gate", double: "Double Gate" };
+import { GATE_LABEL, GATE_WIDTH_FEET } from "@/lib/gates";
 
 export function EditFenceLineCard({
   editingLine,
@@ -103,7 +102,7 @@ export function EditFenceLineCard({
             <div className="space-y-1.5">
               {gates.map((gate) => (
                 <div key={gate.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5 text-sm">
-                  <span>{GATE_LABEL[gate.type] || "Gate"}</span>
+                  <span>{GATE_LABEL[gate.type] || "Gate"}{GATE_WIDTH_FEET[gate.type] != null ? ` — ${GATE_WIDTH_FEET[gate.type]} ft` : ""}</span>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -127,11 +126,16 @@ export function EditFenceLineCard({
             </div>
           ) : (
             <div className="flex gap-2">
+              {/* Widths added (2026-09-14), direct feedback — nothing
+                  said what "single" vs "double" actually meant size-
+                  wise before you placed one. Same GATE_WIDTH_FEET the
+                  rendered marker on the map is actually sized to (see
+                  lib/gates.ts), not a separately-invented number. */}
               <Button variant="outline" size="sm" className="flex-1" onClick={() => onStartPlacingGate('single')}>
-                + Single Gate
+                + Single Gate ({GATE_WIDTH_FEET.single} ft)
               </Button>
               <Button variant="outline" size="sm" className="flex-1" onClick={() => onStartPlacingGate('double')}>
-                + Double Gate
+                + Double Gate ({GATE_WIDTH_FEET.double} ft)
               </Button>
             </div>
           )}
