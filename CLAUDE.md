@@ -3066,6 +3066,86 @@ regression.
 `npm run check` and `npm run build` both clean; test account/property
 deleted afterward.
 
+## Map editor discoverability, part three — badge spacing, select instead of hover, plain-language copy (2026-09-14)
+
+Direct follow-up, same day as part two, after actually using the new
+drag handle: the delete/square-corner badges sometimes overlapped it,
+and a real concept of "selecting a point" was requested — hover should
+reveal a drag target, not a delete button.
+
+**1. Badge anchors widened to clear the drag handle's real
+footprint.** `deletePointIcon`/`squareCornerIcon`'s offsets
+(`[-4,38]`/`[30,38]`) were tuned against the OLD teardrop pin's shape
+and never revisited when `dragHandleIcon` (part one, above) replaced
+it with a wider, differently-anchored circle — the two genuinely
+overlapped in a real corner region, confirmed by working out both
+icons' actual pixel footprints relative to the point rather than
+eyeballing it. New anchors (`[-18,52]`/`[42,52]`) push each badge
+further out along both axes, leaving a real multi-pixel gap instead of
+sitting flush.
+
+**2. Delete/square-corner badges now appear on a CLICK selection, not
+a hover.** Hover fought the drag handle directly: reaching for the
+handle meant the cursor passed over the point first, which could
+flicker the badges in and out right as you were trying to grab
+something else. New `selectedIdx` state (replacing `hoveredIdx`
+entirely — grep confirms nothing else referenced it) is set by
+clicking a point; it stays selected (badges showing) until you click
+that same point again (toggle off) or a different point (moves
+selection) — no more disappearing the instant the cursor drifts.
+Deleting a point also clears the selection afterward (the point it
+referred to no longer exists); squaring a corner leaves it selected,
+since the point itself is unchanged.
+
+**A real visual gap this surfaced**: with badges appearing on a
+deliberate click rather than a transient hover, there was no visual
+answer to "which point is currently selected" beyond the badges
+themselves floating nearby. New `dragHandleIconSelected` — the same
+circle, with a `hsl(var(--accent))` ring added via `box-shadow` (no
+anchor recalculation needed; box-shadow doesn't affect layout) —
+swapped in via `icon={isEditing ? (selectedIdx === idx ?
+dragHandleIconSelected : dragHandleIcon) : defaultIcon}`. Confirmed
+live via computed style that the ring resolves to a real accent color,
+not a bare `var()` silently dropping to transparent (this file's own
+recurring token-usage bug class — see the Brand section).
+
+**A real, minor rough edge this change surfaced on its own, fixed in
+the same pass**: clicking an ENDPOINT still fires the existing (and
+already-flagged, deferred — see part one's "still open" item 4)
+`onEndpointClick` → extend-mode trigger, unchanged. Selecting that same
+endpoint on the same click meant a delete badge could sit right on a
+point while the whole map had switched into "click anywhere to extend
+the line" mode — a real point of clutter, not a hypothetical one
+(reproduced live: `Finish Extending` showing at the same time as a
+delete badge on the endpoint that triggered it). Fixed by threading a
+new `isExtending` prop into the editingLine's own `FenceLine` render
+only, suppressing both badges whenever it's true — confirmed live that
+triggering extend on an endpoint now shows zero stray badges, and that
+a normal interior-point selection elsewhere is unaffected.
+
+**3. Plain-language instruction copy.** Two status-pill rewrites,
+both naming the actual action instead of an abstract verb:
+"Select a line to edit or create a new one" → "Click a fence line to
+select and edit it, or draw a new one" (says HOW, not just what);
+"Drag points to edit the line or click an endpoint to extend" →
+"Drag a point to move it, click one for more options, or click an
+endpoint to extend the line" (now also names the new click-to-select
+behavior, not just drag and extend).
+
+Verified live end-to-end: hovering a point no longer reveals either
+badge (checked directly — marker count stays at just the line's own
+drag handles); clicking one brings the count up by exactly the right
+number (1 for an endpoint — delete only; 2 for an interior point —
+delete and square-corner) and applies the accent-ringed selected icon;
+clicking a different point moves the selection cleanly; both rewritten
+pill messages render correctly. Zero console errors on a fresh tab —
+re-hit this file's own stale-console-replay gotcha (a full React
+component-stack error, `Cannot read properties of undefined (reading
+'baseVal')`) a third time this week chasing what first looked like a
+real regression, confirmed absent on a genuinely fresh tab both times.
+`npm run check` and `npm run build` both clean; test account/property
+deleted afterward.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up

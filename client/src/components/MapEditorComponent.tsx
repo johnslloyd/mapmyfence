@@ -105,30 +105,56 @@ const dragHandleIcon = new DivIcon({
   tooltipAnchor: [16, -28],
 });
 
-// Hover-only delete affordance for a line point while editing — a
-// small red × badge, anchored so it sits up-and-right of the point's
-// own pin rather than on top of it. Desktop-only by design (hover has
-// no touch equivalent); this was an explicit, deliberate tradeoff, not
-// an oversight — see the pin marker's own eventHandlers below.
+// Selected variant (2026-09-14) — same circle, plus a visible accent
+// ring so "this is the point the delete/square-corner badges below
+// belong to" reads clearly at a glance, now that those badges appear
+// on a deliberate click rather than a passing hover (see FenceLine's
+// own `selectedIdx` comment). Same box/anchor as `dragHandleIcon` —
+// only the ring is added via `box-shadow`, which doesn't affect layout,
+// so nothing else needed re-anchoring for this variant.
+const dragHandleIconSelected = new DivIcon({
+  className: "leaflet-drag-handle",
+  html: `<div style="position:relative;width:25px;height:41px;"><div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);background:hsl(var(--primary));border-radius:9999px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 0 0 3px hsl(var(--accent)), 0 1px 3px rgba(0,0,0,0.4);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="m15 19-3 3-3-3"/><path d="m19 9 3 3-3 3"/><path d="M2 12h20"/><path d="m5 9-3 3 3 3"/><path d="m9 5 3-3 3 3"/></svg></div></div>`,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  tooltipAnchor: [16, -28],
+});
+
+// Select-only (not hover — see FenceLine's `selectedIdx` comment)
+// delete affordance for a line point while editing — a small red ×
+// badge, anchored so it sits up-and-right of the point's own drag
+// handle rather than on top of it. Desktop-only by design (a
+// click-to-select has no less discoverable touch equivalent here yet);
+// this was an explicit, deliberate tradeoff, not an oversight — see the
+// pin marker's own eventHandlers below.
 // 26px (up from an earlier 18px pass) with real Lucide glyph data — a
 // plain "×" character read as thin/inconsistent at a glance; this is
 // Lucide's exact X path (lucide-react's x.js), same "confirmed exact
 // glyph, not hand-approximated" discipline this app's favicon was built
-// with, not a redrawn approximation. iconAnchor scaled to keep the same
-// real gap above the point marker's own pin (12px) and the same 4px
-// horizontal offset the original 18px version used.
+// with, not a redrawn approximation.
+//
+// Anchor widened 2026-09-14, direct feedback: this badge and
+// `dragHandleIcon`'s own circle footprint (bottom-anchored, roughly
+// [-12,+12] x [-24,0] relative to the point) genuinely overlapped —
+// the drag-handle redesign made the handle itself much wider than the
+// old teardrop pin this offset was originally tuned against. Pushed
+// further right (x starts at +18, clearing the handle's +12 edge) and
+// further up (y starts at -52, clearing the handle's -24 top edge),
+// each with a real few-px gap rather than sitting flush.
 const deletePointIcon = new DivIcon({
   className: "",
   html: `<div style="background:#ef4444;border-radius:9999px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></div>`,
   iconSize: [26, 26],
-  iconAnchor: [-4, 38],
+  iconAnchor: [-18, 52],
 });
 
-// Hover-only "square this corner" affordance — an interior vertex only
+// Select-only "square this corner" affordance — an interior vertex only
 // (needs two adjacent segments to form a corner at all; an endpoint has
 // just one). Anchored up-and-LEFT (mirrored from deletePointIcon's
 // up-and-right) so the two never overlap when both show on the same
-// hovered point. Same desktop-only-by-design reasoning as delete.
+// selected point. Same desktop-only-by-design reasoning as delete, and
+// the same 2026-09-14 anchor-widening to clear the drag handle.
 //
 // Lucide's exact CornerRightDown path (lucide-react's corner-right-
 // down.js) — reads as "turn/adjust" more clearly than the plain "∟"
@@ -146,7 +172,7 @@ const squareCornerIcon = new DivIcon({
   className: "",
   html: `<div style="background:hsl(var(--primary));border-radius:9999px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 15 15 20 20 15"/><path d="M4 4h7a4 4 0 0 1 4 4v12"/></svg></div>`,
   iconSize: [26, 26],
-  iconAnchor: [30, 38],
+  iconAnchor: [42, 52],
 });
 
 const postIcon = {
@@ -315,11 +341,27 @@ function GateMarker({ gate, points }: { gate: { type: string; segmentIndex: numb
   );
 }
 
-function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineClick, onEndpointClick, onDeletePoint, onSquareCorner, gates = [], placingGate, onSegmentClick }: { points: any[], color: string, weight: number, isEditing?: boolean, onPointDragEnd?: (index: number, newLatLng: LatLng) => void, onLineClick?: () => void, onEndpointClick?: (index: number) => void, onDeletePoint?: (index: number) => void, onSquareCorner?: (index: number) => void, gates?: { type: string; segmentIndex: number; position: number }[], placingGate?: boolean, onSegmentClick?: (segmentIndex: number, latlng: LatLng) => void }) {
-  // Hover-only delete-point affordance (desktop only — see
-  // deletePointIcon's own comment). Tracked here, not per-Marker state,
-  // since only one point can be hovered at a time.
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineClick, onEndpointClick, onDeletePoint, onSquareCorner, gates = [], placingGate, onSegmentClick, isExtending }: { points: any[], color: string, weight: number, isEditing?: boolean, onPointDragEnd?: (index: number, newLatLng: LatLng) => void, onLineClick?: () => void, onEndpointClick?: (index: number) => void, onDeletePoint?: (index: number) => void, onSquareCorner?: (index: number) => void, gates?: { type: string; segmentIndex: number; position: number }[], placingGate?: boolean, onSegmentClick?: (segmentIndex: number, latlng: LatLng) => void, isExtending?: boolean }) {
+  // Which point's delete/square-corner badges are showing — a CLICK
+  // selection, not a hover (2026-09-14, direct feedback). Hover was the
+  // original design, but it fought the drag handle directly: nudging
+  // the cursor toward the handle to grab it could brush past the
+  // hover-triggered badges first, and the badges could flicker in/out
+  // while just aiming. A deliberate click is a real, stable choice —
+  // it stays showing until you click elsewhere, so there's time to
+  // actually reach for a badge without it vanishing. Tracked here (one
+  // per LINE, not per-Marker) since only one point can be selected at
+  // a time.
+  //
+  // `isExtending` (passed down only for the editingLine render) hides
+  // both badges regardless of selection — clicking an ENDPOINT selects
+  // it here AND still fires the existing (unchanged, pending its own
+  // redesign — see CLAUDE.md) click-to-extend trigger, swapping the
+  // whole map into "click to extend" mode. A delete badge sitting on
+  // that same point while the pill and a "Finish Extending" button are
+  // telling you to click the map instead would just be visual clutter,
+  // not a real option worth keeping on screen.
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   // Whole-line hover highlight (2026-09-13), direct feedback that an
   // unselected line wasn't obviously clickable — nothing distinguished a
   // "just sitting there" line from an interactive one until you actually
@@ -406,7 +448,7 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
         <Fragment key={p.id || `marker-${idx}`}>
           <Marker
             position={[p.lat, p.lng]}
-            icon={isEditing ? dragHandleIcon : defaultIcon}
+            icon={isEditing ? (selectedIdx === idx ? dragHandleIconSelected : dragHandleIcon) : defaultIcon}
             draggable={isEditing}
             eventHandlers={{
               dragend: (e) => {
@@ -419,10 +461,19 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
                   onEndpointClick(idx);
                 } else if (onLineClick && !isEditing) {
                   onLineClick();
+                  return;
+                }
+                // Click-to-select (2026-09-14) — toggles the delete/
+                // square-corner badges on for THIS point, off for
+                // whichever other point had them. Endpoints also still
+                // fire onEndpointClick above (unchanged, pending a real
+                // redesign of that trigger — see CLAUDE.md); selecting
+                // them here too is harmless even though extend mode's
+                // own UI takes over immediately after.
+                if (isEditing) {
+                  setSelectedIdx((current) => (current === idx ? null : idx));
                 }
               },
-              mouseover: () => isEditing && setHoveredIdx(idx),
-              mouseout: () => setHoveredIdx((current) => (current === idx ? null : current)),
             }}
           >
             <Tooltip permanent direction="top" offset={[0, -20]} className="bg-transparent border-none shadow-none font-bold text-primary">
@@ -430,34 +481,35 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
             </Tooltip>
           </Marker>
           {/* Delete-this-point affordance — only while editing, only on
-              hover, and only when the line would still have >= 2 points
-              left afterward (a line can't be shorter than that; removing
-              the whole thing is the sidebar's trash-icon job instead). */}
-          {isEditing && onDeletePoint && hoveredIdx === idx && points.length > 2 && (
+              the SELECTED point (a click, not a hover — see
+              `selectedIdx`'s own comment), and only when the line would
+              still have >= 2 points left afterward (a line can't be
+              shorter than that; removing the whole thing is the
+              sidebar's trash-icon job instead). */}
+          {isEditing && !isExtending && onDeletePoint && selectedIdx === idx && points.length > 2 && (
             <Marker
               position={[p.lat, p.lng]}
               icon={deletePointIcon}
               interactive={true}
               eventHandlers={{
-                click: () => onDeletePoint(idx),
-                mouseover: () => setHoveredIdx(idx),
-                mouseout: () => setHoveredIdx((current) => (current === idx ? null : current)),
+                click: () => {
+                  onDeletePoint(idx);
+                  setSelectedIdx(null);
+                },
               }}
             />
           )}
           {/* "Square this corner" affordance — interior vertices only
               (idx 0 and the last point are endpoints, with only one
               adjacent segment, so there's no corner to square there).
-              Same hover-only, desktop-only-by-design pattern as delete. */}
-          {isEditing && onSquareCorner && hoveredIdx === idx && idx > 0 && idx < points.length - 1 && (
+              Same select-only, desktop-only-by-design pattern as delete. */}
+          {isEditing && !isExtending && onSquareCorner && selectedIdx === idx && idx > 0 && idx < points.length - 1 && (
             <Marker
               position={[p.lat, p.lng]}
               icon={squareCornerIcon}
               interactive={true}
               eventHandlers={{
                 click: () => onSquareCorner(idx),
-                mouseover: () => setHoveredIdx(idx),
-                mouseout: () => setHoveredIdx((current) => (current === idx ? null : current)),
               }}
             />
           )}
@@ -990,6 +1042,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
              gates={editingLine.gates || []}
              placingGate={!!placingGateType}
              onSegmentClick={handleGateSegmentClick}
+             isExtending={isExtending}
            />
         )}
         
@@ -1078,7 +1131,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
             : isExtending
             ? "Click on the map to extend the line"
             : editingLine
-            ? "Drag points to edit the line or click an endpoint to extend"
+            ? "Drag a point to move it, click one for more options, or click an endpoint to extend the line"
             : isDrawing
             // Progressive, not a static message regardless of progress —
             // matches NewFenceLineCard's own "click the first point again
@@ -1090,7 +1143,10 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
               : "Click to add another post, or click your first post again to finish"
             : readOnly
             ? "Viewing only — pan and zoom to look around"
-            : "Select a line to edit or create a new one"}
+            // Plain-language rewrite (2026-09-14, direct feedback) —
+            // named the actual action (click) instead of the abstract
+            // verb ("select"), which didn't say HOW to select anything.
+            : "Click a fence line to select and edit it, or draw a new one"}
         </div>
       </div>
 
