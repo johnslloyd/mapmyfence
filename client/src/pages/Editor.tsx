@@ -24,7 +24,7 @@ import { NewProjectInstructions } from "@/components/NewProjectInstructions";
 import { EditFenceLineCard } from "@/components/EditFenceLineCard";
 import { NewFenceLineCard } from "@/components/NewFenceLineCard";
 import { STORE_LABELS, MATERIAL_LABELS, consolidateMaterials } from "@/lib/estimates";
-import { ClipboardCheck, ShieldAlert, Send, Copy, Check } from "lucide-react";
+import { ClipboardCheck, ShieldAlert, Send, Copy, Check, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -451,11 +451,17 @@ function MaterialEstimates({ projectId, isGuest, onOpenSendQuote }: { projectId:
       >
         <ClipboardCheck className="w-4 h-4" /> View Shopping List
       </Link>
+      {/* Was a full-width bordered button matching "View Shopping List"
+          above it — direct feedback that the muted border/text combo
+          read as a DISABLED button, not a real, working link. This is
+          genuinely a lower-emphasis, "read when you need it" page, not
+          a primary action competing with Shopping List, so it's now a
+          plain small text link instead of button chrome. */}
       <Link
         href={`/editor/${projectId}/before-you-dig${isGuest ? "?guest=true" : ""}`}
-        className="flex items-center justify-center gap-2 w-full rounded-md border border-border text-muted-foreground text-sm font-medium py-2 hover:bg-secondary/40 hover:text-foreground transition-colors"
+        className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors pt-1"
       >
-        <ShieldAlert className="w-4 h-4" /> Before You Dig & Permits
+        <ShieldAlert className="w-3.5 h-3.5" /> Before You Dig & Permits
       </Link>
     </div>
   );
@@ -491,6 +497,15 @@ export default function Editor() {
   const [editingLine, setEditingLine] = useState<any | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [placingGateType, setPlacingGateType] = useState<'single' | 'double' | null>(null);
+  // Bottom-left map banner (2026-09-14) — a second, more visible surface
+  // for the same Before You Dig & Permits page the sidebar's own small
+  // link points to, styled like a real toast (see toast.tsx's own
+  // `border shadow-lg rounded-md` treatment) rather than another button.
+  // Deliberately session-local (resets on the next page load, not
+  // persisted to localStorage) — a safety reminder like this is worth
+  // showing again on a later visit, not dismissed once and gone for
+  // good the way a one-time onboarding tip would be.
+  const [showBeforeYouDigBanner, setShowBeforeYouDigBanner] = useState(true);
 
   // On mobile the fence-line list lives in a full-screen sheet over the map.
   // Once the user starts drawing or editing a line, close it so the map
@@ -970,6 +985,40 @@ export default function Editor() {
           {!isPanelDocked && (
             <div className="hidden md:block absolute top-4 right-4 z-10 w-80 lg:w-96 h-[calc(100%-2rem)]">
                 <RightPanel />
+            </div>
+          )}
+
+          {/* Before You Dig reminder — a real toast-styled banner, not a
+              button, sitting in the map's bottom-left corner. Direct
+              feedback wanted this as a SECOND, more visible surface
+              alongside the sidebar's own small link, not a replacement
+              for it.
+              On mobile specifically, this corner isn't actually free —
+              MapEditorComponent's own "Show property line"/"Hide
+              property line" buttons live at bottom-right, and a narrow
+              viewport doesn't have room for both a `max-w-xs` banner on
+              the left AND that button on the right without them
+              colliding (confirmed live on a real Mississippi property,
+              the one case both render at once). `bottom-20` on mobile
+              stacks this banner ABOVE that row instead of beside it;
+              `md:bottom-4` drops back down once there's real desktop
+              width to share. */}
+          {showBeforeYouDigBanner && (
+            <div className="absolute bottom-20 md:bottom-4 left-4 z-30 flex items-start gap-2 rounded-md border bg-background text-foreground shadow-lg p-3 max-w-[240px] md:max-w-xs">
+              <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0 text-muted-foreground" />
+              <Link
+                href={`/editor/${projectId}/before-you-dig${isGuest ? "?guest=true" : ""}`}
+                className="text-sm hover:underline"
+              >
+                Remember to call 811 before you dig
+              </Link>
+              <button
+                onClick={() => setShowBeforeYouDigBanner(false)}
+                className="text-muted-foreground hover:text-foreground shrink-0"
+                aria-label="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
         </div>

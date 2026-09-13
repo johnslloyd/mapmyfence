@@ -1733,6 +1733,47 @@ search URL, `call811.com`/`tel:811` links resolved to the correct
 destinations, and the disclaimer banner renders before any actionable
 content on the page.
 
+**The sidebar's own link to this page read as a disabled button —
+fixed, and a second surface added (2026-09-14).** Direct feedback:
+`Editor.tsx`'s "Before You Dig & Permits" link used the exact same
+bordered-button chrome as "View Shopping List" above it, just in muted
+gray (`border-border text-muted-foreground`) — which read as a
+DISABLED button, not a real, working, lower-emphasis link. Simplified
+to a plain small text link (`text-xs text-muted-foreground`, no
+border) — this page is genuinely secondary to Shopping List, not a
+second primary action competing for the same visual weight.
+
+**Also added, alongside (not instead of) that link**: a real toast-
+styled banner ("Remember to call 811 before you dig") in the map's
+own bottom-left corner, matching `toast.tsx`'s own `border shadow-lg
+rounded-md` visual language rather than inventing a new one — a
+second, more visible surface for the same reminder. Dismissible (an
+X, no auto-timeout, since a real toast's usual auto-dismiss would
+undercut the point of a safety reminder someone might not read in
+time) and deliberately session-local, not persisted to `localStorage`
+— worth surfacing again on a later visit, unlike a one-time onboarding
+tip.
+
+**A real mobile overlap caught live, not shipped**: this banner and
+`MapEditorComponent`'s own "Show property line"/"Hide property line"
+buttons (bottom-right, see "Parcel boundaries" above) both fit fine
+side-by-side on desktop, but collided on a narrow viewport — confirmed
+on a real Mississippi property (the one case both actually render at
+once, now that the property-line buttons are gated by location).
+Fixed with a mobile-only vertical offset (`bottom-20 md:bottom-4`)
+that stacks the banner above that row instead of beside it, plus a
+tighter `max-w-[240px]` on mobile so its own text doesn't spill wider
+than that gap allows.
+
+Verified live: the sidebar link now renders as plain text with no
+button chrome; the map banner shows in the correct corner, links to
+the right project's Before You Dig page, and its dismiss button
+actually hides it; re-checked the real Mississippi-property overlap
+case at both 375px mobile (stacks cleanly, no collision) and 1400px
+desktop (sits side-by-side as originally intended) after the fix.
+Zero console errors. `npm run check` and `npm run build` both clean;
+test account/property deleted afterward.
+
 ## Account tiers — the first real piece of the "Pro tool set" roadmap item (2026-08-30)
 
 Prompted by a UX complaint: "My Properties" (a searchable tile grid) is
