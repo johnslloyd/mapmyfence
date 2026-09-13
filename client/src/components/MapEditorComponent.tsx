@@ -77,6 +77,23 @@ const MAPBOX_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/">
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795];
 const DEFAULT_ZOOM = 4;
 
+// Real state's-edge coordinates (Mississippi's actual southernmost,
+// northernmost, westernmost, easternmost points), padded outward by a
+// few tenths of a degree so a property genuinely near a border isn't
+// wrongly hidden — not a precise state-line polygon lookup, just a
+// cheap client-side box to decide whether "Show property line" is even
+// worth offering at all. This is deliberately approximate (a rectangle,
+// not the real jagged border), same spirit as this file's other
+// "close enough at the relevant scale" approximations (squareCorner's
+// local-planar geometry) — false positives near a border are possible
+// and handled by the lookup itself just returning "not found," false
+// negatives (hiding it for a real MS property) are the one thing worth
+// avoiding, hence the padding.
+const MS_BOUNDS = { minLat: 29.9, maxLat: 35.1, minLng: -91.8, maxLng: -87.9 };
+function isLikelyInMississippi(lat: number, lng: number): boolean {
+  return lat >= MS_BOUNDS.minLat && lat <= MS_BOUNDS.maxLat && lng >= MS_BOUNDS.minLng && lng <= MS_BOUNDS.maxLng;
+}
+
 // Drag-handle marker for an editing-mode point (2026-09-13) — real
 // visual differentiation from a plain numbered pin, not just the old
 // `.leaflet-edit-marker { filter: hue-rotate(120deg) }` rule this
@@ -585,6 +602,24 @@ function MapEvents({ onMapClick }: { onMapClick: (e: any) => void }) {
   return null;
 }
 
+// Reports the map's current center up to the parent, so it can decide
+// whether "Show property line" is even worth offering (2026-09-14,
+// direct feedback — that button used to render unconditionally on
+// every map, everywhere, for a feature that only ever works in
+// Mississippi). Always mounted (not gated like MapEvents above, which
+// only cares about clicks while drawing/extending) — visibility needs
+// to track panning at all times. `useMapEvents` returns the real map
+// instance the same way `useMap()` does; the mount-time effect below
+// covers the initial center, since `moveend` only fires on a later,
+// real pan/zoom.
+function MapCenterTracker({ onCenterChange }: { onCenterChange: (center: LatLng) => void }) {
+  const map = useMapEvents({ moveend: () => onCenterChange(map.getCenter()) });
+  useEffect(() => {
+    onCenterChange(map.getCenter());
+  }, [map]);
+  return null;
+}
+
 function AddressSearchInput({ value, onValueChange, onSearch, isSearching, autoFocus }: { value: string, onValueChange: (value: string) => void, onSearch: () => void, isSearching: boolean, autoFocus?: boolean }) {
   return (
     <div className="flex gap-2">
@@ -668,6 +703,12 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
     geometry?: GeoJSON.Polygon | GeoJSON.MultiPolygon | any;
   } | null>(null);
   const parcelLookup = useParcelLookup();
+  // Drives whether "Show property line" even renders — see
+  // isLikelyInMississippi's own comment and MapCenterTracker below.
+  // Starts null (unknown) rather than defaulting to visible, so there's
+  // no flash-then-hide the instant the map actually reports its center.
+  const [mapCenter, setMapCenter] = useState<LatLng | null>(null);
+  const showsParcelFeature = !!mapCenter && isLikelyInMississippi(mapCenter.lat, mapCenter.lng);
   // Persistent (non-toast) guidance for when the address can't be located —
   // null once there's no unresolved issue. The toast alone used to be the
   // only feedback: it disappears in a few seconds and leaves the user with
@@ -848,9 +889,16 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
             setParcel(result);
           } else {
             setParcel(null);
+            // No longer blames "we only cover Mississippi" here — the
+            // button itself is now gated to only appear when the map's
+            // center is already within Mississippi (see
+            // isLikelyInMississippi), so reaching this toast means the
+            // STATE wasn't the problem. What's actually true: either
+            // this exact spot isn't centered on a real parcel, or it's
+            // a genuine gap in the underlying data.
             toast({
               title: "No property line found here",
-              description: "Property line lookup currently only covers Mississippi. Pan the map to center on the property first.",
+              description: "Try panning so the property is centered under the map — or this spot may not be in the available parcel data yet.",
             });
           }
         },
@@ -986,6 +1034,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
             itself, which a plain unweighted rule here would lose to. */}
         <style>{`.leaflet-drag-handle { cursor: grab !important; } .leaflet-drag-handle:active { cursor: grabbing !important; }`}</style>
         {(isDrawing || isExtending) && <MapEvents onMapClick={handleMapClick} />}
+        <MapCenterTracker onCenterChange={setMapCenter} />
         <FitBoundsOnLoad existingLines={existingLines} isMobile={isMobile} maxZoom={useMapboxImagery ? MAPBOX_NATIVE_ZOOM : TILE_NATIVE_ZOOM} />
 
         {parcel && parcel.geometry && (
@@ -1156,29 +1205,40 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
         </div>
       )}
 
-      <div className="absolute bottom-4 right-4 z-40 flex gap-2">
-        {parcel && (
-          <Button
-            size="sm"
-            variant="secondary"
-            className="shadow-sm bg-background/90 backdrop-blur"
-            onClick={() => setParcel(null)}
-          >
-            Hide property line
-          </Button>
-        )}
-        <Button
-          size="sm"
-          variant="secondary"
-          className="gap-2 shadow-sm bg-background/90 backdrop-blur"
-          onClick={handleShowPropertyLine}
-          disabled={parcelLookup.isPending}
-          title="Looks up the property line at the center of the map (Mississippi only for now)"
-        >
-          {parcelLookup.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPinned className="h-4 w-4" />}
-          Show property line
-        </Button>
-      </div>
+      {/* Gated on `showsParcelFeature` (2026-09-14, direct feedback) —
+          this used to render unconditionally on every project's map
+          regardless of where it actually is, for a feature that only
+          ever works in Mississippi. `|| parcel` keeps "Hide property
+          line" reachable even if a result is already showing and the
+          map then gets panned just outside the box — the user should
+          still be able to dismiss what's already on screen. */}
+      {(showsParcelFeature || parcel) && (
+        <div className="absolute bottom-4 right-4 z-40 flex gap-2">
+          {parcel && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="shadow-sm bg-background/90 backdrop-blur"
+              onClick={() => setParcel(null)}
+            >
+              Hide property line
+            </Button>
+          )}
+          {showsParcelFeature && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="gap-2 shadow-sm bg-background/90 backdrop-blur"
+              onClick={handleShowPropertyLine}
+              disabled={parcelLookup.isPending}
+              title="Looks up the property line at the center of the map (Mississippi only, for now)"
+            >
+              {parcelLookup.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPinned className="h-4 w-4" />}
+              Show property line
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

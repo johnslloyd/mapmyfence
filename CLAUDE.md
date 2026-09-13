@@ -3867,6 +3867,61 @@ the real live outage and confirmed a `503` with the honest message,
 not a `200` — this fix is real and testable independent of whether/when
 Mississippi's service ever comes back.
 
+**The outage is still ongoing, days later (confirmed live 2026-09-14,
+not assumed from the earlier note) — re-verified with a fresh `curl -v`:
+TLS handshake completes and the certificate verifies clean, then the
+actual request gets `Recv failure: Connection reset by peer`, byte-for-
+byte the same failure mode as the original 2026-09-10 finding. Nothing
+in this app changed or can change about that; it's still Mississippi's
+own infrastructure.**
+
+**"Show property line" used to render on every project's map,
+everywhere — direct feedback fixed this (2026-09-14).** Three real
+problems, reported together: the feature is effectively down right now
+(the outage above), its one "not found" message named Mississippi and
+told the user to "pan the map" even when they were in Tennessee (where
+no amount of panning would ever find anything, since the state isn't
+covered at all), and — independent of both — offering the button
+unconditionally on every map was always going to be a bad experience
+for the large majority of users outside the one state this ever
+helps.
+
+Fixed by actually gating the button on location, not just narrating the
+limitation in a tooltip nobody reads. New `isLikelyInMississippi(lat,
+lng)` (`MapEditorComponent.tsx`) — a plain, padded lat/lng bounding-box
+check (real state-edge coordinates, padded outward so a property
+genuinely near the border isn't wrongly hidden), deliberately NOT a
+real state-line polygon lookup — that's a rectangle approximation, same
+"close enough at the relevant scale" spirit as `squareCorner`'s local-
+planar geometry elsewhere in this file. A new `MapCenterTracker`
+(mounted unconditionally inside the map, using `useMapEvents({moveend})`
+plus a mount-time read for the initial center) keeps a live `mapCenter`
+in state; "Show property line" only renders when that center is
+plausibly within Mississippi. Starts at `null` (unknown) rather than
+defaulting to visible, so there's no flash-then-hide the instant a real
+center comes in. "Hide property line" stays reachable via `|| parcel`
+even if a result is already showing and the map gets panned just
+outside the box afterward — dismissing what's already on screen should
+always be possible.
+
+The remaining "not found" toast (a genuine 200, checked successfully,
+no parcel at this exact point) no longer mentions Mississippi or
+suggests panning as if state coverage were still in question — since
+the button itself now only appears when the center is already judged
+to be in Mississippi, reaching this toast means the state was never the
+problem. Reworded to name the two things that ARE still true: the exact
+point isn't centered on a parcel, or this specific spot is a genuine
+gap in the underlying data.
+
+Verified live: a real Mississippi property (Jackson) shows the button;
+a real Tennessee property (Memphis, MS_BOUNDS padding tested — Memphis
+sits close enough to the state line to be a meaningful edge case, and
+correctly falls just outside the padded box) shows neither button at
+all; the live outage's own 503 message still fires correctly and still
+accurately names Mississippi, since that's genuinely whose service is
+down. Zero console errors. `npm run check` and `npm run build` both
+clean; test account/properties deleted afterward.
+
 ## Deployment
 
 **Canonical target: the Hostinger VPS** (`srv1070754.hstgr.cloud`), run as a
