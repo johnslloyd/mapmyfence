@@ -3146,6 +3146,47 @@ real regression, confirmed absent on a genuinely fresh tab both times.
 `npm run check` and `npm run build` both clean; test account/property
 deleted afterward.
 
+## Map editor discoverability, part four — the "Editing Line" card finally fills its column (2026-09-14)
+
+Closes the last item from the original four-part discussion (parts
+one through three, above) — deliberately deferred until now.
+`EditFenceLineCard`'s outer `Card` was `w-full max-w-md` (448px cap,
+no centering), but this card is ONLY ever rendered inside `Editor.tsx`'s
+docked panel (`isPanelDocked` is always true whenever `uiState` is
+`"EDITING"` — the floating/undocked branch can't reach this state at
+all), which is 480px/560px wide. At the wider breakpoint this left a
+real, uneven, uncentered gap on the right — the cap never served an
+actual purpose here since there was never a second, narrower context
+for it to apply to. Fix: dropped `max-w-md` entirely, so the card
+fills its column exactly like `EditorSidebar`'s own fence-line list
+cards already do (which never had this constraint in the first place).
+
+**A real, self-inflicted crash caught immediately, not shipped**:
+the first attempt at this fix left a bare `{/* comment */}` as the
+literal first thing inside `return (...)`, outside any enclosing JSX
+element — valid-*looking* but actually invalid syntax (a JSX comment
+only parses as a child of a surrounding element, not as a standalone
+expression). This didn't just fail to compile — it took the whole
+local dev server process down (`exited with code 1`), confirmed via
+`preview_logs` showing a real Babel parse error at the exact line.
+Moved the explanation to a plain `//` comment above `return (`
+instead (safe anywhere), restarted the dev server, and re-verified
+clean from there.
+
+Verified live: entering edit mode on a real line and measuring the
+card's actual rendered width against its container confirms it now
+fills the column (527px inside a 560px panel, the ~33px gap being
+exactly the panel's own padding) instead of stopping short at 448px;
+confirmed visually via screenshot that both edges now sit flush with
+even padding, matching the rest of the docked sidebar's own cards.
+Zero console errors on a fresh tab. `npm run check` and `npm run
+build` both clean; test account/property deleted afterward.
+
+With this, all four items from the original map-editor-discoverability
+discussion are resolved except the one explicitly skipped by the user
+(extending a line via an ambiguous endpoint click, still using its
+original, unredesigned trigger — see part three's own note on this).
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up

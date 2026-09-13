@@ -36,8 +36,16 @@ export function EditFenceLineCard({
   deleteGateMutation?: any;
 }) {
   const gates: any[] = editingLine.gates || [];
+  // `max-w-md` removed (2026-09-14), direct feedback — this card is
+  // ONLY ever rendered inside Editor.tsx's docked panel (isPanelDocked
+  // is always true whenever uiState is "EDITING"), which is 480px/560px
+  // wide. Capped at max-w-md (448px) with no centering, it left an
+  // uncentered, uneven gap on the right at the wider breakpoint — the
+  // cap never served a real purpose here, since the floating/undocked
+  // panel branch can't render this card at all. Now fills its column
+  // exactly like EditorSidebar's own fence-line cards already do.
   return (
-    <Card className={cn("z-10 w-full max-w-md rounded-lg bg-panel text-panel-foreground", className)}>
+    <Card className={cn("z-10 w-full rounded-lg bg-panel text-panel-foreground", className)}>
       <CardHeader>
         <CardTitle>Editing Line</CardTitle>
       </CardHeader>
