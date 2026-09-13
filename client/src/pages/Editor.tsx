@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Trash2, ArrowLeft, Save, Menu, Camera, ClipboardList, Plus } from "lucide-react";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import NotFound from "./not-found";
 import { useState, useEffect, useRef } from "react";
@@ -783,103 +782,80 @@ export default function Editor() {
         <p className="text-sm text-muted-foreground truncate">{project.property.address}</p>
       </div>
       <ScrollArea className="flex-1">
-        <Tabs defaultValue="lines">
-          <div className="px-4 pt-4 sticky top-0 bg-panel z-10 border-b">
-            <TabsList className="w-full grid grid-cols-2">
-              <TabsTrigger value="lines">Fence Lines</TabsTrigger>
-              <TabsTrigger value="details">Property Details</TabsTrigger>
-            </TabsList>
-          </div>
-          <TabsContent value="lines" className="mt-2">
-            <div className="px-4 py-2 bg-muted/30 border-y flex items-center justify-between">
-              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {project.fenceLines?.length || 0} Lines Defined
-              </span>
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                Total: {project.fenceLines?.reduce((sum: number, line: any) => sum + (line.length || 0), 0).toFixed(0)} ft
-              </Badge>
-            </div>
-            <div className="p-4 space-y-3">
-              {project.fenceLines?.map((line: any) => (
-                <Card
-                  key={line.id}
-                  className={cn(
-                    "group overflow-hidden border-border/60 hover:border-primary/50 transition-colors cursor-pointer",
-                    selectedLineId === line.id && "border-primary/80"
-                  )}
-                  onClick={() => setSelectedLineId(selectedLineId === line.id ? null : line.id)}
-                >
-                  <div className="p-3 flex items-start gap-3">
-                    <div className="w-2 h-full min-h-[3rem] rounded-full bg-primary/20 shrink-0 self-stretch" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <h4 className="font-medium text-sm truncate">{line.name}</h4>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => handleDeleteLine(line.id)}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
-                          {MATERIAL_LABELS[line.material] || line.material}
-                        </Badge>
-                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
-                          {line.height} ft high
-                        </Badge>
-                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
-                          {line.length ? `${line.length.toFixed(0)} ft` : "No length"}
-                        </Badge>
-                      </div>
-                    </div>
+        {/* The "Fence Lines"/"Property Details" toggle was removed
+            2026-09-13, direct feedback that the details tab was getting
+            too much emphasis for information that's rarely useful
+            mid-edit (the property's name/address/notes, already visible
+            above in this sidebar's own header, plus this project's own
+            name/status). Fence Lines is now the only view — no tabs
+            needed for one option. */}
+        <div className="px-4 py-2 bg-muted/30 border-y flex items-center justify-between">
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {project.fenceLines?.length || 0} Lines Defined
+          </span>
+          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+            Total: {project.fenceLines?.reduce((sum: number, line: any) => sum + (line.length || 0), 0).toFixed(0)} ft
+          </Badge>
+        </div>
+        <div className="p-4 space-y-3">
+          {project.fenceLines?.map((line: any) => (
+            <Card
+              key={line.id}
+              className={cn(
+                "group overflow-hidden border-border/60 hover:border-primary/50 transition-colors cursor-pointer",
+                selectedLineId === line.id && "border-primary/80"
+              )}
+              onClick={() => setSelectedLineId(selectedLineId === line.id ? null : line.id)}
+            >
+              <div className="p-3 flex items-start gap-3">
+                <div className="w-2 h-full min-h-[3rem] rounded-full bg-primary/20 shrink-0 self-stretch" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <h4 className="font-medium text-sm truncate">{line.name}</h4>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleDeleteLine(line.id)}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
                   </div>
-                </Card>
-              ))}
-              {/* Deliberately NOT styled as a primary CTA (2026-09-10) —
-                  this only ever renders once at least one line already
-                  exists (the SIDEBAR state requires existingLines.length
-                  > 0; a brand-new project's first line uses
-                  NewProjectInstructions' own, correctly-prominent button
-                  instead). A second fence line is the uncommon case, not
-                  the expected next action, so this reads as a quiet,
-                  available option rather than something competing for
-                  attention with the lines already listed above it. */}
-              <Button variant="outline" size="sm" className="w-full gap-2 text-muted-foreground font-normal" onClick={handleStartDrawing}>
-                <Plus className="w-3.5 h-3.5" /> Add another fence line
-              </Button>
-            </div>
-            <div className="p-4 space-y-4 border-t">
-              <h4 className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
-                <ClipboardList className="w-4 h-4" />
-                Material Estimates
-              </h4>
-              <MaterialEstimates projectId={project.id} isGuest={isGuest} onOpenSendQuote={() => setSendQuoteOpen(true)} />
-            </div>
-          </TabsContent>
-          <TabsContent value="details" className="p-4">
-            <div className="space-y-4">
-              <div>
-                <Label>Property Name</Label>
-                <div className="text-sm font-medium">{project.property.name}</div>
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                      {MATERIAL_LABELS[line.material] || line.material}
+                    </Badge>
+                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                      {line.height} ft high
+                    </Badge>
+                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                      {line.length ? `${line.length.toFixed(0)} ft` : "No length"}
+                    </Badge>
+                  </div>
+                </div>
               </div>
-              <div>
-                <Label>Address</Label>
-                <div className="text-sm text-muted-foreground">{project.property.address || "No address provided"}</div>
-              </div>
-              <div>
-                <Label>Description</Label>
-                <div className="text-sm text-muted-foreground">{project.property.description || "No notes"}</div>
-              </div>
-              <div>
-                <Label>This Project</Label>
-                <div className="text-sm text-muted-foreground">{project.name} — {project.status}</div>
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+            </Card>
+          ))}
+          {/* Deliberately NOT styled as a primary CTA (2026-09-10) —
+              this only ever renders once at least one line already
+              exists (the SIDEBAR state requires existingLines.length
+              > 0; a brand-new project's first line uses
+              NewProjectInstructions' own, correctly-prominent button
+              instead). A second fence line is the uncommon case, not
+              the expected next action, so this reads as a quiet,
+              available option rather than something competing for
+              attention with the lines already listed above it. */}
+          <Button variant="outline" size="sm" className="w-full gap-2 text-muted-foreground font-normal" onClick={handleStartDrawing}>
+            <Plus className="w-3.5 h-3.5" /> Add another fence line
+          </Button>
+        </div>
+        <div className="p-4 space-y-4 border-t">
+          <h4 className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+            <ClipboardList className="w-4 h-4" />
+            Material Estimates
+          </h4>
+          <MaterialEstimates projectId={project.id} isGuest={isGuest} onOpenSendQuote={() => setSendQuoteOpen(true)} />
+        </div>
       </ScrollArea>
     </div>
   );

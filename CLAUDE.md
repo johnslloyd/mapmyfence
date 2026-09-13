@@ -2784,6 +2784,95 @@ thing in the top-left corner. Verified live with a real quote/plan
 page: the card now sits fully clear of the zoom control at any
 viewport width tested.
 
+## Project status: simplified, and finally wired up for real (2026-09-13)
+
+Direct feedback prompted a real finding, not just a request: every
+project has shown a "planning" status badge since the Property/Project
+restructure (`planning | quoting | in-progress | completed`,
+`shared/schema.ts`), and `PropertyOverview.tsx`/`Properties.tsx` had
+color-coded badge styling ready for all four — but **nothing anywhere
+ever set a project past `"planning"`**. It was hardcoded at creation
+(`server/routes.ts`) with no route or UI to change it afterward, so
+every project in the database was stuck at "planning" forever, by
+omission, not by design.
+
+**The real design question wasn't "add a status picker" — it was which
+transitions the app can actually know about vs. which only a human
+could ever tell it.** `in-progress`/`completed` describe PHYSICAL
+construction progress this app has no way to observe (no "I started
+building" signal exists anywhere), so a manual picker for those would
+just be a second, unenforced honor-system field — not worth the UI. By
+contrast, "quoting" describes something the app already knows the
+instant it happens: a quote got sent. Direct user decision, matching
+that reasoning: drop `in-progress`/`completed` entirely (enum narrowed
+to `["planning", "quoting"]` — `text`'s `enum` option is TS-only, see
+"Database migrations" below, so narrowing needed no `ALTER TABLE`; a
+stray old value can't exist since nothing ever wrote one), and stop
+showing status to DIY accounts at all — it's only ever meaningful for a
+real business project, since only an org member can ever send a quote
+(`routes.ts`'s "Sending a quote requires being part of a business..."
+check) and a DIY project can now never be anything but "planning."
+
+**`quoting` is now set automatically, not by hand.**
+`POST /api/projects/:id/quotes` calls `storage.updateProject(projectId,
+{ status: "quoting" })` right after the quote itself is created — a
+project can never drift out of sync with "did we actually quote this,"
+since it's a side effect of the one real event that means that, not a
+field someone has to remember to update. No route exists to set status
+any other way; there's nothing left for a human to manually pick.
+
+**Client-side, status only renders for a real org member** — the same
+`useMyOrganization()` gate `Editor.tsx`'s "Customer Quote" toggle
+already uses (see Phase 4 above), not the broader `isPro` flag, since a
+personally-approved Pro account with no business membership can never
+send a quote either and would otherwise be shown a status stuck at
+"Planning" forever, same dead-end as before. `Properties.tsx`'s card
+badge and `PropertyOverview.tsx`'s two project-row components
+(`FenceProjectRow`/`LawnCareProjectRow`) all gained this gate; a
+multi-project property's project-COUNT badge is unaffected (unlike a
+status, a count is real structural information regardless of account
+type). New `client/src/lib/projectStatus.ts` holds the shared
+`STATUS_LABELS` (raw `"quoting"` → shown "Quote Sent" — a display-label
+map, not a stored-value rename, same pattern as `MATERIAL_LABELS`, so
+no data migration for a wording change) and two color-class maps (flat,
+for `PropertyOverview.tsx`'s badges; translucent, for `Properties.tsx`'s
+cards floating over a photo) — pulled out of each page's own local
+`STATUS_BADGE` constant, which had already drifted inconsistent between
+the two files (amber vs. blue for the same "quoting" status) before
+this pass unified them. Admin's own views
+(`AdminUserDetail.tsx`/`Admin.tsx`) still show the raw status
+regardless of org membership — an internal diagnostic view, not
+DIYer-facing messaging, so it wasn't in scope for the "remove it for
+DIYers" ask.
+
+Verified live end-to-end: a fresh DIY account's property/project rows
+render with zero status text anywhere (checked via `innerText`, not
+just eyeballing); granted the same account a real test org and a rate,
+drew a fence line, and confirmed sending a real quote flipped the
+project's status to `"quoting"` server-side *and* the UI immediately
+showed "Quote Sent" on both `Properties.tsx`'s card and
+`PropertyOverview.tsx`'s row, in the correct blue. `npm run check` and
+`npm run build` both clean; test account/org deleted afterward.
+
+## Editor sidebar: the "Property Details" tab is gone (2026-09-13)
+
+Direct feedback: the "Fence Lines" / "Property Details" toggle atop
+`Editor.tsx`'s docked sidebar was putting too much emphasis on
+information that's rarely useful mid-edit — the property's own
+name/address (already visible right above, in the sidebar's own
+header) plus the current project's name and status. Removed the toggle
+and the "Property Details" tab's content entirely, not just hidden —
+"Fence Lines" is now the sidebar's only view, so the `Tabs`/`TabsList`/
+`TabsTrigger`/`TabsContent` wrapper came out too (that import is now
+unused and was dropped). Nothing else about the sidebar changed; the
+Fence Lines content renders exactly as it did before, just without a
+tab bar sitting above it doing nothing once there's only one option.
+
+Verified live: a real project with a drawn line renders the docked
+sidebar with "N Lines Defined" directly at the top — no tab row, and
+`document.body.innerText` confirms "Property Details" doesn't appear
+anywhere on the page. `npm run check` and `npm run build` both clean.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up
