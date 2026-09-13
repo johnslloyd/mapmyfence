@@ -94,6 +94,40 @@ function isLikelyInMississippi(lat: number, lng: number): boolean {
   return lat >= MS_BOUNDS.minLat && lat <= MS_BOUNDS.maxLat && lng >= MS_BOUNDS.minLng && lng <= MS_BOUNDS.maxLng;
 }
 
+// Real finding (2026-09-14) while building the disambiguation prompt
+// below: a plain street address with no city/state ("12141 N Shady
+// Tree Ln") doesn't actually come back as multiple candidates to pick
+// between — confirmed live against Nominatim's real API — it comes
+// back as exactly ONE, confident-looking, silently WRONG match (a
+// Tennessee street with that exact name and house-number range genuinely
+// exists in OpenStreetMap's data, but a bare, state-less query matched
+// an unrelated Idaho street instead, at the ROAD level — it couldn't
+// even place the house number, just returned the street). A results-
+// count check alone can't catch this; it needs to also know whether the
+// INPUT itself was specific enough to trust a single answer.
+const US_STATE_ABBREVIATIONS = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC"];
+const US_STATE_NAMES = ["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"];
+const US_STATE_ABBR_REGEX = new RegExp(`\\b(${US_STATE_ABBREVIATIONS.join("|")})\\b`, "i");
+// A bare street address (no city/state/ZIP) is exactly the shape that
+// let the Idaho/Tennessee mixup through — a ZIP code or a real state
+// name/abbreviation is a cheap, honest signal that the search was
+// actually narrowed down, not a guess at "is this really Tennessee."
+//
+// A real bug caught live while verifying this, not shipped: the ZIP
+// check first used a bare `\b\d{5}\b`, which matched "12141" — the
+// HOUSE NUMBER at the very start of "12141 N Shady Tree Ln" — as if it
+// were a trailing ZIP, marking the exact address this was built for as
+// "specific enough" and silently reproducing the bug this was supposed
+// to fix. A real ZIP is the LAST token in a normal US address; end-
+// anchoring the regex (`$`, allowing only trailing whitespace after it)
+// fixes this without needing to parse the address into real fields.
+function looksSpecificEnoughToTrust(input: string): boolean {
+  if (/\d{5}(-\d{4})?\s*$/.test(input.trim())) return true;
+  if (US_STATE_ABBR_REGEX.test(input)) return true;
+  const lower = input.toLowerCase();
+  return US_STATE_NAMES.some((name) => lower.includes(name.toLowerCase()));
+}
+
 // Drag-handle marker for an editing-mode point (2026-09-13) — real
 // visual differentiation from a plain numbered pin, not just the old
 // `.leaflet-edit-marker { filter: hue-rotate(120deg) }` rule this
@@ -718,6 +752,20 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   // right there to retry — see the render block near the bottom of this
   // component.
   const [geocodeIssue, setGeocodeIssue] = useState<{ address: string; message: string } | null>(null);
+  // Real, reported problem (2026-09-14) this app's own "second geocoding
+  // failure mode" note above always flagged as the actual fix, deferred
+  // until now: a plain street address with no city/state ("12141 N
+  // Shady Tree Ln") can genuinely match several real places nationwide
+  // — Nominatim doesn't pick the one you meant, it just returns SOME
+  // result, and this app used to trust `results[0]` blindly regardless.
+  // Now `handleSearch` asks for up to 5 matches instead of 1; if more
+  // than one comes back, nothing auto-navigates — this holds the real
+  // candidates (each one's own `display_name`, which names its actual
+  // city/state, disambiguating "Idaho" from "Tennessee" at a glance)
+  // until the user picks the right one. `zoomToState` is carried along
+  // so picking a candidate zooms exactly the way a single unambiguous
+  // match already would have.
+  const [geocodeCandidates, setGeocodeCandidates] = useState<{ zoomToState: boolean; results: { lat: number; lon: number; display_name: string }[] } | null>(null);
 
   // True whenever a click on the map places a point — a new line, an
   // extension of an existing one, or a gate snapped to a segment. Drives
@@ -817,17 +865,50 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
       // radius to "wrong US location" instead of "wrong continent," but
       // doesn't eliminate bad fuzzy matches entirely — Nominatim gives no
       // trustworthy signal to do that with.
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=us&q=${encodeURIComponent(searchAddress)}&limit=1`);
-      const results = await response.json();
-      if (results.length > 0) {
+      // limit=5, not 1 — a plain street address with no city/state
+      // ("12141 N Shady Tree Ln") can genuinely match several real
+      // places nationwide, and used to silently trust whichever one
+      // Nominatim ranked first regardless of whether that was even
+      // close to right. See geocodeCandidates' own comment for the
+      // real fix this enables.
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=us&q=${encodeURIComponent(searchAddress)}&limit=5`);
+      const rawResults = await response.json();
+      // De-duplicate by display_name — Nominatim can return more than
+      // one raw entry (different OSM object types) for what's really
+      // the SAME place, which would otherwise show a disambiguation
+      // prompt for an address that was never actually ambiguous.
+      const seenNames = new Set<string>();
+      const results = rawResults.filter((r: any) => {
+        if (seenNames.has(r.display_name)) return false;
+        seenNames.add(r.display_name);
+        return true;
+      });
+      const closeZoom = useMapboxImagery ? MAPBOX_NATIVE_ZOOM : 20;
+      if (results.length === 1 && looksSpecificEnoughToTrust(searchAddress)) {
+        // Only auto-navigate when BOTH the API gave one answer AND the
+        // input itself had enough in it (a ZIP or a real state) to trust
+        // that answer — a single result for a bare, state-less query
+        // still gets the confirmation prompt below, since that's exactly
+        // the shape of query that silently matched Idaho instead of
+        // Tennessee.
         const { lat, lon } = results[0];
         // Same Pro/Mapbox-aware ceiling as FitBoundsOnLoad's maxZoom
         // below — a brand-new property (no line yet, so this path runs
         // instead of that one) shouldn't land at a more conservative
         // zoom than the same property would get after its first line
         // is saved and the page reloads.
-        const closeZoom = useMapboxImagery ? MAPBOX_NATIVE_ZOOM : 20;
         handleAddressFound(parseFloat(lat), parseFloat(lon), zoomToState ? 8 : closeZoom);
+        setGeocodeIssue(null);
+        setGeocodeCandidates(null);
+      } else if (results.length >= 1) {
+        // Either genuinely ambiguous (more than one real place matched)
+        // or a single result the input itself didn't earn enough trust
+        // for — either way, hold off on navigating anywhere until the
+        // user actually confirms which real place they meant.
+        setGeocodeCandidates({
+          zoomToState,
+          results: results.map((r: any) => ({ lat: parseFloat(r.lat), lon: parseFloat(r.lon), display_name: r.display_name })),
+        });
         setGeocodeIssue(null);
       } else {
         toast({ title: "Address not found", description: "The provided address could not be located.", variant: "destructive" });
@@ -835,6 +916,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
           address: searchAddress,
           message: "Try adding more detail (city, state, ZIP) — or search a nearby address and pan/zoom to your property.",
         });
+        setGeocodeCandidates(null);
       }
     } catch (error) {
       console.error("Geocoding error:", error);
@@ -843,12 +925,24 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
         address: searchAddress,
         message: "Something went wrong searching for that address. Try again, or pan/zoom the map manually to find your property.",
       });
+      setGeocodeCandidates(null);
     } finally {
       setIsSearching(false);
     }
   };
   
   const onManualSearch = () => handleSearch(address, false);
+
+  // Commits to whichever real candidate the user picked from
+  // geocodeCandidates — same zoom logic handleSearch's own single-match
+  // branch already uses, just triggered by a click instead of an
+  // automatic "only one result" case.
+  const handlePickCandidate = (lat: number, lon: number) => {
+    if (!geocodeCandidates) return;
+    const closeZoom = useMapboxImagery ? MAPBOX_NATIVE_ZOOM : 20;
+    handleAddressFound(lat, lon, geocodeCandidates.zoomToState ? 8 : closeZoom);
+    setGeocodeCandidates(null);
+  };
 
   useEffect(() => {
     if (points.length < 2) {
@@ -1145,6 +1239,67 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
           span — it never blocks map clicks outside its own visible
           footprint, no `pointer-events-none` dance required. */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-3">
+        {/* Address-disambiguation picker (2026-09-14) — shares this same
+            top-center stack; mutually exclusive with geocodeIssue below
+            (one means "found something to check," the other means
+            "found nothing at all"), so there's never a risk of both
+            showing at once. Each button's own label is the candidate's
+            real `display_name` — Nominatim's own full "street, city,
+            state" string — which is exactly what actually disambiguates
+            "12141 N Shady Tree Ln" in Tennessee from the same street
+            address in Idaho; no separate explanation text needed beyond
+            that. Covers TWO real cases with one UI: genuinely multiple
+            candidates to pick between, AND (see looksSpecificEnoughToTrust's
+            own comment) a single result the input itself didn't earn
+            enough trust for — the heading and framing adapt, but the
+            underlying "here's what we found, you pick" interaction is
+            identical either way. */}
+        {geocodeCandidates && (
+          <Card className="w-[calc(100vw-2rem)] max-w-md bg-panel/95 text-panel-foreground backdrop-blur shadow-xl border-border/50 rounded-lg p-4 space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium">
+                  {geocodeCandidates.results.length === 1 ? "Is this the right address?" : "Which one did you mean?"}
+                </p>
+                {geocodeCandidates.results.length === 1 && (
+                  <p className="text-xs text-muted-foreground">
+                    That search didn't include a city or state, so we want to confirm before centering the map here.
+                  </p>
+                )}
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 -mt-1 -mr-1 shrink-0"
+                onClick={() => setGeocodeCandidates(null)}
+                aria-label="Dismiss"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {geocodeCandidates.results.map((c, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handlePickCandidate(c.lat, c.lon)}
+                  className="w-full text-left text-sm rounded-md border border-border/60 px-3 py-2 hover:bg-primary/5 hover:border-primary/40 transition-colors"
+                >
+                  {c.display_name}
+                </button>
+              ))}
+            </div>
+            {/* Same reasoning as geocodeIssue's own search box below —
+                dismissing this card with no way to search again would
+                just reproduce the exact "stranded with an interactive
+                but un-navigable map" gap that banner was originally
+                built to close. "Add a city and state" is the literal,
+                actionable fix for exactly what got someone here. */}
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Not it? Add a city and state and search again:</p>
+              <AddressSearchInput value={address} onValueChange={setAddress} onSearch={onManualSearch} isSearching={isSearching} />
+            </div>
+          </Card>
+        )}
         {geocodeIssue && (
           <Card className="w-[calc(100vw-2rem)] max-w-md bg-panel/95 text-panel-foreground backdrop-blur shadow-xl border-border/50 rounded-lg p-4 space-y-3">
             <div className="flex items-start justify-between gap-2">

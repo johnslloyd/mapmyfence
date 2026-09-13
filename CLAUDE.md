@@ -1157,6 +1157,62 @@ result surfaced to the user for confirmation before the map commits to
 it (e.g. "We found: {display_name} — is this right?"), which is a bigger
 UX change and was deliberately not built without asking first.
 
+**The real fix flagged above finally landed (2026-09-14)** — reported
+directly: entering "12141 N Shady Tree Ln" (no city/state) landed on a
+property in Idaho instead of the intended Tennessee one. Investigated
+before building anything: this ISN'T actually a "multiple candidates,
+pick one" case — confirmed live against Nominatim's real API that this
+exact query returns exactly ONE result (Idaho, matched at the ROAD
+level, not even the specific house number — a real Tennessee street
+with that name and house-number range genuinely exists in OSM's data,
+per a separate query, but the bare state-less query never found it).
+A results-count check alone can't catch a single, confident-looking,
+wrong answer — the fix needed to also judge whether the INPUT itself
+earned enough trust for that answer.
+
+`handleSearch` now requests `limit=5` (was `1`), de-duplicated by
+`display_name` (Nominatim can return more than one raw entry for the
+same real place). New `looksSpecificEnoughToTrust(input)` — a real
+ZIP code or a real US state name/abbreviation present in the typed
+address — gates whether a single result auto-navigates at all. Only
+when the API returns exactly one match AND the input looks specific
+enough does the map jump there automatically, same as before; every
+other case (genuinely multiple real candidates, OR a single result
+for a bare, state-less query) now holds off entirely and shows a new
+top-center picker card — the same UI serving two different framings:
+"Which one did you mean?" (multiple real places) or "Is this the
+right address?" (one place, but the search didn't earn enough trust
+to commit to it silently) — each candidate's own button label is its
+full `display_name`, which is exactly what actually disambiguates
+Idaho from Tennessee. The card also carries its own retry search box
+(same reasoning as `geocodeIssue`'s), so dismissing it without picking
+never strands the user on an interactive-but-un-navigated map.
+
+**A real bug in the fix itself, caught live before shipping — not
+after**: the first version's ZIP-detection regex (`\b\d{5}\b`) matched
+"12141" — the HOUSE NUMBER at the very start of the address — as if it
+were a trailing ZIP code, marking the exact address this was built for
+as "specific enough" and silently reproducing the original bug. Found
+by adding temporary debug logging and confirming `handleSearch` really
+was being called with the right results, then noticing the
+confirmation card still never showed. Fixed by end-anchoring the ZIP
+regex (`\d{5}(-\d{4})?\s*$`) — a real ZIP is the last token in a
+normal US address, a house number is the first; this distinguishes
+them without needing to actually parse the string into structured
+fields.
+
+Verified live end-to-end: the exact reported address now stays at the
+default zoomed-out view and shows "Is this the right address?" naming
+the real Idaho match by its full `display_name` (obviously wrong once
+named); searching "Shady Tree Lane, Tennessee" (no house number, which
+Nominatim DOES have data for) correctly shows "Which one did you
+mean?" with both real Tennessee streets (Nashville and Arlington)
+listed, and clicking one navigates there and closes the card; a real,
+well-specified address ("200 E Capitol St, Jackson, MS 39201") still
+auto-navigates with zero added friction, confirming the common case is
+unaffected. `npm run check` and `npm run build` both clean; test
+accounts/properties deleted afterward.
+
 ## Gates on wooden fences — single/double, placed not drawn (2026-08-29)
 
 Real gap identified during a pre-VPS-push strategy review: the BOM had
