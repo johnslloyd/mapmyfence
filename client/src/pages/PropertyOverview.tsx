@@ -1,7 +1,8 @@
 import { Layout } from "@/components/Layout";
 import { useRoute, Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { useProperty, useProject, useEstimates, useCreateProject } from "@/hooks/use-projects";
+import { useProperty, useProject, useEstimates, useCreateProject, useMyOrganization } from "@/hooks/use-projects";
+import { STATUS_LABELS, STATUS_BADGE_CLASS } from "@/lib/projectStatus";
 import { EditPropertyDialog } from "@/components/EditPropertyDialog";
 import { PropertySatelliteImage } from "@/components/PropertySatelliteImage";
 import { PlanThumbnail } from "@/lib/planPreview";
@@ -31,13 +32,6 @@ import { format } from "date-fns";
 // before this redesign — it only ever showed the "primary" fence
 // project's shape and silently ignored any others. Per-project is the
 // correct home for it, not just a nicer one.
-
-const STATUS_BADGE: Record<string, string> = {
-  planning: "bg-gray-100 text-gray-700",
-  quoting: "bg-amber-100 text-amber-700",
-  "in-progress": "bg-blue-100 text-blue-700",
-  completed: "bg-green-100 text-green-700",
-};
 
 // Moved from a small top-right text link to its own row below the
 // project list, per direct feedback — reads as "an empty project you
@@ -93,7 +87,7 @@ function AddProjectRow({ propertyId }: { propertyId: number }) {
   );
 }
 
-function FenceProjectRow({ project, guestQuery }: { project: any; guestQuery: string }) {
+function FenceProjectRow({ project, guestQuery, isOrgMember }: { project: any; guestQuery: string; isOrgMember: boolean }) {
   const { data: detail } = useProject(project.id, { isGuest: !!guestQuery });
   const { data: estimates } = useEstimates(project.id);
   const totalFeet = detail?.fenceLines?.reduce((sum: number, l: any) => sum + (l.length || 0), 0) || 0;
@@ -125,9 +119,15 @@ function FenceProjectRow({ project, guestQuery }: { project: any; guestQuery: st
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5">
             <span className="font-semibold text-lg truncate">{project.name}</span>
-            <Badge variant="outline" className={`text-xs h-5 px-2 font-normal capitalize border-transparent shrink-0 ${STATUS_BADGE[project.status] || STATUS_BADGE.planning}`}>
-              {project.status}
-            </Badge>
+            {/* Status is only meaningful for a real business project —
+                see shared/schema.ts's status comment — so a DIY project
+                (no org membership) doesn't show it at all rather than
+                display a "Planning" badge that can never change. */}
+            {isOrgMember && (
+              <Badge variant="outline" className={`text-xs h-5 px-2 font-normal capitalize border-transparent shrink-0 ${STATUS_BADGE_CLASS[project.status] || STATUS_BADGE_CLASS.planning}`}>
+                {STATUS_LABELS[project.status] || project.status}
+              </Badge>
+            )}
           </div>
           <div className="text-sm text-muted-foreground mt-1">Fence &middot; Updated {format(new Date(project.createdAt), "MMM d")}</div>
           <div className="flex gap-8 mt-5">
@@ -151,7 +151,7 @@ function FenceProjectRow({ project, guestQuery }: { project: any; guestQuery: st
   );
 }
 
-function LawnCareProjectRow({ project, guestQuery }: { project: any; guestQuery: string }) {
+function LawnCareProjectRow({ project, guestQuery, isOrgMember }: { project: any; guestQuery: string; isOrgMember: boolean }) {
   return (
     // See FenceProjectRow's identical comment above — `block` is required
     // for this row to actually respect the grid column's width.
@@ -163,9 +163,11 @@ function LawnCareProjectRow({ project, guestQuery }: { project: any; guestQuery:
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5">
             <span className="font-semibold text-lg truncate">{project.name}</span>
-            <Badge variant="outline" className={`text-xs h-5 px-2 font-normal capitalize border-transparent shrink-0 ${STATUS_BADGE[project.status] || STATUS_BADGE.planning}`}>
-              {project.status}
-            </Badge>
+            {isOrgMember && (
+              <Badge variant="outline" className={`text-xs h-5 px-2 font-normal capitalize border-transparent shrink-0 ${STATUS_BADGE_CLASS[project.status] || STATUS_BADGE_CLASS.planning}`}>
+                {STATUS_LABELS[project.status] || project.status}
+              </Badge>
+            )}
           </div>
           <div className="text-sm text-muted-foreground mt-1">Lawn Care &middot; Updated {format(new Date(project.createdAt), "MMM d")}</div>
         </div>
@@ -178,6 +180,10 @@ function LawnCareProjectRow({ project, guestQuery }: { project: any; guestQuery:
 function PropertyOverviewContent({ propertyId, isGuest }: { propertyId: number; isGuest: boolean }) {
   const { data: property, isLoading } = useProperty(propertyId, { isGuest });
   const guestQuery = isGuest ? "?guest=true" : "";
+  // Same real-org-membership gate as Properties.tsx — see
+  // FenceProjectRow's comment on why status is org-only.
+  const { data: myOrg } = useMyOrganization({ enabled: !isGuest });
+  const isOrgMember = !!myOrg;
 
   if (isLoading) {
     return (
@@ -266,9 +272,9 @@ function PropertyOverviewContent({ propertyId, isGuest }: { propertyId: number; 
             <div className="divide-y divide-border mb-2">
               {property.projects.map((project: any) =>
                 project.type === "fence" ? (
-                  <FenceProjectRow key={project.id} project={project} guestQuery={guestQuery} />
+                  <FenceProjectRow key={project.id} project={project} guestQuery={guestQuery} isOrgMember={isOrgMember} />
                 ) : (
-                  <LawnCareProjectRow key={project.id} project={project} guestQuery={guestQuery} />
+                  <LawnCareProjectRow key={project.id} project={project} guestQuery={guestQuery} isOrgMember={isOrgMember} />
                 )
               )}
             </div>

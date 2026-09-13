@@ -81,7 +81,19 @@ export const projects = pgTable("projects", {
   propertyId: integer("property_id").references(() => properties.id, { onDelete: 'cascade' }).notNull(),
   type: text("type", { enum: ["fence", "lawn_care"] }).notNull(),
   name: text("name").notNull(),
-  status: text("status", { enum: ["planning", "quoting", "in-progress", "completed"] }).default("planning").notNull(),
+  // Narrowed 2026-09-13, direct feedback — "in-progress"/"completed"
+  // never had a way to actually get set (no UI ever wrote them; every
+  // project sat at "planning" forever regardless of real progress) and
+  // status is only meaningful at all for a business/Pro project today:
+  // "quoting" is set automatically the moment a quote is sent
+  // (POST /api/projects/:id/quotes), never chosen by hand. A DIY
+  // project has no event that could ever move it off "planning", so
+  // the client deliberately doesn't surface status for those at all —
+  // see Properties.tsx/PropertyOverview.tsx. `text`'s `enum` option is
+  // TS-only (see "Database migrations" in CLAUDE.md), so narrowing this
+  // needed no ALTER TABLE — a stray old "in-progress"/"completed" row
+  // simply can't exist since nothing ever wrote one.
+  status: text("status", { enum: ["planning", "quoting"] }).default("planning").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

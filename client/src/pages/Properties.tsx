@@ -1,5 +1,5 @@
 import { Layout } from "@/components/Layout";
-import { useProperties, useDeleteProperty, useProject, useEstimates } from "@/hooks/use-projects";
+import { useProperties, useDeleteProperty, useProject, useEstimates, useMyOrganization } from "@/hooks/use-projects";
 import { useAuth } from "@/hooks/use-auth";
 import { AddPropertyDialog } from "@/components/AddPropertyDialog";
 import { PropertySatelliteImage } from "@/components/PropertySatelliteImage";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { FREE_PROPERTY_LIMIT } from "@shared/routes";
+import { STATUS_LABELS, STATUS_BADGE_CLASS_TRANSLUCENT } from "@/lib/projectStatus";
 
 // Renamed from Projects.tsx in the Property/Project restructure — this
 // lists PROPERTIES now (just addresses), not the typed projects under
@@ -33,6 +34,13 @@ export default function Properties() {
   // isPro (not a raw plan check) — Pro via a business membership counts
   // the same as personally-approved Pro, see server/auth.ts.
   const isPro = user?.isPro;
+  // Status (2026-09-13) is only ever meaningful for a REAL business
+  // project — "quoting" can only get set by actually sending a quote,
+  // which requires real org membership, not just a personally-approved
+  // Pro flag (see routes.ts's quote-creation route). Fetched once here
+  // rather than per-card.
+  const { data: myOrg } = useMyOrganization({ enabled: isPro });
+  const isOrgMember = !!myOrg;
 
   // Search removed for now (2026-08-30) — pulled the whole filter UI
   // and its own "no results match your search" empty state rather than
@@ -79,6 +87,7 @@ export default function Properties() {
                 property={property}
                 onDelete={(id) => deleteProperty.mutate(id)}
                 isDeleting={deleteProperty.isPending}
+                isOrgMember={isOrgMember}
               />
             ))}
           </div>
@@ -153,14 +162,22 @@ function PropertyCard({
   property,
   onDelete,
   isDeleting,
+  isOrgMember,
 }: {
   property: any;
   onDelete: (id: number) => void;
   isDeleting: boolean;
+  isOrgMember: boolean;
 }) {
   const projects = property.projects || [];
   const singleProject = projects.length === 1 ? projects[0] : null;
   const isFenceSingle = singleProject?.type === "fence";
+  // A single project's STATUS only shows for a real org member — a DIY
+  // project can never move off "planning" (see shared/schema.ts), so
+  // showing it there is just noise, not information. A multi-project
+  // property still shows its project COUNT for everyone regardless —
+  // that's structural, not a lifecycle status.
+  const showBadge = singleProject ? isOrgMember : true;
 
   // Real per-project stats, same fetch shape as PropertyOverview's
   // FenceProjectRow — only fires when there's exactly one fence
@@ -178,18 +195,16 @@ function PropertyCard({
       {/* Status / project-count indicator — now overlaid on the
           satellite image, so it carries its own translucent backdrop
           to stay legible over a real photo instead of a flat card bg. */}
-      <div className={`absolute top-3 right-3 z-10 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider backdrop-blur-sm ${
-        singleProject
-          ? singleProject.status === 'completed' ? 'bg-green-100/90 text-green-700' :
-            singleProject.status === 'in-progress' ? 'bg-blue-100/90 text-blue-700' :
-            'bg-gray-100/90 text-gray-700'
-          : 'bg-gray-100/90 text-gray-700'
-      }`}>
-        {singleProject ? singleProject.status : `${projects.length} projects`}
-      </div>
+      {showBadge && (
+        <div className={`absolute top-3 right-3 z-10 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider backdrop-blur-sm ${
+          singleProject ? (STATUS_BADGE_CLASS_TRANSLUCENT[singleProject.status] ?? STATUS_BADGE_CLASS_TRANSLUCENT.planning) : 'bg-gray-100/90 text-gray-700'
+        }`}>
+          {singleProject ? (STATUS_LABELS[singleProject.status] ?? singleProject.status) : `${projects.length} projects`}
+        </div>
+      )}
 
       {/* Delete Control */}
-      <div className="absolute top-12 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className={`absolute ${showBadge ? "top-12" : "top-3"} right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity`}>
         <Button
           size="icon"
           variant="ghost"

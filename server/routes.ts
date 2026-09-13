@@ -857,6 +857,14 @@ export async function registerRoutes(
         tokenHash,
       });
 
+      // Status simplification (2026-09-13): "quoting" is the one status
+      // transition this app can actually know happened on its own — a
+      // quote just got sent off this project — so it's set here, as a
+      // side effect, rather than needing a manual status picker anyone
+      // has to remember to use. No-op if it's already "quoting" (a
+      // second quote sent off the same project).
+      await storage.updateProject(projectId, { status: "quoting" });
+
       const origin = `${req.protocol}://${req.get("host")}`;
       const publicUrl = `${origin}/quotes/${rawToken}`;
       const pricePerFoot = quote.totalCost / quote.totalLinearFeet;
