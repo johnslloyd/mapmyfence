@@ -61,6 +61,13 @@ export default {
           foreground: "hsl(var(--destructive-foreground) / <alpha-value>)",
           border: "hsl(var(--destructive-border) / <alpha-value>)",
         },
+        // A real green, not a reuse of --primary — see index.css's
+        // comment on --success for why toast.tsx needed this.
+        success: {
+          DEFAULT: "hsl(var(--success) / <alpha-value>)",
+          foreground: "hsl(var(--success-foreground) / <alpha-value>)",
+          border: "hsl(var(--success-border) / <alpha-value>)",
+        },
         ring: "hsl(var(--ring) / <alpha-value>)",
         chart: {
           "1": "hsl(var(--chart-1) / <alpha-value>)",

@@ -230,6 +230,37 @@ and a real error toast (geocoding an invalid address) side by side —
 green and red respectively, both clearly legible and visibly part of
 the same warm/muted palette rather than a bolted-on alert-library look.
 
+**Success toasts silently went navy, not green, for the entire
+"Blueprint" era — fixed (2026-09-14).** Direct feedback: "success and
+other positive toast notifications should be green." First checked
+whether the real bug was a missing `variant: "success"` somewhere —
+audited every `toast()` call site app-wide and found exactly one
+(`AddPropertyDialog.tsx`'s "Creating property" toast) that was
+positively-toned but fell back to the plain `default` variant; fixed
+with `variant: "success"`. But live-verifying that fix surfaced the
+actual, much bigger root cause: the write-up directly above this one
+styled `success` as `bg-primary text-primary-foreground border-primary`
+— correct at the time, since `--primary` WAS the site's deep muted
+green under the old "Package" theme. The "Blueprint" rebrand
+(2026-09-03, see below) repointed `--primary` to ink navy and nothing
+ever updated this toast to match — so every genuinely-tagged
+`variant: "success"` toast in the app (project created, quote sent,
+password changed, ...) had been rendering navy blue, not green, for
+the past eleven days, confirmed live via computed style
+(`backgroundColor: rgb(22, 41, 75)` on a real triggered toast, not
+`rgb(27, 121, 60)`).
+
+Fixed with a real green token, not a reuse of another role's color:
+`--success`/`--success-foreground`/`--success-border`
+(`client/src/index.css`), converted from hex the same disciplined way
+every other color in this palette was, wired into `tailwind.config.ts`
+mirroring the existing `destructive` color-group pattern, and
+`toast.tsx`'s `success` variant (plus its `ToastClose`/`ToastAction`
+`group-[.success]:` hover/focus rules, which had the identical
+`-primary`-based staleness) repointed to the new tokens. Verified live:
+a real triggered success toast now computes to `rgb(27, 121, 60)` — a
+genuine green — not `rgb(22, 41, 75)`.
+
 ## Rebrand: "Package" → "Blueprint," MyYardManager → Lot Planner (2026-09-03)
 
 **A genuine third theme, and a fourth product name — the first time

@@ -68,6 +68,18 @@
   --destructive-foreground: 5 73% 97%;
   --destructive-border: 3 71% 41%;
 
+  /* Real green, added 2026-09-14 — toast.tsx's "success" variant had
+     reused --primary since the old "Package" theme, back when --primary
+     WAS a deep green. Blueprint (2026-09-03) repointed --primary to ink
+     navy and nobody updated the toast to match, so every "success" toast
+     had silently been rendering navy, not green, since that rebrand (see
+     CLAUDE.md's Brand section). A genuine green token, converted from
+     hex the same way the rest of this palette was, not a reuse of
+     another role's color. */
+  --success: 141 64% 29%;
+  --success-foreground: 137 41% 97%;
+  --success-border: 141 64% 29%;
+
   --border: 212 23% 87%;
   --input: 212 23% 87%;
   --ring: 218 55% 19%;

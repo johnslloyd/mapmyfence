@@ -95,7 +95,13 @@ export function AddPropertyDialog({
   });
 
   async function onSubmit(data: InsertProperty) {
-    toast({ title: 'Creating property', description: 'Starting property creation' });
+    // The one toast in the app that was positively-toned but missing
+    // `variant: "success"` (2026-09-14, direct feedback) — every other
+    // success/error toast already used the real green/red theme tokens
+    // (see index.css's Brand section); this one alone fell back to the
+    // plain default (tan) styling despite announcing something going
+    // right, not a neutral/negative state.
+    toast({ title: 'Creating property', description: 'Starting property creation', variant: 'success' });
     try {
       // Convert empty strings to null/undefined for optional fields
       const cleanedData = {
