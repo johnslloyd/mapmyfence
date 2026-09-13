@@ -77,10 +77,32 @@ const MAPBOX_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/">
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795];
 const DEFAULT_ZOOM = 4;
 
-const editIcon = new Icon({
-  iconUrl, iconRetinaUrl, shadowUrl,
-  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], tooltipAnchor: [16, -28], shadowSize: [41, 41],
-  className: 'leaflet-edit-marker'
+// Drag-handle marker for an editing-mode point (2026-09-13) — real
+// visual differentiation from a plain numbered pin, not just the old
+// `.leaflet-edit-marker { filter: hue-rotate(120deg) }` rule this
+// replaces (a CSS filter alone recolors the same teardrop image but
+// doesn't change its SHAPE, so nothing about it actually read as
+// "this one drags" — direct feedback that dragging a point wasn't
+// discoverable). Lucide's exact `Move` glyph (lucide-react's move.js —
+// literal 4-way arrows), same "confirmed exact glyph, not hand-
+// approximated" discipline as deletePointIcon/squareCornerIcon below.
+// `hsl(var(--primary))`, this app's real ink-navy token — same reason
+// squareCornerIcon uses it, not an arbitrary color.
+//
+// Same iconSize/iconAnchor as defaultIcon (25x41, tip at [12,41])
+// DELIBERATELY — deletePointIcon/squareCornerIcon's own offsets below,
+// and the shared point-number Tooltip's offset, are all tuned relative
+// to that exact tip position. The circle sits at the BOTTOM of that
+// same 25x41 box (not centered in it) so its own visual anchor lands
+// on the exact same spot the old pin's tip did — every other icon
+// anchored off this one needed zero recalculation.
+const dragHandleIcon = new DivIcon({
+  className: "leaflet-drag-handle",
+  html: `<div style="position:relative;width:25px;height:41px;"><div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);background:hsl(var(--primary));border-radius:9999px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="m15 19-3 3-3-3"/><path d="m19 9 3 3-3 3"/><path d="M2 12h20"/><path d="m5 9-3 3 3 3"/><path d="m9 5 3-3 3 3"/></svg></div></div>`,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  tooltipAnchor: [16, -28],
 });
 
 // Hover-only delete affordance for a line point while editing — a
@@ -298,6 +320,15 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
   // deletePointIcon's own comment). Tracked here, not per-Marker state,
   // since only one point can be hovered at a time.
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  // Whole-line hover highlight (2026-09-13), direct feedback that an
+  // unselected line wasn't obviously clickable — nothing distinguished a
+  // "just sitting there" line from an interactive one until you actually
+  // clicked it. Tracked once per LINE, not per segment: hovering any one
+  // segment highlights every segment, so the whole line reads as one
+  // clickable thing rather than several independent ones. Only meaningful
+  // pre-edit — the `isEditing` (orange) render of this same component
+  // never sets this, since it's already unambiguously the active line.
+  const [isHovered, setIsHovered] = useState(false);
   const segments = [];
   for (let i = 0; i < points.length - 1; i++) {
     const p1 = new LatLng(points[i].lat, points[i].lng);
@@ -320,8 +351,20 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
             deliberate, named piece of the fence, not a generic label. */}
         <Polyline
           positions={[p1, p2]}
-          pathOptions={placingGate ? { color: "#f59e0b", weight: weight + 2, dashArray: "8 6" } : { color, weight }}
-          eventHandlers={placingGate && onSegmentClick ? { click: (e: any) => onSegmentClick(i, e.latlng) } : { click: onLineClick }}
+          pathOptions={
+            placingGate
+              ? { color: "#f59e0b", weight: weight + 2, dashArray: "8 6" }
+              : { color, weight: isHovered && !isEditing ? weight + 3 : weight }
+          }
+          eventHandlers={
+            placingGate && onSegmentClick
+              ? { click: (e: any) => onSegmentClick(i, e.latlng) }
+              : {
+                  click: onLineClick,
+                  mouseover: () => !isEditing && setIsHovered(true),
+                  mouseout: () => setIsHovered(false),
+                }
+          }
         >
           <Tooltip position={midPoint} permanent direction="center" className="bg-transparent border-none shadow-none">
             <span className="inline-block rounded px-2 py-0.5 font-mono text-xs font-semibold bg-accent/95 text-primary border border-primary shadow-sm">
@@ -346,7 +389,7 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
         <Fragment key={p.id || `marker-${idx}`}>
           <Marker
             position={[p.lat, p.lng]}
-            icon={isEditing ? editIcon : defaultIcon}
+            icon={isEditing ? dragHandleIcon : defaultIcon}
             draggable={isEditing}
             eventHandlers={{
               dragend: (e) => {
@@ -867,7 +910,12 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
             />
           </>
         )}
-        <style>{`.leaflet-edit-marker { filter: hue-rotate(120deg); }`}</style>
+        {/* Grab/grabbing cursor on the drag-handle marker — needs
+            `!important` the same reason the crosshair-while-drawing
+            cursor does (see index.css's own comment): Leaflet sets
+            cursor directly on `.leaflet-interactive`/draggable markers
+            itself, which a plain unweighted rule here would lose to. */}
+        <style>{`.leaflet-drag-handle { cursor: grab !important; } .leaflet-drag-handle:active { cursor: grabbing !important; }`}</style>
         {(isDrawing || isExtending) && <MapEvents onMapClick={handleMapClick} />}
         <FitBoundsOnLoad existingLines={existingLines} isMobile={isMobile} maxZoom={useMapboxImagery ? MAPBOX_NATIVE_ZOOM : TILE_NATIVE_ZOOM} />
 
@@ -886,14 +934,29 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
           </GeoJSON>
         )}
         
-        {existingLines.map(line => (
+        {/* A real, pre-existing bug surfaced while building the new
+            drag-handle marker (2026-09-13): the line currently being
+            edited was rendering HERE too — the plain, non-draggable
+            blue copy, fully underneath the separate orange `isEditing`
+            FenceLine below — at the exact same coordinates. The old
+            default/edit icons were similar-enough blue pins that the
+            resulting z-fighting was invisible; the new drag-handle
+            circle made it obvious (Leaflet's marker z-index is
+            assigned by screen Y position, not render order, so which
+            copy actually ends up on top — and therefore which one
+            actually receives clicks/drags — was arbitrary per point).
+            Skipping the currently-editing line here entirely, not just
+            hiding its gates (the narrower fix this used to be), removes
+            the duplicate outright rather than leaving two full copies
+            fighting for the same pixels. */}
+        {existingLines.filter(line => line.id !== editingLine?.id).map(line => (
           <FenceLine
             key={line.id}
             points={line.coordinates}
-            color={selectedLineId === line.id && !editingLine ? 'red' : 'blue'}
-            weight={selectedLineId === line.id && !editingLine ? 5 : 3}
+            color={selectedLineId === line.id ? 'red' : 'blue'}
+            weight={selectedLineId === line.id ? 5 : 3}
             onLineClick={() => onLineSelect(line.id)}
-            gates={line.id === editingLine?.id ? [] : (line.gates || [])}
+            gates={line.gates || []}
           />
         ))}
 
@@ -949,57 +1012,76 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
           prevents the exact stranding this was built to fix. Screen
           position keeps them from visually colliding regardless (this
           banner is top-center; the New Fence Line card is anchored
-          top-left/top-right). */}
-      {geocodeIssue && (
-        <Card className="absolute top-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-md bg-panel/95 text-panel-foreground backdrop-blur shadow-xl border-border/50 rounded-lg p-4 space-y-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 mt-0.5 text-destructive shrink-0" />
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Couldn't locate "{geocodeIssue.address}"</p>
-                <p className="text-xs text-muted-foreground">{geocodeIssue.message}</p>
+          top-left/top-right).
+
+          Moved up here from a small bottom-left pill (2026-09-13),
+          direct feedback that the instructions were easy to lose track
+          of down there among everything else happening on screen. Both
+          this banner and the pill below now share ONE top-center
+          stack — a flex column, not two independently-positioned
+          elements with a hand-tuned pixel gap — so they can never
+          overlap regardless of how tall the banner's message gets; the
+          wrapper has no fixed width (sized to its widest child, capped
+          by the banner's own max-w-md), so — unlike a full `inset-x-0`
+          span — it never blocks map clicks outside its own visible
+          footprint, no `pointer-events-none` dance required. */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-3">
+        {geocodeIssue && (
+          <Card className="w-[calc(100vw-2rem)] max-w-md bg-panel/95 text-panel-foreground backdrop-blur shadow-xl border-border/50 rounded-lg p-4 space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 mt-0.5 text-destructive shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Couldn't locate "{geocodeIssue.address}"</p>
+                  <p className="text-xs text-muted-foreground">{geocodeIssue.message}</p>
+                </div>
               </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 -mt-1 -mr-1 shrink-0"
+                onClick={() => setGeocodeIssue(null)}
+                aria-label="Dismiss"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
             </div>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-6 w-6 -mt-1 -mr-1 shrink-0"
-              onClick={() => setGeocodeIssue(null)}
-              aria-label="Dismiss"
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-          <AddressSearchInput value={address} onValueChange={setAddress} onSearch={onManualSearch} isSearching={isSearching} autoFocus />
-        </Card>
-      )}
-      
+            <AddressSearchInput value={address} onValueChange={setAddress} onSearch={onManualSearch} isSearching={isSearching} autoFocus />
+          </Card>
+        )}
+
+        {/* The main "what does this map want from me right now" hint —
+            enlarged and given more breathing room in the same pass that
+            moved it up here (2026-09-13, direct feedback), since a
+            bigger target at top-center is also easier to actually read
+            than a small pill tucked in a corner. */}
+        <div className="bg-panel/95 text-panel-foreground backdrop-blur px-5 py-3 rounded-full text-sm font-medium border border-border/50 shadow-xl text-center">
+          {placingGateType
+            ? `Click on the highlighted line to place the ${placingGateType} gate`
+            : isExtending
+            ? "Click on the map to extend the line"
+            : editingLine
+            ? "Drag points to edit the line or click an endpoint to extend"
+            : isDrawing
+            // Progressive, not a static message regardless of progress —
+            // matches NewFenceLineCard's own "click the first point again
+            // to finish" promise once there's an actual line to close.
+            ? points.length === 0
+              ? "Click on the map to place your first fence post"
+              : points.length === 1
+              ? "Click to add your next post"
+              : "Click to add another post, or click your first post again to finish"
+            : readOnly
+            ? "Viewing only — pan and zoom to look around"
+            : "Select a line to edit or create a new one"}
+        </div>
+      </div>
+
       {isExtending && (
         <div className="absolute bottom-16 left-4 z-40">
           <Button onClick={() => setIsExtending(false)}>Finish Extending</Button>
         </div>
       )}
-
-      <div className="absolute bottom-4 left-4 z-40 bg-background/80 backdrop-blur px-3 py-1.5 rounded-full text-xs font-medium border shadow-sm">
-        {placingGateType
-          ? `Click on the highlighted line to place the ${placingGateType} gate`
-          : isExtending
-          ? "Click on the map to extend the line"
-          : editingLine
-          ? "Drag points to edit the line or click an endpoint to extend"
-          : isDrawing
-          // Progressive, not a static message regardless of progress —
-          // matches NewFenceLineCard's own "click the first point again
-          // to finish" promise once there's an actual line to close.
-          ? points.length === 0
-            ? "Click on the map to place your first fence post"
-            : points.length === 1
-            ? "Click to add your next post"
-            : "Click to add another post, or click your first post again to finish"
-          : readOnly
-          ? "Viewing only — pan and zoom to look around"
-          : "Select a line to edit or create a new one"}
-      </div>
 
       <div className="absolute bottom-4 right-4 z-40 flex gap-2">
         {parcel && (

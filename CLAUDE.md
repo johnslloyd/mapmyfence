@@ -2873,6 +2873,127 @@ sidebar with "N Lines Defined" directly at the top — no tab row, and
 `document.body.innerText` confirms "Property Details" doesn't appear
 anywhere on the page. `npm run check` and `npm run build` both clean.
 
+## Map editor discoverability, part one — hover, the status pill, and a real drag handle (2026-09-13)
+
+A four-part discussion (existing-line selection isn't obvious, dragging
+a point isn't obvious, the "Editing Line" card doesn't fill its column,
+and a wanted "click an endpoint to add a post" feature) — the last two
+deliberately deferred. This is the first two, done together since both
+are "teach a standard-feeling gesture" problems, the same category this
+app already has a real pattern for (cursor change + status-pill text +
+a one-time visual cue — see "First-fence-line onboarding clarity"
+above), as opposed to "non-standard action" problems (gate placement,
+square-corner) which get an explicit button + map-mode treatment
+instead. Both changes are in `MapEditorComponent.tsx`.
+
+**1. An unselected line now highlights on hover.** Previously a plain
+blue `Polyline` had zero affordance beyond a click handler — nothing
+signaled it was interactive until you happened to click it.
+`FenceLine` gained one `isHovered` boolean (not per-segment — hovering
+ANY segment highlights the whole line, since the several segments
+read as one clickable fence, not independent pieces), applied as a
+`weight + 3` bump on `mouseover`/`mouseout`, gated to `!isEditing` so
+it never touches the already-unambiguous orange editing render.
+Deliberately just a weight bump, not a color change — Leaflet
+Polylines have no built-in glow/halo, and a second, wider "shadow"
+polyline per segment was judged more complexity than this needed.
+
+**2. The status pill moved from a small bottom-left corner to a larger
+top-center one, sharing a stack with the geocode-failure banner.**
+Direct feedback that the instructions ("Select a line to edit...",
+"Drag points to edit the line...") were easy to lose track of tucked
+in a corner. The geocode banner already lived at top-center
+(`absolute top-4 left-1/2 -translate-x-1/2`) — rather than
+hand-tuning a second, independently-positioned element to not overlap
+it (fragile the moment either one's height changes), both now share
+ONE wrapper (`flex flex-col items-center gap-3`) so they stack
+correctly regardless of message length, with zero pixel math. The
+wrapper deliberately has no fixed/full width (sized to its widest
+child, itself capped at `max-w-md`) — a naive `inset-x-0` span would
+have blocked map clicks across the whole horizontal band it occupied,
+requiring a `pointer-events-none`/`-auto` dance this avoids entirely.
+The pill itself grew (`px-5 py-3 text-sm`, up from `px-3 py-1.5
+text-xs`) and switched from `bg-background/80` to the same
+`bg-panel/95` treatment every other floating card in this file
+already uses, for visual consistency now that it sits in the same
+stack as one of them.
+
+**3. A real drag-handle marker, replacing a CSS filter on the same
+pin image.** The "editing" marker used to be `defaultIcon` with a
+`.leaflet-edit-marker { filter: hue-rotate(120deg) }` rule — a
+recolor, not a reshape, so nothing about it actually read as
+"draggable" beyond a slightly different blue. New `dragHandleIcon`: a
+small navy circle (`hsl(var(--primary))`) with Lucide's exact `Move`
+glyph in white — same "confirmed exact glyph" discipline as
+`deletePointIcon`/`squareCornerIcon` — plus a real `cursor: grab`
+(`grabbing` mid-drag), needing `!important` for the same reason the
+crosshair-while-drawing cursor does (Leaflet sets cursor directly on
+interactive/draggable elements). Deliberately kept the SAME
+`iconSize`/`iconAnchor` as `defaultIcon` (25×41, tip at `[12,41]`) —
+the circle sits at the bottom of that same box rather than being
+centered in a smaller one, so `deletePointIcon`/`squareCornerIcon`'s
+own offsets and the shared point-number `Tooltip`'s offset, all tuned
+relative to that exact tip position, needed zero recalculation.
+
+**A real, pre-existing bug found while verifying this, not caused by
+it — though the new icon is what made it visible.** The line currently
+being edited was rendering TWICE: the plain, non-draggable blue copy
+from `existingLines.map()` (previously only its gates were suppressed,
+via `gates={line.id === editingLine?.id ? [] : ...}`) sat fully
+underneath the separate orange `isEditing` `FenceLine` at the exact
+same coordinates. The old `defaultIcon`/`editIcon` were similar-enough
+blue pins that this z-fighting was invisible; Leaflet assigns marker
+z-index by screen Y position, not render order, so which of the two
+identical-position copies actually ended up on top — and therefore
+which one actually received clicks and drags — was arbitrary per
+point, confirmed live (one point visibly showed the OLD plain pin
+while its siblings showed the new circle). Fixed at the root:
+`existingLines.filter(line => line.id !== editingLine?.id).map(...)`
+skips the currently-editing line entirely instead of only hiding its
+gates — the orange overlay already renders that exact line in full,
+so the underlying copy was always fully redundant, just not visibly
+so until now.
+
+**A real verification gotcha, worth recording**: scripting a Leaflet
+marker drag via synthetic `MouseEvent`s or the browser tool's own
+`left_click_drag` proved unreliable in this environment — several
+careful attempts (correct button/which/buttons properties, precise
+coordinate-scale math) either did nothing or, worse, silently grabbed
+the MAP background instead of the small marker (confirmed by ALL
+markers shifting by an identical delta — a pan, not a point move).
+The fix wasn't a different event recipe: it was getting a big enough,
+well-centered target to begin with. Reaching into the page for the
+live Leaflet map instance (walking the React fiber tree from
+`.leaflet-container` for an object exposing `setView`/`getCenter`) and
+calling `map.setView([exact lat, exact lng], 20)` to center hard on
+the specific point turned a ~14px screenshot-space target into one
+covering a large fraction of the map — after that, both the scripted
+`MouseEvent` sequence and a plain `left_click_drag` worked
+immediately, confirmed by the segment length recomputing, a "Fence
+line updated" toast, and (checked separately) a real `PUT` request.
+Worth remembering: a failed automated drag in this environment is not
+proof the app is broken — check whether the target was actually big
+enough to reliably hit first.
+
+Verified live end-to-end: hovering a segment increases every segment's
+`stroke-width` from 3 to 6 (checked directly via the SVG attribute,
+not just eyeballed); the pill renders large and top-center with zero
+overlap against a real geocode-failure banner triggered at the same
+time; the drag-handle circle renders correctly (navy, white glyph,
+`cursor: grab` confirmed via computed style) once the duplicate-render
+bug above was fixed, and a real drag (via the `setView`-assisted
+technique) moved a point, recomputed its segment's length, and saved
+via the normal auto-save-on-drag path. Zero console errors on a fresh
+tab (a same-tab stale-console replay of an unrelated old error was
+reproduced and dismissed per this file's own documented gotcha, then
+confirmed absent on a fresh tab). `npm run check` and `npm run build`
+both clean; test account/property deleted afterward.
+
+Still open, by design: item 3 (the "Editing Line" card doesn't fill
+its docked column — the fix is known, just deferred) and item 4 (an
+explicit "+ Extend from Start/End" button pair in `EditFenceLineCard`,
+replacing the current bare, ambiguous click-an-endpoint trigger).
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up
