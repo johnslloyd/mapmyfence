@@ -3562,6 +3562,46 @@ correctly enters drawing mode, unchanged. `npm run check` and
 `npm run build` both clean; test accounts/properties deleted
 afterward.
 
+**The exact same overlap, one step later in the flow — reported live
+from a real iPhone (2026-09-14), same day.** Clicking "Create a Fence
+Line" moves from `INSTRUCTIONS` into `DRAWING`, which had its own
+separate "New Fence Line" card (Total Length, Undo, Delete, Save
+Line) — on mobile, full-width at the same `top-4` the centered status
+pill sits at, so the pill's own progressive instruction text ("Click
+on the map to place your first fence post") painted right over the
+card's title. This is the exact latent bug part five's own writeup
+already flagged and deliberately left alone ("The `isDrawing` card the
+pattern was copied from has this exact same latent mobile overlap...
+worth closing the same way if it ever gets its own complaint") — it
+did, the same day, and got the same fix.
+
+Direct instruction, matching the just-shipped `showingStartPrompt`
+pattern exactly: fold "Save Line" into the pill's own message, the
+same way "Create a Fence Line" was just folded in. **Scoped to mobile
+only, unlike that fix** — desktop's version of this card is
+side-anchored (`left-4`/`right-4` via `controlsPosition`, never the
+centered pill's spot) and was never reported broken, so it's untouched;
+a new `showingDrawingPrompt` const (`isDrawing && !editingLine &&
+isMobile`) gates the merge specifically where the problem exists.
+Mobile's merged block reuses `MobileContent` (the exact same Total
+Length/Undo/Delete/Save Line component the old card rendered) unchanged
+apart from dropping its own now-redundant `p-4 pt-0` padding, which
+compensated for a card header that no longer exists above it in this
+context — the new wrapper supplies its own padding instead. The
+progressive instruction text moved from the plain pill into this
+merged block's own `<p>`, so it still updates live as points are added.
+
+Verified live: entered drawing mode on a real 375px mobile viewport
+and confirmed exactly one element renders (no separate card, per a DOM
+check for stray `h3` tags), the merged block's text updates correctly
+after placing a real point (dispatched a real click on the Leaflet
+container, not simulated at the React level), and Total Length/Undo/
+Delete/Save Line all render inside it; separately confirmed desktop is
+completely unaffected — the original side-anchored card still renders
+exactly as before, alongside the centered pill, no overlap, no
+duplicate card. `npm run check` and `npm run build` both clean; test
+account/property deleted afterward.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up

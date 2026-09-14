@@ -798,6 +798,17 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   // thing on top of each other.
   const showingStartPrompt = !isDrawing && !editingLine && !readOnly && existingLines.length === 0 && !!onStartDrawing;
 
+  // Same fix, same day, for the NEXT step (2026-09-14) — reported live
+  // with a screenshot: mid-drawing, the "New Fence Line" card (Total
+  // Length, Undo, Delete, Save Line) sat at this same mobile `top-4`
+  // spot as the centered pill above it, and the pill's own progressive
+  // instruction text painted right over the card's title — the exact
+  // overlap shape `showingStartPrompt` above already fixed once,
+  // recurring one step later in the same flow. Desktop's side-anchored
+  // card never had this problem (see its own render condition just
+  // above) and is untouched; this only applies on mobile.
+  const showingDrawingPrompt = isDrawing && !editingLine && isMobile;
+
   // MapContainer's own `className` prop only applies once, at the
   // initial imperative L.map(...) construction — react-leaflet doesn't
   // re-render it on later prop changes (confirmed live: the class was
@@ -1091,8 +1102,13 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
     </div>
   );
   
+  // Rendered inside the status pill's own merged block on mobile now
+  // (see `showingDrawingPrompt` below), not a standalone Card — no
+  // longer needs its own `p-4 pt-0` (that padding compensated for a
+  // header above it that no longer exists here); the pill's own
+  // container supplies padding instead.
   const MobileContent = () => (
-    <div className="space-y-3 p-4 pt-0">
+    <div className="space-y-3 w-full">
       <div className="flex items-center justify-between bg-secondary/50 rounded-lg px-3 py-2 border border-border/50">
         <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Total Length</span>
         <span className="text-lg font-mono font-bold text-foreground">{totalDistance.toFixed(1)} <span className="text-xs text-muted-foreground">ft</span></span>
@@ -1224,10 +1240,20 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
         <div className="absolute inset-0 z-30 pointer-events-none rounded-lg fence-draw-hint" />
       )}
 
-      {isDrawing && !editingLine && (
-        <Card className={cn("absolute top-4 z-40 bg-panel/95 text-panel-foreground backdrop-blur shadow-xl border-border/50 rounded-lg", isMobile ? "left-4 right-4 w-auto" : `${controlsPosition === 'left' ? 'left-4' : 'right-4'} w-full max-w-md lg:w-96 p-4`)}>
-          <h3 className={cn("font-display font-bold text-lg flex items-center gap-2", isMobile ? "mb-0 p-4" : "mb-4")}><Ruler className="w-5 h-5 text-primary" /> New Fence Line</h3>
-          {isMobile ? <MobileContent /> : <DesktopContent />}
+      {/* Desktop only (2026-09-14) — on mobile this card sat at this same
+          `top-4` spot as the centered status pill below, and a real
+          user report showed the pill's own text painting over this
+          card's title, same overlap shape as the INSTRUCTIONS card
+          this file already fixed the same day. Desktop's version is
+          side-anchored (`left-4`/`right-4`, controlsPosition), never
+          shares the pill's centered spot, and was never reported
+          broken — left exactly as-is. Mobile's equivalent content now
+          lives inside the pill stack itself, see `showingDrawingPrompt`
+          below. */}
+      {isDrawing && !editingLine && !isMobile && (
+        <Card className={cn("absolute top-4 z-40 bg-panel/95 text-panel-foreground backdrop-blur shadow-xl border-border/50 rounded-lg", `${controlsPosition === 'left' ? 'left-4' : 'right-4'} w-full max-w-md lg:w-96 p-4`)}>
+          <h3 className="font-display font-bold text-lg flex items-center gap-2 mb-4"><Ruler className="w-5 h-5 text-primary" /> New Fence Line</h3>
+          <DesktopContent />
         </Card>
       )}
 
@@ -1369,6 +1395,22 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
             <Button onClick={onStartDrawing} className="gap-2">
               <Plus className="w-4 h-4" /> Create a Fence Line
             </Button>
+          </div>
+        ) : showingDrawingPrompt ? (
+          // Same merge as showingStartPrompt just above, one step later
+          // in the flow — Total Length/Undo/Delete/Save Line (the exact
+          // same `MobileContent` the old, now desktop-only card used)
+          // now live in this one element instead of a second card
+          // fighting the pill for the same mobile `top-4` space.
+          <div className="bg-panel/95 text-panel-foreground backdrop-blur px-5 py-4 rounded-2xl border border-border/50 shadow-xl text-center flex flex-col items-center gap-3 w-[calc(100vw-2rem)] sm:max-w-sm">
+            <p className="text-sm font-medium">
+              {points.length === 0
+                ? "Click on the map to place your first fence post"
+                : points.length === 1
+                ? "Click to add your next post"
+                : "Click to add another post, or click your first post again to finish"}
+            </p>
+            <MobileContent />
           </div>
         ) : (
         <div className="bg-panel/95 text-panel-foreground backdrop-blur px-5 py-3 rounded-full text-sm font-medium border border-border/50 shadow-xl text-center">
