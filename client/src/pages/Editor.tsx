@@ -20,7 +20,6 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { NewProjectInstructions } from "@/components/NewProjectInstructions";
 import { EditFenceLineCard } from "@/components/EditFenceLineCard";
 import { NewFenceLineCard } from "@/components/NewFenceLineCard";
 import { STORE_LABELS, MATERIAL_LABELS, consolidateMaterials } from "@/lib/estimates";
@@ -871,9 +870,10 @@ export default function Editor() {
           {/* Deliberately NOT styled as a primary CTA (2026-09-10) —
               this only ever renders once at least one line already
               exists (the SIDEBAR state requires existingLines.length
-              > 0; a brand-new project's first line uses
-              NewProjectInstructions' own, correctly-prominent button
-              instead). A second fence line is the uncommon case, not
+              > 0; a brand-new project's first line uses the map's own
+              status-pill CTA instead — see MapEditorComponent's
+              `showingStartPrompt`). A second fence line is the
+              uncommon case, not
               the expected next action, so this reads as a quiet,
               available option rather than something competing for
               attention with the lines already listed above it. */}
@@ -894,8 +894,13 @@ export default function Editor() {
   
   const RightPanel = () => {
       switch (uiState) {
-          case "INSTRUCTIONS":
-              return <NewProjectInstructions onStartDrawing={handleStartDrawing} />;
+          // No INSTRUCTIONS case (2026-09-14, direct feedback) —
+          // NewProjectInstructions used to render here (desktop's
+          // floating panel and, before that, mobile's Sheet); its
+          // "Create a Fence Line" button now lives permanently in
+          // MapEditorComponent's own status pill instead, visible on
+          // the map itself on every device with nothing extra to open.
+          // Falls through to `default: return null` below.
           case "DRAWING":
               return <NewFenceLineCard onCancel={cancelDrawing} />;
           case "SIDEBAR":
@@ -1007,18 +1012,11 @@ export default function Editor() {
           </div>
 
           {/* Desktop Right Panel — floating overlay (nothing to review yet).
-              Excludes INSTRUCTIONS (2026-09-14) — MapEditorComponent now
-              renders its OWN "Create a Fence Line" prompt directly on the
-              map, cross-platform (see its onStartDrawing render block),
-              specifically so it's visible on mobile without opening the
-              Sheet first. On desktop that card sits at this exact same
-              `right-4` spot at a higher z-index, so leaving this wrapper
-              active for INSTRUCTIONS too would just stack an identical,
-              fully-obscured duplicate underneath it. The Sheet (below)
-              still routes through RightPanel unconditionally — reaching
-              INSTRUCTIONS there is still correct, just no longer the only
-              way to see it on mobile. */}
-          {!isPanelDocked && uiState !== "INSTRUCTIONS" && (
+              RightPanel() itself returns null for INSTRUCTIONS (see its
+              switch above), so this simply renders nothing extra for a
+              brand-new project — the map's own status pill already
+              carries the "Create a Fence Line" CTA. */}
+          {!isPanelDocked && (
             <div className="hidden md:block absolute top-4 right-4 z-10 w-80 lg:w-96 h-[calc(100%-2rem)]">
                 <RightPanel />
             </div>

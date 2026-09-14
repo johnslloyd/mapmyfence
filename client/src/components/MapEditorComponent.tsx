@@ -683,14 +683,14 @@ interface MapEditorProps {
   onLineUpdate?: (line: any) => void;
   isDrawing?: boolean;
   onCancelDrawing?: () => void;
-  // Starts a brand-new line (2026-09-14) — lets this component render
-  // its OWN "Create a Fence Line" prompt directly on the map, cross-
-  // platform, the same way it already owns the isDrawing card below.
-  // Editor.tsx's NewProjectInstructions/RightPanel still exists and is
-  // still reachable (desktop's floating panel, mobile's Sheet), but
-  // neither one is visible on the map ITSELF on mobile without an
-  // extra tap to open the sheet first — see this prop's own render
-  // block for the real bug that surfaced.
+  // Starts a brand-new line (2026-09-14) — powers the status pill's own
+  // "Create a Fence Line" CTA for a project with zero lines yet (see
+  // `showingStartPrompt`), so the one real affordance that starts
+  // drawing at all is visible on the map itself, on every device, with
+  // nothing extra to open. Editor.tsx's old NewProjectInstructions
+  // component rendered this same button through a desktop-only floating
+  // panel (and, briefly, mobile's Sheet) — removed once this made both
+  // paths fully redundant.
   onStartDrawing?: () => void;
   controlsPosition?: 'left' | 'right';
   // Gate placement — see EditFenceLineCard's Gates section. Active only
@@ -788,9 +788,14 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   // already correct there.
   const isPlacingPoint = isDrawing || isExtending || !!placingGateType;
 
-  // Drives the on-map "Create your first fence line" card below AND
-  // (2026-09-14) suppresses the redundant top-center status pill on
-  // mobile when that card is showing — see both render sites for why.
+  // Drives the status pill's own "Create a Fence Line" CTA below
+  // (2026-09-14, direct feedback) — a brand-new project used to get a
+  // whole separate floating card ("Create your first fence line...")
+  // on top of the map, which on mobile could sit right under a
+  // property-creation toast, covering the header. Folded the CTA
+  // directly into the persistent status pill instead of a second
+  // element — one thing on screen, not two saying almost the same
+  // thing on top of each other.
   const showingStartPrompt = !isDrawing && !editingLine && !readOnly && existingLines.length === 0 && !!onStartDrawing;
 
   // MapContainer's own `className` prop only applies once, at the
@@ -1226,30 +1231,6 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
         </Card>
       )}
 
-      {/* "Create a Fence Line" prompt for a brand-new project (2026-09-14,
-          direct feedback) — this is the ONLY real affordance that starts
-          drawing at all, and it used to live exclusively in Editor.tsx's
-          NewProjectInstructions, rendered through a `hidden md:block`
-          wrapper. On mobile that meant the button existed only inside
-          the "Open project menu" Sheet — reachable after last session's
-          fix, but not VISIBLE anywhere on the map itself, so a first-time
-          mobile user had no on-screen cue that tapping the hamburger was
-          the way to start. Mirrors the isDrawing card immediately above
-          — same position/sizing/mobile treatment — so it reads as the
-          same family of on-map prompt, not a new pattern. Gated on
-          `onStartDrawing` being provided at all (QuotePlanView/
-          AdminProjectMapView never pass it, same as they never pass
-          onCancelDrawing) and `!readOnly` for the same reason. */}
-      {showingStartPrompt && (
-        <Card className={cn("absolute top-4 z-40 bg-panel/95 text-panel-foreground backdrop-blur shadow-xl border-border/50 rounded-lg", isMobile ? "left-4 right-4 w-auto p-4" : `${controlsPosition === 'left' ? 'left-4' : 'right-4'} w-full max-w-md lg:w-96 p-4`)}>
-          <h3 className="font-display font-bold text-lg flex items-center gap-2 mb-2"><Ruler className="w-5 h-5 text-primary" /> Create your first fence line</h3>
-          <p className="text-sm text-muted-foreground mb-3">Your project is ready. To get started, create a new fence line on the map.</p>
-          <Button onClick={onStartDrawing} className="w-full gap-2">
-            <Plus className="w-4 h-4" /> Create a Fence Line
-          </Button>
-        </Card>
-      )}
-
       {/* Persistent geocode-failure guidance. This is the case that used
           to strand a user: a project created with an address that
           doesn't geocode landed them on a map with only a transient
@@ -1369,16 +1350,27 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
             moved it up here (2026-09-13, direct feedback), since a
             bigger target at top-center is also easier to actually read
             than a small pill tucked in a corner.
-            Suppressed on mobile while `showingStartPrompt`'s own card is
-            up (2026-09-14) — that card is full-width on mobile
-            (`left-4 right-4`) at this same `top-4`, directly under this
-            centered pill, so without this the pill (later in the DOM,
-            same z-40) painted straight over the card's own title —
-            confirmed live, not assumed. The card's own text already
-            says the same thing this pill would, so hiding it here loses
-            nothing; on desktop the card sits in a side corner instead
-            of centered, so the two never touch and the pill stays. */}
-        {!(isMobile && showingStartPrompt) && (
+
+            For a brand-new project, this now carries its OWN "Create a
+            Fence Line" button rather than just naming the action
+            (2026-09-14, direct feedback) — a separate floating card
+            used to own that button, which meant a new property showed
+            TWO things stacked near the top of the map saying almost the
+            same thing (worse on mobile, where the card was full-width
+            right under this centered pill and could also sit under a
+            property-creation toast). Folded into one element instead:
+            still `bg-panel/95 backdrop-blur` for the same visual
+            family, just `rounded-2xl` and a column layout in this one
+            case, since a single `rounded-full` pill can't hold a full
+            sentence and a button without looking cramped. */}
+        {showingStartPrompt ? (
+          <div className="bg-panel/95 text-panel-foreground backdrop-blur px-5 py-4 rounded-2xl border border-border/50 shadow-xl text-center flex flex-col items-center gap-3 max-w-[calc(100vw-2rem)] sm:max-w-sm">
+            <p className="text-sm font-medium">To get started, create a new fence line on the map.</p>
+            <Button onClick={onStartDrawing} className="gap-2">
+              <Plus className="w-4 h-4" /> Create a Fence Line
+            </Button>
+          </div>
+        ) : (
         <div className="bg-panel/95 text-panel-foreground backdrop-blur px-5 py-3 rounded-full text-sm font-medium border border-border/50 shadow-xl text-center">
           {placingGateType
             ? `Click on the highlighted line to place the ${placingGateType} gate`
@@ -1397,14 +1389,10 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
               : "Click to add another post, or click your first post again to finish"
             : readOnly
             ? "Viewing only — pan and zoom to look around"
-            // A brand-new project (2026-09-14 fix, direct feedback):
-            // the fallback below used to show unconditionally, telling
-            // a user to "draw a new one" on the map before the map
-            // would actually respond to a click there — the real first
-            // step is the "Create a Fence Line" button (now visible
-            // directly on the map, see the card just above), not the
-            // map itself. Named that action instead of implying direct
-            // map interaction that isn't live yet.
+            // Defensive fallback only — every real non-readOnly caller
+            // passes onStartDrawing (Editor.tsx does), so a zero-line
+            // project always takes the `showingStartPrompt` branch
+            // above instead of reaching this text at all.
             : existingLines.length === 0
             ? 'Click "Create a Fence Line" to get started'
             // Plain-language rewrite (2026-09-14, direct feedback) —

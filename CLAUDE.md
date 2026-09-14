@@ -3514,6 +3514,54 @@ pill and the card, not just a visual impression); the existing
 and `npm run build` both clean; test account/property deleted
 afterward.
 
+**Same-day follow-up, prompted by a real iPhone screenshot: part
+five's own fix wasn't enough — the toast this file had already been
+fixing all week was still the actual problem on a genuinely new
+property.** The screenshot showed a green toast sitting fixed across
+the ENTIRE top of the screen — header, "My Properties" nav, and the
+top of the "Create your first fence line" card all covered at once —
+for as long as it stayed up. Direct instruction, three parts:
+
+1. **No success toast for property creation at all.** Landing on the
+   brand-new property's own editor page is already unmistakable
+   confirmation — `useCreateProperty`'s `onSuccess` toast
+   ("Property created successfully") added nothing a user needed, and
+   on mobile it was actively in the way. Removed outright, not
+   replaced with a shorter one.
+2. **The separate "Create your first fence line" card is gone
+   entirely, on both desktop and mobile** — not just repositioned or
+   restyled. Part five's own on-map card (added earlier the same day)
+   and the original Editor.tsx `NewProjectInstructions` component it
+   was built to make mobile-visible are BOTH removed; the latter is
+   deleted outright (`client/src/components/NewProjectInstructions.tsx`)
+   since nothing renders it anymore — `RightPanel()`'s `INSTRUCTIONS`
+   case falls through to `default: return null`.
+3. **The "Create a Fence Line" button now lives inside the status
+   pill itself**, not a second element beside it. The pill's own
+   fallback text ("Click a fence line to select and edit it, or draw a
+   new one") was ALSO the wrong message for this exact state (there's
+   nothing to click yet) — both problems shared one fix: when
+   `showingStartPrompt` is true, the pill renders as a slightly larger
+   `rounded-2xl` column (instead of the plain `rounded-full` one-liner)
+   holding "To get started, create a new fence line on the map." above
+   a real "Create a Fence Line" button. One element, doing what two
+   used to.
+
+This also retired the whole reason part five's mobile-vs-desktop pill-
+suppression logic existed (a separate card and a centered pill
+fighting for the same `top-4` space on mobile) — there's only one
+element now, so that conditional came out along with the card itself.
+
+Verified live end-to-end: registered a fresh account, created a
+property, and confirmed — via a tick-by-tick DOM poll spanning the
+entire create-to-editor transition — that zero toasts fire at any
+point; the resulting editor page shows exactly one element (the
+merged pill+button), no separate card, on both a real 375px mobile
+viewport and a 1280px desktop viewport; clicking the button still
+correctly enters drawing mode, unchanged. `npm run check` and
+`npm run build` both clean; test accounts/properties deleted
+afterward.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up

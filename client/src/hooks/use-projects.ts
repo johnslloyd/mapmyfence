@@ -75,7 +75,15 @@ export function useCreateProperty() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.properties.list.path] });
-      toast({ title: "Success", description: "Property created successfully", variant: "success" });
+      // No success toast (2026-09-14, direct feedback) — creating a
+      // property immediately navigates into that property's own new
+      // editor page (AddPropertyDialog's onSubmit), which is already a
+      // real, unmistakable confirmation on its own. On mobile
+      // specifically, ToastViewport is `fixed top-0 w-full` below the
+      // `sm:` breakpoint, so a toast here sat directly over the header
+      // and the map's own "Create a Fence Line" prompt for as long as
+      // it stayed up — a worse experience than just landing on the new
+      // page with nothing covering it.
     },
     onError: (error) => {
       toast({
