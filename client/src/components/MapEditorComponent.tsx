@@ -1102,24 +1102,12 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
     </div>
   );
   
-  // Rendered inside the status pill's own merged block on mobile now
-  // (see `showingDrawingPrompt` below), not a standalone Card — no
-  // longer needs its own `p-4 pt-0` (that padding compensated for a
-  // header above it that no longer exists here); the pill's own
-  // container supplies padding instead.
-  const MobileContent = () => (
-    <div className="space-y-3 w-full">
-      <div className="flex items-center justify-between bg-secondary/50 rounded-lg px-3 py-2 border border-border/50">
-        <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Total Length</span>
-        <span className="text-lg font-mono font-bold text-foreground">{totalDistance.toFixed(1)} <span className="text-xs text-muted-foreground">ft</span></span>
-      </div>
-      <div className="flex gap-2">
-        <Button variant="outline" size="icon" onClick={handleUndo} disabled={points.length === 0} title="Undo last point"><Undo2 className="h-4 w-4" /></Button>
-        <Button variant="outline" size="icon" onClick={handleClear} disabled={points.length === 0} className="text-destructive hover:text-destructive" title="Clear all"><Trash2 className="h-4 w-4" /></Button>
-        <Button className="flex-1 gap-2 bg-primary hover:bg-primary/90" onClick={handleSave} disabled={points.length < 2 || isSaving}><Save className="h-4 w-4" />{isSaving ? "Saving..." : "Save Line"}</Button>
-      </div>
-    </div>
-  );
+  // MobileContent (Total Length + Undo/Clear/Save Line) removed
+  // (2026-09-14) — mobile's drawing prompt now builds its own trimmed
+  // button row directly inline (see `showingDrawingPrompt`'s render
+  // block), dropping Total Length and Clear-all on purpose. This
+  // component has no other caller left (desktop uses `DesktopContent`
+  // in its own, still-separate, side-anchored card above).
 
   return (
     <div className="relative w-full h-full min-h-[500px]">
@@ -1398,10 +1386,16 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
           </div>
         ) : showingDrawingPrompt ? (
           // Same merge as showingStartPrompt just above, one step later
-          // in the flow — Total Length/Undo/Delete/Save Line (the exact
-          // same `MobileContent` the old, now desktop-only card used)
-          // now live in this one element instead of a second card
-          // fighting the pill for the same mobile `top-4` space.
+          // in the flow. Trimmed further than that first merge, per
+          // direct feedback right after it shipped: Total Length and
+          // the Clear-all/delete button dropped entirely rather than
+          // folded in — on a small screen, the progressive text plus
+          // Undo/Save Line is everything actually needed while placing
+          // points; the running length and a destructive "clear
+          // everything" action aren't worth the extra height. Undo
+          // stays (a real, still-relevant drawing action); Save Line
+          // is the one this request specifically asked to move in,
+          // mirroring `showingStartPrompt`'s single-button shape.
           <div className="bg-panel/95 text-panel-foreground backdrop-blur px-5 py-4 rounded-2xl border border-border/50 shadow-xl text-center flex flex-col items-center gap-3 w-[calc(100vw-2rem)] sm:max-w-sm">
             <p className="text-sm font-medium">
               {points.length === 0
@@ -1410,7 +1404,10 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
                 ? "Click to add your next post"
                 : "Click to add another post, or click your first post again to finish"}
             </p>
-            <MobileContent />
+            <div className="flex gap-2 w-full">
+              <Button variant="outline" size="icon" onClick={handleUndo} disabled={points.length === 0} title="Undo last point"><Undo2 className="h-4 w-4" /></Button>
+              <Button className="flex-1 gap-2 bg-primary hover:bg-primary/90" onClick={handleSave} disabled={points.length < 2 || isSaving}><Save className="h-4 w-4" />{isSaving ? "Saving..." : "Save Line"}</Button>
+            </div>
           </div>
         ) : (
         <div className="bg-panel/95 text-panel-foreground backdrop-blur px-5 py-3 rounded-full text-sm font-medium border border-border/50 shadow-xl text-center">

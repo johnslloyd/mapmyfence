@@ -3602,6 +3602,29 @@ exactly as before, alongside the centered pill, no overlap, no
 duplicate card. `npm run check` and `npm run build` both clean; test
 account/property deleted afterward.
 
+**Trimmed further, right after shipping, direct feedback:** the merge
+above kept ALL of `MobileContent`'s original pieces — Total Length,
+Undo, Clear-all, Save Line — inside the pill. Asked to go further:
+"the pill shaped message takes up so much less space on mobile, we
+don't need to show the total length or delete button." Dropped the
+Total Length stat and the Clear-all/trash button entirely (not folded
+in — just removed from mobile's drawing prompt), keeping Undo (a real,
+still-relevant action while placing points) and Save Line — the one
+this whole request has been about moving in. `MobileContent` itself is
+now unused (its old caller was this exact block) and was deleted;
+mobile's trimmed row is written inline instead. Desktop's
+`DesktopContent`/side-anchored card is a separate component, untouched
+— still shows Total Length and Clear-all exactly as before, since nothing
+about desktop was reported as cramped.
+
+Verified live: a real 2-point line placed on mobile shows the pill with
+NO "Total Length" text and no "Clear all"-titled button anywhere in the
+DOM, while "Undo last point" and "Save Line" are both present and
+Save Line correctly persists the line (confirmed via a direct API
+read afterward); separately confirmed desktop's card still shows all
+four original pieces, unchanged. `npm run check` and `npm run build`
+both clean; test accounts/properties deleted afterward.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up
