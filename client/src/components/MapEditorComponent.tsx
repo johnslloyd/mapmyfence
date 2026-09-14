@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, Fragment } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, GeoJSON, useMapEvents, useMap, Tooltip, CircleMarker } from "react-leaflet";
 import { LatLng, LatLngBounds, Icon, DivIcon } from "leaflet";
 import { Button } from "@/components/ui/button";
-import { Undo2, Save, Trash2, Ruler, Search, Loader2, MapPinned, AlertTriangle, X } from "lucide-react";
+import { Undo2, Save, Trash2, Ruler, Search, Loader2, MapPinned, AlertTriangle, X, Plus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -683,6 +683,15 @@ interface MapEditorProps {
   onLineUpdate?: (line: any) => void;
   isDrawing?: boolean;
   onCancelDrawing?: () => void;
+  // Starts a brand-new line (2026-09-14) — lets this component render
+  // its OWN "Create a Fence Line" prompt directly on the map, cross-
+  // platform, the same way it already owns the isDrawing card below.
+  // Editor.tsx's NewProjectInstructions/RightPanel still exists and is
+  // still reachable (desktop's floating panel, mobile's Sheet), but
+  // neither one is visible on the map ITSELF on mobile without an
+  // extra tap to open the sheet first — see this prop's own render
+  // block for the real bug that surfaced.
+  onStartDrawing?: () => void;
   controlsPosition?: 'left' | 'right';
   // Gate placement — see EditFenceLineCard's Gates section. Active only
   // while editingLine is set: 'single' | 'double' puts the editing
@@ -718,7 +727,7 @@ interface MapEditorProps {
   readOnly?: boolean;
 }
 
-export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSaving, existingLines = [], isMobile, selectedLineId = null, onLineSelect = () => {}, editingLine = null, onLineUpdate = () => {}, isDrawing = false, onCancelDrawing = () => {}, controlsPosition = 'left', placingGateType = null, onGatePlaced = () => {}, onDeletePoint = () => {}, isPro = false, readOnly = false }: MapEditorProps) {
+export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSaving, existingLines = [], isMobile, selectedLineId = null, onLineSelect = () => {}, editingLine = null, onLineUpdate = () => {}, isDrawing = false, onCancelDrawing = () => {}, onStartDrawing, controlsPosition = 'left', placingGateType = null, onGatePlaced = () => {}, onDeletePoint = () => {}, isPro = false, readOnly = false }: MapEditorProps) {
   // A Pro account with no token set yet (VITE_MAPBOX_TOKEN unset —
   // see the migration/env-setup note in CLAUDE.md) still gets the
   // normal free Esri map, never a broken one.
@@ -778,6 +787,11 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   // drag interaction, not click-to-place, so the default cursor is
   // already correct there.
   const isPlacingPoint = isDrawing || isExtending || !!placingGateType;
+
+  // Drives the on-map "Create your first fence line" card below AND
+  // (2026-09-14) suppresses the redundant top-center status pill on
+  // mobile when that card is showing — see both render sites for why.
+  const showingStartPrompt = !isDrawing && !editingLine && !readOnly && existingLines.length === 0 && !!onStartDrawing;
 
   // MapContainer's own `className` prop only applies once, at the
   // initial imperative L.map(...) construction — react-leaflet doesn't
@@ -1212,6 +1226,30 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
         </Card>
       )}
 
+      {/* "Create a Fence Line" prompt for a brand-new project (2026-09-14,
+          direct feedback) — this is the ONLY real affordance that starts
+          drawing at all, and it used to live exclusively in Editor.tsx's
+          NewProjectInstructions, rendered through a `hidden md:block`
+          wrapper. On mobile that meant the button existed only inside
+          the "Open project menu" Sheet — reachable after last session's
+          fix, but not VISIBLE anywhere on the map itself, so a first-time
+          mobile user had no on-screen cue that tapping the hamburger was
+          the way to start. Mirrors the isDrawing card immediately above
+          — same position/sizing/mobile treatment — so it reads as the
+          same family of on-map prompt, not a new pattern. Gated on
+          `onStartDrawing` being provided at all (QuotePlanView/
+          AdminProjectMapView never pass it, same as they never pass
+          onCancelDrawing) and `!readOnly` for the same reason. */}
+      {showingStartPrompt && (
+        <Card className={cn("absolute top-4 z-40 bg-panel/95 text-panel-foreground backdrop-blur shadow-xl border-border/50 rounded-lg", isMobile ? "left-4 right-4 w-auto p-4" : `${controlsPosition === 'left' ? 'left-4' : 'right-4'} w-full max-w-md lg:w-96 p-4`)}>
+          <h3 className="font-display font-bold text-lg flex items-center gap-2 mb-2"><Ruler className="w-5 h-5 text-primary" /> Create your first fence line</h3>
+          <p className="text-sm text-muted-foreground mb-3">Your project is ready. To get started, create a new fence line on the map.</p>
+          <Button onClick={onStartDrawing} className="w-full gap-2">
+            <Plus className="w-4 h-4" /> Create a Fence Line
+          </Button>
+        </Card>
+      )}
+
       {/* Persistent geocode-failure guidance. This is the case that used
           to strand a user: a project created with an address that
           doesn't geocode landed them on a map with only a transient
@@ -1330,7 +1368,17 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
             enlarged and given more breathing room in the same pass that
             moved it up here (2026-09-13, direct feedback), since a
             bigger target at top-center is also easier to actually read
-            than a small pill tucked in a corner. */}
+            than a small pill tucked in a corner.
+            Suppressed on mobile while `showingStartPrompt`'s own card is
+            up (2026-09-14) — that card is full-width on mobile
+            (`left-4 right-4`) at this same `top-4`, directly under this
+            centered pill, so without this the pill (later in the DOM,
+            same z-40) painted straight over the card's own title —
+            confirmed live, not assumed. The card's own text already
+            says the same thing this pill would, so hiding it here loses
+            nothing; on desktop the card sits in a side corner instead
+            of centered, so the two never touch and the pill stays. */}
+        {!(isMobile && showingStartPrompt) && (
         <div className="bg-panel/95 text-panel-foreground backdrop-blur px-5 py-3 rounded-full text-sm font-medium border border-border/50 shadow-xl text-center">
           {placingGateType
             ? `Click on the highlighted line to place the ${placingGateType} gate`
@@ -1349,11 +1397,22 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
               : "Click to add another post, or click your first post again to finish"
             : readOnly
             ? "Viewing only — pan and zoom to look around"
+            // A brand-new project (2026-09-14 fix, direct feedback):
+            // the fallback below used to show unconditionally, telling
+            // a user to "draw a new one" on the map before the map
+            // would actually respond to a click there — the real first
+            // step is the "Create a Fence Line" button (now visible
+            // directly on the map, see the card just above), not the
+            // map itself. Named that action instead of implying direct
+            // map interaction that isn't live yet.
+            : existingLines.length === 0
+            ? 'Click "Create a Fence Line" to get started'
             // Plain-language rewrite (2026-09-14, direct feedback) —
             // named the actual action (click) instead of the abstract
             // verb ("select"), which didn't say HOW to select anything.
             : "Click a fence line to select and edit it, or draw a new one"}
         </div>
+        )}
       </div>
 
       {isExtending && (

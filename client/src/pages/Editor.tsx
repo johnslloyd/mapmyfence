@@ -957,6 +957,7 @@ export default function Editor() {
             onLineUpdate={handleUpdateLine}
             isDrawing={isDrawing}
             onCancelDrawing={cancelDrawing}
+            onStartDrawing={handleStartDrawing}
             controlsPosition="right"
             placingGateType={placingGateType}
             onGatePlaced={handleGatePlaced}
@@ -1005,8 +1006,19 @@ export default function Editor() {
             </Sheet>
           </div>
 
-          {/* Desktop Right Panel — floating overlay (nothing to review yet) */}
-          {!isPanelDocked && (
+          {/* Desktop Right Panel — floating overlay (nothing to review yet).
+              Excludes INSTRUCTIONS (2026-09-14) — MapEditorComponent now
+              renders its OWN "Create a Fence Line" prompt directly on the
+              map, cross-platform (see its onStartDrawing render block),
+              specifically so it's visible on mobile without opening the
+              Sheet first. On desktop that card sits at this exact same
+              `right-4` spot at a higher z-index, so leaving this wrapper
+              active for INSTRUCTIONS too would just stack an identical,
+              fully-obscured duplicate underneath it. The Sheet (below)
+              still routes through RightPanel unconditionally — reaching
+              INSTRUCTIONS there is still correct, just no longer the only
+              way to see it on mobile. */}
+          {!isPanelDocked && uiState !== "INSTRUCTIONS" && (
             <div className="hidden md:block absolute top-4 right-4 z-10 w-80 lg:w-96 h-[calc(100%-2rem)]">
                 <RightPanel />
             </div>

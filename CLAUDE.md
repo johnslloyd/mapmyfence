@@ -3444,6 +3444,76 @@ discussion are resolved except the one explicitly skipped by the user
 (extending a line via an ambiguous endpoint click, still using its
 original, unredesigned trigger — see part three's own note on this).
 
+## Map editor discoverability, part five — the real gap behind "hidden on mobile" (2026-09-14)
+
+Direct report, worded as a copy complaint but pointing at a real
+structural gap underneath: "the text says 'click a fence line... or
+draw a new one' but you can't click on the map until you click
+'create a fence [line],' which is hidden on the mobile screen."
+
+**The real bug: the one button that starts drawing at all was never
+visible on the map itself, on any device.** `NewProjectInstructions`
+("Create a Fence Line") only ever rendered through Editor.tsx's
+desktop-only floating wrapper (`hidden md:block`) or, after the
+mobile-Sheet fix earlier this same day, inside the "Open project
+menu" Sheet — reachable on mobile, but still not something a
+first-time user sees without already knowing to tap the hamburger
+first. `MapEditorComponent` already has an established, working
+pattern for exactly this shape of prompt — its own `isDrawing` card
+("New Fence Line," total length, Save/Cancel) has rendered directly
+on the map, cross-platform, since the very first pass on this feature.
+INSTRUCTIONS state just never got the same treatment.
+
+Fixed by giving `MapEditorComponent` a new optional `onStartDrawing`
+prop and its own "Create your first fence line" card — same
+position/sizing/mobile treatment as the `isDrawing` card immediately
+above it in the file, gated on `existingLines.length === 0 &&
+!isDrawing && !editingLine && !readOnly && onStartDrawing` (a new
+`showingStartPrompt` const, reused by both this card and the pill fix
+below). It's now visible on the map itself on EVERY device, not just
+reachable via a menu. Editor.tsx's desktop-only wrapper now skips
+rendering for `uiState === "INSTRUCTIONS"` specifically — leaving it
+active there too would have stacked an identical, fully-obscured
+duplicate underneath the new card at the same `right-4` spot (confirmed
+by inspecting both elements' positioning before deciding this, not
+assumed) — while the mobile Sheet still routes through the same
+`RightPanel` as before, now just a secondary, no-longer-only way to
+reach the same action.
+
+**A real overlap this introduced, caught live before shipping — not
+after.** On mobile, the new card is full-width (`left-4 right-4`) at
+`top-4`, directly under the ALSO-`top-4`, horizontally-centered status
+pill — first attempt showed the pill painting straight over the
+card's own title, cutting "Create your first fence line" down to
+"Crea" (same z-40, later in the DOM, so it always won the paint
+order). Fixed by suppressing the pill specifically when
+`isMobile && showingStartPrompt` — the card's own text already says
+everything the pill would, so nothing is lost, and on desktop the two
+never touch anyway since the card sits in a side corner instead of
+centered. (The `isDrawing` card the pattern was copied from has this
+exact same latent mobile overlap — confirmed live, not fixed here,
+since it wasn't part of this report; worth closing the same way if it
+ever gets its own complaint.)
+
+**The copy fix, addressing the literal words reported.** The status
+pill's fallback text — "Click a fence line to select and edit it, or
+draw a new one" — showed unconditionally regardless of whether any
+line existed, telling a brand-new project's user to interact with the
+map before the map would actually respond to a click there. Now reads
+`Click "Create a Fence Line" to get started` whenever
+`existingLines.length === 0`, naming the real first action instead of
+implying the map itself is already interactive.
+
+Verified live end-to-end: a fresh project's map now shows "Create your
+first fence line" directly, with zero pill overlap, on both a real
+375px mobile viewport (pill fully suppressed, card's button confirmed
+clickable and correctly entering drawing mode) and a 1280px desktop
+viewport (`getBoundingClientRect()` confirmed an 85px gap between the
+pill and the card, not just a visual impression); the existing
+`isDrawing` flow immediately afterward was unaffected. `npm run check`
+and `npm run build` both clean; test account/property deleted
+afterward.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up
