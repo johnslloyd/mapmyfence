@@ -4216,6 +4216,45 @@ exactly, no horizontal overflow). The underlying fix — `dvh` over
 one; a real before/after on an actual iPhone is the one confirmation
 this session couldn't produce itself.
 
+**A second, related iOS Safari chrome bug, same day, different
+mechanism.** Reported with another real iPhone screenshot: "anytime a
+green toast message appears, it stays for a few seconds and goes away,
+but this green background stays" — Safari's own address-bar/toolbar
+area itself was staying tinted green long after the actual toast had
+disappeared. Not the same `100vh` bug as above (that one was about the
+app's OWN layout rendering behind Safari's chrome); this is Safari
+tinting its OWN UI. Root cause: with no `<meta name="theme-color">` set
+at all (confirmed — none existed anywhere in `client/index.html`), iOS
+Safari 15+ falls back to dynamically SAMPLING whatever color currently
+sits at the top of the page and tints its own chrome to match. Since
+`ToastViewport` is `fixed top-0 w-full` below the `sm:` breakpoint (see
+the earlier duplicate-toast writeup above), a green success toast
+briefly IS the color at the top of the page — and Safari's sampling
+doesn't reliably re-trigger when that toast is removed from the DOM,
+so the chrome stays tinted green from a page element that's already
+gone.
+
+**Fixed by giving Safari a fixed color instead of something to
+sample**: added `<meta name="theme-color" content="#FFFFFF">` to
+`client/index.html`, matching `--card` (index.css) — the app header's
+own real background color, the thing actually sitting at the very top
+of every page at rest, not `--background` (the muted page body, which
+the header sits ON TOP of and is what a naive sampler would otherwise
+occasionally catch during scroll/repaint). With an explicit
+`theme-color` present, Safari uses that fixed value instead of
+sampling page content at all, so this bug class doesn't have a
+mechanism to occur through anymore, independent of what any toast (or
+anything else transiently rendered at the top of the page) does.
+
+Same honest verification limit as the `dvh` fix above: this session's
+browser automation is Chromium-based, so Safari's own chrome-tinting
+behavior can't be observed or screenshotted here. Confirmed instead
+that the meta tag is present with the correct value in both the dev
+server's live HTML and the production build's output (survives
+minification), and that adding it introduced no other change to page
+behavior. No PWA manifest exists in this project to conflict with it.
+`npm run check` and `npm run build` both clean.
+
 ## Editor panel layout — docked vs. floating
 
 `Editor.tsx`'s right-hand panel (`RightPanel`) has two presentations,

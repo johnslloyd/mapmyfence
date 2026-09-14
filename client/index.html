@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://server.arcgisonline.com https://unpkg.com https://cdn.midjourney.com https://api.mapbox.com; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://nominatim.openstreetmap.org ws: wss:; frame-src 'self'; worker-src 'self' blob:;" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <!-- Without an explicit theme-color, iOS Safari (15+) tints its own
+         address-bar/toolbar chrome by dynamically sampling whatever
+         color currently sits at the top of the page — and a real bug
+         report showed it getting stuck on a success toast's green
+         (ToastViewport is `fixed top-0 w-full` below the `sm:`
+         breakpoint) long after that toast itself had disappeared,
+         since nothing forced Safari to resample. Pinning this to the
+         header's own real color (`--card`, index.css) gives Safari a
+         fixed value to use instead of sampling transient page content
+         at all — 2026-09-14. -->
+    <meta name="theme-color" content="#FFFFFF" />
     <title>PostPlotter</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
