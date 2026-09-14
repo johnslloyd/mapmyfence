@@ -16,7 +16,13 @@ import { PageHeader } from "./PageHeader";
 // out on any other page" reads as the same app, not a different one.
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col bg-secondary/30">
+    // min-h-dvh, not min-h-screen (2026-09-14) — same iOS Safari fix as
+    // Layout.tsx's own container: 100vh doesn't shrink when Safari's
+    // chrome is actually showing, 100dvh does. This is only a MINIMUM
+    // height here (the page can grow past it), so the practical effect
+    // is smaller than Layout.tsx's full-height case, but the same
+    // "header renders where the chrome is" risk exists on a short page.
+    <div className="min-h-dvh flex flex-col bg-secondary/30">
       <PageHeader>
         <Link href="/" className="flex items-center gap-2">
           <div className="bg-primary text-primary-foreground p-2 rounded-lg">

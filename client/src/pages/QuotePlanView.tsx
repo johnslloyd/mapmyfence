@@ -40,7 +40,10 @@ export default function QuotePlanView() {
 
   if (isLoading) {
     return (
-      <div className="h-screen flex flex-col overflow-hidden">
+      // h-dvh, not h-screen — see Layout.tsx's own comment on this same
+      // fix (2026-09-14): 100vh doesn't shrink for iOS Safari's chrome,
+      // 100dvh does, applied to all three of this page's return paths.
+      <div className="h-dvh flex flex-col overflow-hidden">
         <PageHeader>
           <div className="flex items-center gap-2">
             <div className="bg-primary text-primary-foreground p-2 rounded-lg">
@@ -58,7 +61,7 @@ export default function QuotePlanView() {
 
   if (isError || !quote || quote.fenceLines.length === 0) {
     return (
-      <div className="min-h-screen flex flex-col bg-secondary/30">
+      <div className="min-h-dvh flex flex-col bg-secondary/30">
         <PageHeader>
           <div className="flex items-center gap-2">
             <div className="bg-primary text-primary-foreground p-2 rounded-lg">
@@ -85,7 +88,7 @@ export default function QuotePlanView() {
   const gateCount = quote.fenceLines.reduce((sum, l) => sum + l.gates.length, 0);
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="h-dvh flex flex-col overflow-hidden">
       <PageHeader>
         <div className="flex items-center gap-2">
           <div className="bg-primary text-primary-foreground p-2 rounded-lg">

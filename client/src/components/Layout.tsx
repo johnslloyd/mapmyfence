@@ -73,7 +73,19 @@ export function Layout({ children }: LayoutProps) {
   }
 
   return (
-    <div className="h-screen bg-secondary/30 flex flex-col overflow-hidden">
+    // h-dvh, not h-screen (2026-09-14, direct feedback — reported with
+    // a real iPhone screenshot): `100vh` in iOS Safari is sized to the
+    // LARGEST possible viewport, as if the browser's own address-bar
+    // chrome were always fully hidden — it does not shrink when that
+    // chrome is actually showing. That made this whole layout taller
+    // than the real visible area whenever Safari's UI was on screen, so
+    // the header (and the map's own status pill just below it) could
+    // render in the exact region Safari's translucent toolbar was
+    // sitting over, reading as the browser chrome "covering" the app's
+    // own nav. `100dvh` (Tailwind 3.4+, no arbitrary-value syntax
+    // needed) tracks the CURRENT real visible viewport instead, growing
+    // and shrinking with the chrome automatically.
+    <div className="h-dvh bg-secondary/30 flex flex-col overflow-hidden">
       {/* Header — shell (border/blur/height/width-cap) lives in
           PageHeader.tsx, shared with AuthLayout.tsx, so the two can't
           drift out of alignment with each other again (see CLAUDE.md's

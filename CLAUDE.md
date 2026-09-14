@@ -4100,6 +4100,59 @@ at 1600px: header and main content row report byte-identical
 wide page; a narrow page's content visibly nests inside the header's
 column instead of just looking arbitrarily narrower.
 
+## iOS Safari's own chrome overlapping the app's header (2026-09-14)
+
+Reported with a real iPhone screenshot: on a fresh property's map
+page, Safari's own translucent address-bar/toolbar sat directly on top
+of the app's header (the "Add a Property" button, zoom controls) and
+the top of the status pill — not a z-index fight between two pieces of
+this app's own UI, but the OS browser's chrome rendering over content
+that should have been positioned below it.
+
+**Root cause: `100vh` in iOS Safari doesn't shrink when the browser's
+own chrome is actually showing.** `Layout.tsx`'s outer shell (and
+`AuthLayout.tsx`'s, and `QuotePlanView.tsx`'s three return paths) used
+Tailwind's `h-screen`/`min-h-screen` — plain `height: 100vh`. iOS
+Safari has always computed `100vh` against the LARGEST possible
+viewport, as if its own address bar and toolbar were permanently
+hidden, regardless of whether they're actually on screen. That makes a
+`100vh`-tall layout taller than the space Safari is actually leaving
+visible whenever its chrome IS showing, so content anchored to the top
+of that oversized column — this app's own header — ends up positioned
+in the same physical screen region the chrome is currently occupying.
+Long-documented Safari behavior, not new, and not something any
+z-index or positioning change on this app's side could fix, since it's
+the browser's own UI compositing on top of the page.
+
+**The real fix: `100dvh` instead of `100vh`.** The "dynamic viewport
+height" unit — Safari 15.4+, and available in Tailwind 3.4+ (this
+project's version) as `h-dvh`/`min-h-dvh` with no arbitrary-value
+syntax needed — tracks the CURRENT actual visible viewport, shrinking
+when chrome is showing and growing when it collapses, instead of
+always assuming the largest case. Swapped in everywhere a full-page
+`h-screen`/`min-h-screen` container existed: `Layout.tsx` (the one
+from the report), `AuthLayout.tsx` (same shape of container, not
+independently reported but the identical bug class), and all three of
+`QuotePlanView.tsx`'s return paths (loading, error, and the real
+map view). `toast.tsx`'s own `max-h-screen` on `ToastViewport` was
+deliberately left alone — a ceiling on how tall the toast STACK can
+grow before needing its own scroll, not a full-page layout container,
+so it doesn't share this exact failure mode.
+
+**Verification is honestly limited here, worth saying plainly**: this
+project's browser-automation tooling runs a Chromium-based engine, not
+real Safari, so the actual address-bar-collapsing behavior this bug
+depends on can't be reproduced or screenshotted from this environment
+— confirmed instead that `h-dvh`/`min-h-dvh` compile to real
+`height/min-height: 100dvh` rules in the built CSS (not silently
+dropped by an older Tailwind config), and that the layout still
+renders correctly with zero regression at a normal mobile viewport
+(`window.innerHeight` and the container's own computed height matching
+exactly, no horizontal overflow). The underlying fix — `dvh` over
+`vh` for exactly this class of bug — is the standard, widely-documented
+one; a real before/after on an actual iPhone is the one confirmation
+this session couldn't produce itself.
+
 ## Editor panel layout — docked vs. floating
 
 `Editor.tsx`'s right-hand panel (`RightPanel`) has two presentations,
