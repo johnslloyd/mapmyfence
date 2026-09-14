@@ -983,8 +983,24 @@ export default function Editor() {
                   <PanelLeftOpen className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="p-0 w-[85vw] sm:w-[400px]">
-                <EditorSidebar />
+              {/* Was hardcoded to <EditorSidebar/> regardless of uiState
+                  (2026-09-14 fix, direct feedback: "no start project box"
+                  on mobile) — this Sheet is the ONLY way a mobile user
+                  reaches the right panel at all (see "Editor panel
+                  layout" in CLAUDE.md), so hardcoding one state's
+                  content here meant INSTRUCTIONS (the "Create a Fence
+                  Line" button for a brand-new project) and EDITING (the
+                  Name/Material/Height/Gates/Save Changes form) were
+                  completely unreachable on mobile — a fresh mobile
+                  property had no way to start a line at all, not just a
+                  missing visual cue. Routing through the same `RightPanel`
+                  desktop already uses makes mobile show whatever state
+                  the editor is actually in, same as desktop. Padding is
+                  conditional because `EditorSidebar` manages its own
+                  (see its `p-4` sections) while the other states'
+                  plain Cards need the Sheet to supply it. */}
+              <SheetContent side="left" className={cn("w-[85vw] sm:w-[400px]", uiState === "SIDEBAR" ? "p-0" : "p-4 overflow-y-auto")}>
+                <RightPanel />
               </SheetContent>
             </Sheet>
           </div>

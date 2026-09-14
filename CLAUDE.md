@@ -1271,6 +1271,72 @@ same-tab check briefly showed stale `ReferenceError`s from this file's
 own documented HMR-replay gotcha, not a real regression. `npm run
 check` and `npm run build` both clean.
 
+**A real, more serious bug this trigger's own Sheet was hiding, found
+the same day creating a fresh property on mobile (2026-09-14).**
+Reported as three symptoms together — "the green banner doesn't go
+away," "there's no start-project box," and "a second banner covers
+the navigation" — that turned out to share one root cause plus one
+separate, real duplicate-toast bug:
+
+1. **The mobile Sheet's `SheetContent` hardcoded `<EditorSidebar />`
+   regardless of `uiState`.** `RightPanel()` (see "Editor panel
+   layout" above) already switches on `uiState` to show the right
+   content — `NewProjectInstructions` for a brand-new project
+   (`INSTRUCTIONS`), `NewFenceLineCard` while drawing, `EditorSidebar`
+   for the line list, `EditFenceLineCard` while editing one — but on
+   mobile the Sheet ignored all of that and always showed the line-list
+   view. For a genuinely NEW property (zero lines, `uiState ===
+   "INSTRUCTIONS"`), that meant the "Create a Fence Line" button —
+   the only affordance that starts drawing at all — straight up did
+   not exist anywhere reachable on mobile; not hidden behind an extra
+   tap, actually absent. The same hardcoding meant `EDITING` was
+   equally unreachable — no way to rename a line, change material/
+   height, add a gate, or click "Save Changes" from the sheet, only
+   the drag/delete-point/square-corner affordances baked directly into
+   the map itself. This had nothing to do with the mobile trigger fix
+   directly above — it's a pre-existing gap in how the Sheet was
+   wired, just found while testing the mobile flow end-to-end same
+   day. Fixed by swapping `<EditorSidebar />` for `<RightPanel />`
+   inside `SheetContent`, so mobile shows whatever state the editor is
+   actually in, exactly like desktop's floating/docked panel already
+   does — zero new components. Padding is now conditional
+   (`uiState === "SIDEBAR" ? "p-0" : "p-4 overflow-y-auto"`) since
+   `EditorSidebar` manages its own internal padding but the other
+   states' plain `Card`s need the Sheet to supply it.
+2. **A genuine duplicate toast, not just a long-lived one.**
+   `AddPropertyDialog.tsx`'s `onSubmit` fired its own
+   `toast({ title: 'Creating property', description: 'Starting
+   property creation', ... })` immediately, then `useCreateProperty`'s
+   `onSuccess` fired a SECOND, real `"Property created successfully"`
+   toast a moment later — the only two-toasts-for-one-action call site
+   in the entire app (checked via a full grep of every `toast()` call
+   before touching anything). Harmless-looking on desktop, where
+   `ToastViewport` stacks toasts bottom-right — but below the `sm:`
+   breakpoint it's `fixed top-0 w-full`, so two toasts there are two
+   full-width green banners stacked at the very top of the screen,
+   above the header, for as long as both remain visible — reads
+   exactly like "the banner won't go away" plus "a second banner
+   covers the navigation," which is literally what was happening.
+   Removed the premature toast entirely — it announced a request
+   STARTING, the only such toast anywhere in this app (every other
+   success toast fires exactly once, from a mutation's own
+   `onSuccess`) — and a property create resolves in well under a
+   second locally, so it added a false sense of a multi-step process
+   for nothing a user needed to know.
+
+Verified live end-to-end on a real 375px mobile viewport: a fresh
+account's very first "Add a Property" now lands on a real, reachable
+"Create your first fence line" card inside the sheet (confirmed via
+the sheet's own rendered text, not assumed); tapping "Create a Fence
+Line" correctly enters drawing mode and the sheet auto-closes onto the
+map's own drawing card, same as before; created a real fence line via
+a direct API call, entered edit mode, and confirmed the sheet now
+shows the full Name/Material/Height/Gates/Save Changes form — Cancel
+correctly returns to the line-list view in place; confirmed via a
+tick-by-tick DOM poll that exactly one toast now fires per property
+creation. `npm run check` and `npm run build` both clean; the test
+account and its properties were deleted afterward.
+
 ## Gates on wooden fences — single/double, placed not drawn (2026-08-29)
 
 Real gap identified during a pre-VPS-push strategy review: the BOM had

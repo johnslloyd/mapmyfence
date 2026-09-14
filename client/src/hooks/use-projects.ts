@@ -405,7 +405,17 @@ export function useUpdateFenceLine() {
       // while still unmounted, means the cache is already fresh by the
       // time the panel remounts.
       queryClient.invalidateQueries({ queryKey: [api.projects.getEstimates.path, projectId], refetchType: 'all' });
-      toast({ title: "Saved", description: "Fence line updated", variant: "success" });
+      // No success toast here (2026-09-14, direct feedback) — this
+      // mutation is the ONE thing behind both a silent auto-save (drag a
+      // point, delete a point, square a corner — none of which are "I'm
+      // done" moments, see Editor.tsx's handleUpdateLine) and the
+      // explicit "Save Changes" button. A blanket "Saved" toast fired
+      // here regardless of which one just happened, which meant every
+      // drag announced "Saved" while the Save button was still sitting
+      // right there — confusing, since the edit session genuinely isn't
+      // over. Editor.tsx already owns the real "you're done" signal for
+      // the explicit-save case (its own toast, plus exiting back to the
+      // sidebar) — this hook only needs to surface a real failure.
     },
     onError: (error) => {
       toast({

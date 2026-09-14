@@ -95,13 +95,19 @@ export function AddPropertyDialog({
   });
 
   async function onSubmit(data: InsertProperty) {
-    // The one toast in the app that was positively-toned but missing
-    // `variant: "success"` (2026-09-14, direct feedback) — every other
-    // success/error toast already used the real green/red theme tokens
-    // (see index.css's Brand section); this one alone fell back to the
-    // plain default (tan) styling despite announcing something going
-    // right, not a neutral/negative state.
-    toast({ title: 'Creating property', description: 'Starting property creation', variant: 'success' });
+    // A "Creating property / Starting property creation" toast used to
+    // fire right here, before the request even resolved — the ONE place
+    // in the app announcing an action was STARTING rather than that it
+    // SUCCEEDED (every other toast fires once, from a mutation's own
+    // onSuccess). Removed (2026-09-14, direct feedback: on mobile, this
+    // stacked with useCreateProperty's own real "Property created
+    // successfully" toast a moment later — ToastViewport is `fixed
+    // top-0 w-full` below the `sm:` breakpoint, so two toasts there
+    // means two full-width green banners covering the header at once,
+    // reading as "the banner won't go away"). The real confirmation
+    // already exists — see useCreateProperty's onSuccess — this one
+    // added a false sense of a slow, multi-step process for a request
+    // that resolves in well under a second.
     try {
       // Convert empty strings to null/undefined for optional fields
       const cleanedData = {
