@@ -3625,6 +3625,47 @@ read afterward); separately confirmed desktop's card still shows all
 four original pieces, unchanged. `npm run check` and `npm run build`
 both clean; test accounts/properties deleted afterward.
 
+**The plain-text pill itself sized down, same day.** Direct feedback,
+independent of the merges above: "that pill shaped notification...
+needs to take a little less vertical space. Drop the font size by 2px
+and make the pill a little wider without overlapping the map controls
+or the side panel controller." Two changes to the plain `rounded-full`
+pill (the one carrying `editingLine`'s and `readOnly`'s text, and
+desktop's own `isDrawing`/default-fallback text — the two merged
+`rounded-2xl` prompts above already had their own, already-adequate
+widths and untouched-here `text-sm`, since their content is a single
+short line, not the multi-line messages this was actually about):
+`text-sm` (14px) → `text-xs` (12px), and a REAL forced width, not a cap.
+
+**A real CSS gotcha caught live, not assumed**: the first attempt just
+added `max-w-[260px]` — confirmed via `getBoundingClientRect()` that
+this did precisely nothing, still rendering at the exact same ~187.5px
+as before. Root cause: this pill is absolutely positioned via
+`left-1/2` with no `right` set, so its shrink-to-fit width was already
+landing well under 260px on its own — a `max-width` can only LOWER an
+already-larger natural width, it can't force something wider than what
+shrink-to-fit already chose. Fixed with a real fixed `w-[224px]`
+instead, a measured value: at a real 375px mobile viewport, Leaflet's
+own zoom control (top-left) ends at x=44 and the mobile menu trigger
+(top-right) starts at x=319 — both read via `getBoundingClientRect()`,
+not estimated — leaving a 275px gap; 224px centered in that gap lands
+with ~31px clearance on the left and ~20px on the right, comfortably
+inside both edges. Confirmed the same fixed width also centers
+correctly within the map's own (narrower) area on desktop once the
+right panel is docked, since the pill's positioning ancestor is the
+map wrapper itself, not the full browser viewport — it isn't
+vw-relative, so it can't be thrown off by how much width the docked
+panel is currently eating.
+
+Verified live: the longest real message (`editingLine`'s) dropped from
+126px tall (3 lines) to 74px tall (2 lines) — both font-size and width
+contributed — with zero horizontal overlap against either the zoom
+control or the mobile menu trigger, confirmed via the same
+`getBoundingClientRect()` measurements on both a real 375px mobile
+viewport and a 1280px desktop viewport with the panel docked. `npm run
+check` and `npm run build` both clean; test account/property deleted
+afterward.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up

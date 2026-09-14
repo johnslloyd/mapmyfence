@@ -1379,7 +1379,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
             sentence and a button without looking cramped. */}
         {showingStartPrompt ? (
           <div className="bg-panel/95 text-panel-foreground backdrop-blur px-5 py-4 rounded-2xl border border-border/50 shadow-xl text-center flex flex-col items-center gap-3 max-w-[calc(100vw-2rem)] sm:max-w-sm">
-            <p className="text-sm font-medium">To get started, create a new fence line on the map.</p>
+            <p className="text-xs font-medium">To get started, create a new fence line on the map.</p>
             <Button onClick={onStartDrawing} className="gap-2">
               <Plus className="w-4 h-4" /> Create a Fence Line
             </Button>
@@ -1397,7 +1397,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
           // is the one this request specifically asked to move in,
           // mirroring `showingStartPrompt`'s single-button shape.
           <div className="bg-panel/95 text-panel-foreground backdrop-blur px-5 py-4 rounded-2xl border border-border/50 shadow-xl text-center flex flex-col items-center gap-3 w-[calc(100vw-2rem)] sm:max-w-sm">
-            <p className="text-sm font-medium">
+            <p className="text-xs font-medium">
               {points.length === 0
                 ? "Click on the map to place your first fence post"
                 : points.length === 1
@@ -1410,7 +1410,26 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
             </div>
           </div>
         ) : (
-        <div className="bg-panel/95 text-panel-foreground backdrop-blur px-5 py-3 rounded-full text-sm font-medium border border-border/50 shadow-xl text-center">
+        // Smaller text + a real, forced width (2026-09-14, direct
+        // feedback) — this pill previously had NO width of its own at
+        // all, just shrink-to-fit content, which is why the longer
+        // messages (editingLine's, in particular) wrapped to 3 lines
+        // and read as unnecessarily tall. A `max-w-*` alone doesn't
+        // help here — this element is absolutely positioned via
+        // `left-1/2` with no `right`, and that shrink-to-fit sizing was
+        // ALREADY landing well under any reasonable max-width (confirmed
+        // live: adding `max-w-[260px]` rendered at the exact same width
+        // as before, since max-width only lowers a ceiling, it can't
+        // force something wider). `w-[224px]` is a real, measured, fixed
+        // width instead: at a real 375px mobile viewport, Leaflet's own
+        // zoom control ends at x=44 and the mobile menu trigger starts
+        // at x=319 (both measured live via getBoundingClientRect) — a
+        // 224px-wide pill centered in that 375px span sits from x≈65.5
+        // to x≈289.5, comfortably inside that 44–319 gap with real
+        // margin on both sides, not flush against either. `text-xs`
+        // (12px, down from `text-sm`'s 14px) combines with the extra
+        // width to cut the longest message from 3 lines to 2.
+        <div className="bg-panel/95 text-panel-foreground backdrop-blur px-5 py-3 rounded-full text-xs font-medium border border-border/50 shadow-xl text-center w-[224px]">
           {placingGateType
             ? `Click on the highlighted line to place the ${placingGateType} gate`
             : isExtending
