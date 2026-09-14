@@ -120,8 +120,20 @@ export default function QuotePlanView() {
             wonder whether they can click around and change something.
             top-RIGHT, not top-left (2026-09-11 fix) — Leaflet's own
             zoom control renders top-left by default and this card was
-            overlapping it. */}
-        <div className="absolute top-4 right-4 z-30">
+            overlapping it.
+            Moved again to bottom-LEFT (2026-09-14 fix, reported with a
+            screenshot) — MapEditorComponent's own top-center status
+            pill (`readOnly` mode: "Viewing only — pan and zoom to look
+            around") sits at `top-4 left-1/2 -translate-x-1/2 z-40`,
+            wide enough on two lines to reach this card's old top-right
+            spot, and z-40 beat this card's z-30 outright, so the pill
+            visually clipped straight through it. Bottom-left is the one
+            corner nothing else on this specific read-only page ever
+            claims: zoom controls are top-left, the pill is top-center,
+            and "Show property line" (MapEditorComponent's own, for a
+            Mississippi property) is bottom-RIGHT — this card is the
+            only thing here at all on the left side, at any height. */}
+        <div className="absolute bottom-4 left-4 z-30">
           <Card className="bg-panel/95 backdrop-blur shadow-xl border-border/50 rounded-lg py-2 px-3">
             <div className="flex items-center gap-2 mb-1">
               <Badge variant="outline" className="gap-1 text-[10px] h-5 font-normal">

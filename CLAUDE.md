@@ -3022,6 +3022,25 @@ thing in the top-left corner. Verified live with a real quote/plan
 page: the card now sits fully clear of the zoom control at any
 viewport width tested.
 
+**Third follow-up, 2026-09-14: that same badge now collided with the
+map's OWN status pill instead.** Reported with a screenshot — this
+page's `readOnly` mode gives `MapEditorComponent`'s top-center status
+pill (`absolute top-4 left-1/2 -translate-x-1/2 z-40`) its own long
+message, "Viewing only — pan and zoom to look around," which wraps to
+two lines and, at plenty of ordinary viewport widths, reaches far
+enough right to overlap the badge's `top-4 right-4` spot from the fix
+above — and the pill's `z-40` beats the badge's `z-30` outright, so it
+visually cut straight through the badge's text instead of sitting
+beside it. Moved the badge to `bottom-4 left-4` instead of nudging
+z-index or width — the one corner nothing else on this specific
+read-only page ever claims: zoom controls are top-left, the pill is
+top-center, and `MapEditorComponent`'s own "Show property line" button
+(for a Mississippi property) is bottom-RIGHT. Verified live with a
+real sent quote (a real 3-point line, two segments) at both a narrow
+and a 1280px-wide viewport: the pill and badge no longer touch at
+either width. `npm run check` and `npm run build` both clean; test
+account/org/property deleted afterward.
+
 ## Project status: simplified, and finally wired up for real (2026-09-13)
 
 Direct feedback prompted a real finding, not just a request: every
