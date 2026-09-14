@@ -113,6 +113,31 @@
   }
 }
 
+/* A real, documented Radix ScrollArea gotcha (2026-09-14, found chasing
+   a live "content gets cut off in the drawer, not fully responsive"
+   report): `ScrollAreaPrimitive.Viewport` (scroll-area.tsx) is correctly
+   sized to its container (`h-full w-full`), but Radix renders its own,
+   unstyled wrapper DIV directly inside that viewport with an inline
+   `display: table` — used internally to measure scrollable content, but
+   a `display: table` box sizes itself to fit its CONTENT (shrink-to-fit,
+   like a table with no explicit width), not to its parent. Confirmed
+   live: a flex row inside `EditorSidebar`'s ScrollArea (the "N Lines
+   Defined / Total: X ft" header) that couldn't fit its own content
+   pushed this wrapper to 380px inside a real 318px-wide mobile Sheet —
+   the OUTER viewport correctly clipped at 318px (`overflow: hidden`),
+   silently cutting off the last ~60px with no scrollbar, matching
+   exactly what was reported. This isn't fixable from `scroll-area.tsx`
+   itself — Radix owns that inner wrapper, it isn't exposed as a prop —
+   so it's overridden globally here instead, the same fix recommended in
+   Radix's own GitHub issues for this exact behavior: forcing it back to
+   a normal block box (sized to its parent, like any ordinary div) fixes
+   the width without touching Radix's actual scroll/measurement logic,
+   which lives in the Viewport's `overflow` property, not this wrapper's
+   `display` value. */
+[data-radix-scroll-area-viewport] > div {
+  display: block !important;
+}
+
 /* Map specific overrides */
 .leaflet-container {
   width: 100%;

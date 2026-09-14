@@ -6,7 +6,7 @@ import { MapEditorComponent } from "@/components/MapEditorComponent";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, ArrowLeft, Save, PanelLeftOpen, Camera, ClipboardList, Plus } from "lucide-react";
+import { Trash2, ArrowLeft, Save, PanelRightOpen, Camera, ClipboardList, Plus } from "lucide-react";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -991,14 +991,23 @@ export default function Editor() {
               from a plain hamburger (`Menu`) — identical to Layout.tsx's
               own, unrelated mobile nav toggle in the header, despite
               opening a completely different thing (this project's
-              fence-line sidebar, not the account nav) — to `PanelLeftOpen`,
-              which actually depicts the interaction: a panel opening
-              from the left, matching this Sheet's own `side="left"`. */}
+              fence-line sidebar, not the account nav) — to a panel-open
+              glyph depicting the real interaction.
+              Both the icon AND the Sheet's own `side` flipped to RIGHT
+              (same day, follow-up direct feedback) — the trigger moving
+              to the right corner made `PanelLeftOpen`/`side="left"`
+              wrong on two counts at once: the icon depicted a panel
+              opening from the OPPOSITE side of where the button now
+              sits, and the sheet itself still visually slid in from the
+              left, away from the button that opened it, instead of
+              growing out from under it the way a panel anchored to a
+              corner should. `PanelRightOpen` + `side="right"` now match
+              the trigger's real position. */}
           <div className="md:hidden absolute top-4 right-4 z-30">
             <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
               <SheetTrigger asChild>
                 <Button size="icon" variant="secondary" className="shadow-md h-10 w-10 rounded-full" aria-label="Open project menu">
-                  <PanelLeftOpen className="h-5 w-5" />
+                  <PanelRightOpen className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
               {/* Was hardcoded to <EditorSidebar/> regardless of uiState
@@ -1017,7 +1026,7 @@ export default function Editor() {
                   conditional because `EditorSidebar` manages its own
                   (see its `p-4` sections) while the other states'
                   plain Cards need the Sheet to supply it. */}
-              <SheetContent side="left" className={cn("w-[85vw] sm:w-[400px]", uiState === "SIDEBAR" ? "p-0" : "p-4 overflow-y-auto")}>
+              <SheetContent side="right" className={cn("w-[85vw] sm:w-[400px]", uiState === "SIDEBAR" ? "p-0" : "p-4 overflow-y-auto")}>
                 <RightPanel />
               </SheetContent>
             </Sheet>

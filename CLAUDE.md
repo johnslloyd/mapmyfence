@@ -3709,6 +3709,77 @@ renders there (the merged block does not), matching the established
 per-platform split from the earlier merges. `npm run check` and
 `npm run build` both clean; test account/property deleted afterward.
 
+## Mobile drawer: wrong slide direction, and a real Radix width bug (2026-09-14)
+
+Two more direct reports, same day, both about the mobile Sheet itself
+rather than what's inside it.
+
+**1. The drawer slid in from the wrong side.** The mobile menu trigger
+moved from top-left to top-right earlier this same day (see "Mobile
+menu trigger" above), but the Sheet it opens was never updated to
+match — it still had `side="left"` and the trigger's icon was still
+`PanelLeftOpen`, both now describing the OPPOSITE of where the button
+actually sits. Flipped both: `SheetContent side="right"`, and the icon
+to `PanelRightOpen` — the drawer now grows out from under the button
+that opens it instead of sliding in from the far side of the screen.
+
+**2. A real, previously-undiscovered Radix `ScrollArea` bug, found
+chasing "the drawer's content gets cut off, the width isn't fully
+responsive here."** Confirmed live, not assumed: the Sheet's own box
+was correctly sized (318px at a real 375px viewport, matching
+`w-[85vw]`), and its outer `overflow: hidden` wrapper was ALSO
+correctly 318px wide — but a flex row inside `EditorSidebar`'s
+`ScrollArea` (the "N Lines Defined" / "Total: X ft" header) rendered at
+**381px**, and its `Total: 243 ft` badge measured `left: 331, right:
+422` — genuinely positioned 47px past the visible 375px viewport,
+silently clipped with no scrollbar, matching the report exactly.
+
+Root cause, traced by walking the actual DOM chain from that row up to
+the Sheet (`getComputedStyle` + `getBoundingClientRect` at every level,
+not guessed): `ScrollAreaPrimitive.Viewport` (`scroll-area.tsx`) is
+correctly styled `h-full w-full` and DOES measure at the right 318px —
+but Radix renders its OWN, unstyled wrapper `<div>` directly inside
+that viewport with an inline `display: table`, used internally for
+scroll measurement. A `display: table` box with non-table children
+sizes itself to fit its CONTENT (shrink-to-fit, the same way a
+table with no explicit width does), not to its parent — so when the
+row's own two children (a label + a badge, 107px + 91px, comfortably
+fittable on their own) couldn't fit AND had nothing forcing them to
+shrink, that inner Radix wrapper just grew to 381px to accommodate
+them, and `justify-between` faithfully spread the badge all the way to
+the far right edge of that oversized box — well past the real,
+correctly-sized viewport around it.
+
+Not fixable from `scroll-area.tsx` itself — that inner wrapper is
+Radix's own implementation detail, never exposed as a prop. Fixed with
+a global override in `index.css` instead (the same remedy recommended
+in Radix's own GitHub issues for this exact behavior):
+```css
+[data-radix-scroll-area-viewport] > div {
+  display: block !important;
+}
+```
+Forcing it back to a normal block box makes it size to its parent like
+any ordinary div, without touching Radix's actual scroll/measurement
+logic (which lives in the Viewport's `overflow` property, not this
+wrapper's `display` value) — every `ScrollArea` in the app (this one,
+and the desktop docked panel, which uses the identical component)
+benefits from the same fix, not just the one row that happened to
+surface it.
+
+Verified live end-to-end on a real 375px mobile viewport: the same row
+that measured 381px wide with a badge 47px off-screen now measures
+318px (matching the Sheet exactly), with the badge's right edge at
+359px — comfortably inside the 375px viewport; re-checked the full
+material-estimates list below it (multiple dollar amounts that were
+ALSO getting silently clipped in the original report) and confirmed
+every line renders completely, wrapping normally instead of cutting
+off; separately confirmed the desktop docked panel — which renders the
+exact same `EditorSidebar` through the exact same `ScrollArea` — still
+looks correct, no regression from the global CSS override. `npm run
+check` and `npm run build` both clean; test account/property deleted
+afterward.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up
@@ -4338,6 +4409,49 @@ server's live HTML and the production build's output (survives
 minification), and that adding it introduced no other change to page
 behavior. No PWA manifest exists in this project to conflict with it.
 `npm run check` and `npm run build` both clean.
+
+**The `theme-color` fix wasn't enough on its own — reported again, live,
+with another real iPhone screenshot, same day.** `theme-color` fixes
+Safari's DEFAULT/idle chrome color, but Safari's chrome ALSO does live
+blur-behind-content compositing at the very top of the viewport — a
+genuinely different mechanism that doesn't respect `theme-color` the
+same way, and can still pick up whatever's really rendered there. Since
+`ToastViewport` (`toast.tsx`) was `fixed top-0 w-full`, a green
+success toast sat exactly in that sampled strip, and no amount of
+"tell Safari the right default color" fixes a LIVE compositing read of
+real content.
+
+**The actual, reliable fix: never let a solid-colored toast touch the
+true top edge at all.** Changed `ToastViewport`'s mobile position from
+`top-0` to `top-20` — clears this app's own `h-16` header with a real
+16px gap, so a toast now slides in just below the header instead of at
+the physical screen edge. This doesn't depend on understanding or
+trusting any Safari-specific heuristic — there's simply nothing left
+for it to sample at the true edge, regardless of mechanism. Desktop
+(`sm:bottom-0 sm:top-auto`) was never anchored to `top-0` and is
+unaffected.
+
+**A second, real, independent bug fixed in the same pass, found while
+in this code, not confirmed as the cause but worth closing regardless**:
+`use-toast.ts`'s `TOAST_REMOVE_DELAY` was `1000000` (16+ minutes) — a
+well-known shadcn/ui scaffold default this app's history never
+revisited. Radix's own Toast `Presence` unmounts the real DOM node once
+its exit animation finishes (a few hundred ms), so this delay mainly
+controlled how long a DISMISSED toast kept occupying this hook's own
+`TOAST_LIMIT = 1` state slot — up to 16 minutes during which a second,
+real toast firing would have nowhere to go. Dropped to `1000`.
+
+Verified live: a real "Save Changes" click's success toast now measures
+at `top: 80` (matching `top-20`'s 80px, confirmed via
+`getBoundingClientRect()` on the actual `ToastPrimitives.Viewport`
+element, not assumed from the class name alone) on a real 375px mobile
+viewport — clearing the header with room to spare. Same honest
+limitation as both fixes above: this session's browser automation is
+Chromium, so Safari's own blur-compositing can't be directly observed
+here; this fix is reasoned from first principles (nothing solid-colored
+at the true edge = nothing to sample) rather than confirmed against
+real Safari internals. `npm run check` and `npm run build` both clean;
+test account/property deleted afterward.
 
 ## Editor panel layout — docked vs. floating
 

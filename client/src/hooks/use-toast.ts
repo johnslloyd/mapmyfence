@@ -6,7 +6,21 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+// Was 1000000 (16+ minutes) — a well-known shadcn/ui scaffold default
+// nobody in this app's history had revisited. Radix's own Toast
+// Presence unmounts the real DOM node once its exit animation finishes
+// (a few hundred ms), so this delay mainly controlled how long a
+// dismissed toast lingered in THIS hook's own React state — but with
+// `TOAST_LIMIT` at 1, that stale entry could still occupy the one
+// available slot for a full 16 minutes after a toast visually
+// disappeared, silently blocking any real toast fired in that window.
+// Fixed as a real bug in passing while chasing the "green stays stuck
+// after a toast disappears" iOS Safari report (2026-09-14) — not
+// confirmed as the cause of that specific bug (see toast.tsx's own
+// `top-20` fix for the actual, verified mechanism), but this shape of
+// "dismissed still counts as occupying the slot" bug is exactly the
+// kind of thing worth closing on its own merits regardless.
+const TOAST_REMOVE_DELAY = 1000
 
 type ToasterToast = ToastProps & {
   id: string

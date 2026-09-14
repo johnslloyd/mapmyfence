@@ -14,7 +14,26 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]",
+      // top-20 on mobile, not top-0 (2026-09-14, direct feedback,
+      // reported with a real iPhone screenshot) — a toast flush against
+      // the true top edge sits exactly where iOS Safari's own chrome
+      // (status bar + address bar, whichever edge the user has it on)
+      // reads color from, and a solid-colored success/destructive toast
+      // there got Safari's chrome visibly stuck tinted to match even
+      // after the toast itself was gone. This app's own `theme-color`
+      // meta tag (index.html) is the primary fix for Safari's DEFAULT
+      // chrome color, but Safari's live blur-behind-content compositing
+      // at the very top of the viewport is a separate mechanism that
+      // doesn't respect theme-color the same way — the only fully
+      // reliable fix is to never let a solid, saturated color touch
+      // that true edge at all. `top-20` clears this app's own `h-16`
+      // header with a real 16px gap, so a mobile toast now slides in
+      // just below the header instead of at the physical screen edge —
+      // still fully visible, just never in the strip Safari's chrome
+      // samples from. Desktop (`sm:`) is unaffected — its toasts were
+      // never anchored to `top-0` in the first place (`sm:top-auto
+      // sm:bottom-0`), so this edge case doesn't apply there.
+      "fixed top-20 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]",
       className
     )}
     {...props}
