@@ -809,6 +809,17 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   // above) and is untouched; this only applies on mobile.
   const showingDrawingPrompt = isDrawing && !editingLine && isMobile;
 
+  // Same pattern, same day, for extending an existing line (2026-09-14,
+  // direct feedback: "continue the pattern of mobile having a guided
+  // process") — "Finish Extending" used to live in its own standalone
+  // button at `bottom-16 left-4`, disconnected from the pill entirely.
+  // Desktop's version of that button never had an overlap problem (it
+  // isn't near the centered pill) and stays exactly as it was; on
+  // mobile the button now lives inside the pill itself, next to the
+  // instruction text, matching `showingStartPrompt`/
+  // `showingDrawingPrompt`'s own shape.
+  const showingExtendPrompt = isExtending && isMobile;
+
   // MapContainer's own `className` prop only applies once, at the
   // initial imperative L.map(...) construction — react-leaflet doesn't
   // re-render it on later prop changes (confirmed live: the class was
@@ -1409,6 +1420,19 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
               <Button className="flex-1 gap-2 bg-primary hover:bg-primary/90" onClick={handleSave} disabled={points.length < 2 || isSaving}><Save className="h-4 w-4" />{isSaving ? "Saving..." : "Save Line"}</Button>
             </div>
           </div>
+        ) : showingExtendPrompt ? (
+          // Same family again — "Finish Extending" moved off its own
+          // standalone `bottom-16 left-4` button (still there, desktop-
+          // only — see that button's own render condition below) and
+          // into the pill next to the instruction text. Each map click
+          // while extending already saves immediately (`handleMapClick`
+          // calls `onLineUpdate` per point, same auto-save-on-edit
+          // plumbing dragging a point uses) — this button only ever
+          // exits extend mode, it doesn't itself trigger a save.
+          <div className="bg-panel/95 text-panel-foreground backdrop-blur px-5 py-4 rounded-2xl border border-border/50 shadow-xl text-center flex flex-col items-center gap-3 w-[calc(100vw-2rem)] sm:max-w-sm">
+            <p className="text-xs font-medium">Click on the map to extend the line</p>
+            <Button onClick={() => setIsExtending(false)} className="w-full">Finish Extending</Button>
+          </div>
         ) : (
         // Smaller text + a real, forced width (2026-09-14, direct
         // feedback) — this pill previously had NO width of its own at
@@ -1461,7 +1485,9 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
         )}
       </div>
 
-      {isExtending && (
+      {/* Desktop only (2026-09-14) — mobile's version of this button now
+          lives inside the pill itself, see `showingExtendPrompt` above. */}
+      {isExtending && !isMobile && (
         <div className="absolute bottom-16 left-4 z-40">
           <Button onClick={() => setIsExtending(false)}>Finish Extending</Button>
         </div>

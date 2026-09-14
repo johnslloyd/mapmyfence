@@ -3666,6 +3666,49 @@ viewport and a 1280px desktop viewport with the panel docked. `npm run
 check` and `npm run build` both clean; test account/property deleted
 afterward.
 
+**Continuing the guided-mobile pattern, same day: "Finish Extending"
+folded in too, and the sidebar now auto-opens after a save.** Direct
+instruction: "when a user is done drawing a line, they have to know to
+click the side drawer icon to save it... continue the pattern of
+mobile having a guided process... for that matter, let's also move the
+'finish extending line' button there too... when a user has saved the
+fence line, we should automatically open that side drawer." (Save Line
+itself was already in the pill per the merges above — this extended
+the same idea to the one remaining standalone action and closed the
+"now what?" gap right after saving.)
+
+- New `showingExtendPrompt` (`isExtending && isMobile`), mirroring
+  `showingDrawingPrompt` exactly: the standalone `bottom-16 left-4`
+  "Finish Extending" button (untouched on desktop — never had an
+  overlap problem, not part of this ask) is now ALSO folded into the
+  pill on mobile, next to "Click on the map to extend the line." Each
+  map click while extending already saves immediately
+  (`handleMapClick` calls `onLineUpdate` per point, the same
+  auto-save-on-edit plumbing dragging a point uses) — this button only
+  ever exits extend mode, never triggers a save itself.
+- `Editor.tsx`'s `handleSaveLine` now calls `setMobileSidebarOpen(true)`
+  (gated on `isMobile`) right alongside the existing
+  `setUiState("SIDEBAR")` — the one moment in this whole file that's a
+  genuine state TRANSITION (DRAWING → SIDEBAR) rather than an in-place
+  auto-save that stays put (drag, square-corner, delete-point, and now
+  extending's own "Finish" all remain in EDITING with nothing to
+  react to). Desktop needs no equivalent — its docked panel already
+  shows SIDEBAR content unconditionally the instant `uiState` changes,
+  with no separate "open" state to drive.
+
+Verified live end-to-end on a real 375px mobile viewport: drew and
+saved a real line — the mobile sheet opened automatically showing the
+just-saved line and material estimates, no manual hamburger tap
+needed; separately selected an existing line, clicked an endpoint, and
+confirmed the pill showed "Click on the map to extend the line" with a
+"Finish Extending" button inside it (exactly one instance in the DOM,
+no leftover standalone button), and that clicking it correctly
+returned to the normal editing pill text. Re-confirmed desktop is
+completely unaffected — the standalone bottom-left button still
+renders there (the merged block does not), matching the established
+per-platform split from the earlier merges. `npm run check` and
+`npm run build` both clean; test account/property deleted afterward.
+
 ## Property page redesign, round two — "Property Dossier" (2026-08-30)
 
 The round-one redesign above (card grid + sidebar) got a follow-up

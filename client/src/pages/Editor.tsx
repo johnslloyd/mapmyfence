@@ -764,6 +764,18 @@ export default function Editor() {
       toast({ title: "Success", description: "Fence line saved.", variant: "success" });
       setIsDrawing(false);
       setUiState("SIDEBAR");
+      // Auto-open the mobile sheet (2026-09-14, direct feedback) — on
+      // mobile, finishing a brand-new line used to leave the user on a
+      // plain map with the sidebar still tucked behind the hamburger;
+      // nothing on screen signaled there was now a real next step
+      // (rename the line, add a gate, check the estimate). Desktop
+      // needs no equivalent — its docked panel already shows the
+      // SIDEBAR content unconditionally the instant uiState changes.
+      // Scoped to this one save moment, not drag/square-corner/extend's
+      // own auto-saves — those stay in EDITING (no state transition at
+      // all to react to) and already behave like every other in-place
+      // edit in this file.
+      if (isMobile) setMobileSidebarOpen(true);
     } catch (error: any) {
       console.error("Failed to save line", error);
       toast({ title: 'Error', description: error?.message || 'Failed to add fence line', variant: 'destructive' });
