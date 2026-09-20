@@ -1,0 +1,12 @@
+{
+  "name": "postplotter-demo-video",
+  "private": true,
+  "description": "Records the marketing demo video (real app footage timed to a VO track). See record-synced.js.",
+  "scripts": {
+    "cards": "node cards.js",
+    "record": "node cards.js && node record-synced.js"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}
