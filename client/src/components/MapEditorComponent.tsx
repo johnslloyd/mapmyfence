@@ -61,6 +61,11 @@ const MAP_MAX_ZOOM = 22;
 // usual test regions differs from the documented 22.
 const MAPBOX_STYLE = "mapbox/satellite-streets-v12";
 const MAPBOX_NATIVE_ZOOM = 22;
+
+// A geocoded address used to land at the zoom ceiling (20 free / 22 Pro),
+// which read as too tight to orient on the property. Zoom levels backed
+// off from that ceiling when centering on a searched address.
+const ADDRESS_SEARCH_ZOOM_OUT = 1;
 const MAPBOX_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 // Fallback for when there's no geocoded point yet — a brand-new project,
@@ -926,7 +931,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
         seenNames.add(r.display_name);
         return true;
       });
-      const closeZoom = useMapboxImagery ? MAPBOX_NATIVE_ZOOM : 20;
+      const closeZoom = (useMapboxImagery ? MAPBOX_NATIVE_ZOOM : 20) - ADDRESS_SEARCH_ZOOM_OUT;
       if (results.length === 1 && looksSpecificEnoughToTrust(searchAddress)) {
         // Only auto-navigate when BOTH the API gave one answer AND the
         // input itself had enough in it (a ZIP or a real state) to trust
@@ -982,7 +987,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
   // automatic "only one result" case.
   const handlePickCandidate = (lat: number, lon: number) => {
     if (!geocodeCandidates) return;
-    const closeZoom = useMapboxImagery ? MAPBOX_NATIVE_ZOOM : 20;
+    const closeZoom = (useMapboxImagery ? MAPBOX_NATIVE_ZOOM : 20) - ADDRESS_SEARCH_ZOOM_OUT;
     handleAddressFound(lat, lon, geocodeCandidates.zoomToState ? 8 : closeZoom);
     setGeocodeCandidates(null);
   };
