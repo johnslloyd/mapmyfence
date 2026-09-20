@@ -11,8 +11,10 @@ import {
   useOrganizationQuotes,
   useOrganizationRates,
   useSetOrganizationRates,
+  useUpdateProject,
 } from "@/hooks/use-projects";
-import { ORG_SEAT_LIMIT } from "@shared/routes";
+import { ORG_SEAT_LIMIT, api } from "@shared/routes";
+import { useQueryClient } from "@tanstack/react-query";
 import { MATERIAL_LABELS } from "@/lib/estimates";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,7 +33,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Building2, Users, UserPlus, Trash2, Image as ImageIcon, FileText, DollarSign } from "lucide-react";
+import { Building2, Users, UserPlus, Trash2, Image as ImageIcon, FileText, DollarSign, CalendarCheck, Check } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useRef, useState, useEffect } from "react";
 import { format } from "date-fns";
@@ -425,10 +427,13 @@ function PricingSection({ isAdmin, teardownRatePerFoot }: { isAdmin: boolean; te
 }
 
 // The "sent" half of the plan's "sent/viewed/accepted rollup" — see
-// api.myOrganization.listQuotes's own comment. The header says exactly
-// that, on purpose, rather than implying a fuller status view exists.
+// api.myOrganization.listQuotes's own comment. "Accepted" and "Mark as
+// Scheduled" (scheduling MVP slice 1, 2026-09-16) close two of the three
+// gaps that comment used to flag; "viewed" tracking still doesn't exist.
 function SentQuotesSection() {
   const { data: quotes, isLoading } = useOrganizationQuotes();
+  const updateProject = useUpdateProject();
+  const queryClient = useQueryClient();
 
   return (
     <Card>
@@ -437,7 +442,7 @@ function SentQuotesSection() {
           <FileText className="w-4 h-4 text-primary" /> Sent Quotes
         </CardTitle>
         <CardDescription>
-          Every quote this business has sent. Just "sent" for now — viewed/accepted tracking isn't built yet.
+          Every quote this business has sent, whether the customer accepted, and their own contact info once they do. "Viewed" tracking still isn't built.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -455,6 +460,7 @@ function SentQuotesSection() {
                   <th className="text-left px-4 py-2.5 font-medium">Customer</th>
                   <th className="text-left px-4 py-2.5 font-medium">Project</th>
                   <th className="text-left px-4 py-2.5 font-medium">Amount</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Status</th>
                   <th className="text-left px-4 py-2.5 font-medium">Sent by</th>
                   <th className="text-left px-4 py-2.5 font-medium">Sent</th>
                 </tr>
@@ -465,9 +471,43 @@ function SentQuotesSection() {
                     <td className="px-4 py-2.5">
                       <div className="font-medium">{q.customerName || "—"}</div>
                       <div className="text-xs text-muted-foreground">{q.customerEmail}</div>
+                      {q.customerPhone && (
+                        <a href={`tel:${q.customerPhone}`} className="text-xs text-muted-foreground hover:text-primary">
+                          {q.customerPhone}
+                        </a>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-muted-foreground">{q.projectName}</td>
                     <td className="px-4 py-2.5 font-mono">${q.totalCost.toFixed(2)}</td>
+                    <td className="px-4 py-2.5">
+                      {q.projectStatus === "scheduled" ? (
+                        <Badge className="bg-primary/10 text-primary border-primary/30 gap-1">
+                          <CalendarCheck className="w-3 h-3" /> Scheduled
+                        </Badge>
+                      ) : q.acceptedAt ? (
+                        <div className="space-y-1">
+                          <Badge className="bg-blue-100 text-blue-700 gap-1">
+                            <Check className="w-3 h-3" /> Accepted
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-xs px-2"
+                            disabled={updateProject.isPending}
+                            onClick={() =>
+                              updateProject.mutate(
+                                { id: q.projectId, status: "scheduled" },
+                                { onSuccess: () => queryClient.invalidateQueries({ queryKey: [api.myOrganization.listQuotes.path] }) }
+                              )
+                            }
+                          >
+                            Mark as Scheduled
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Awaiting response</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 text-muted-foreground">{q.createdByEmail || "—"}</td>
                     <td className="px-4 py-2.5 text-muted-foreground">{format(new Date(q.createdAt), "MMM d, yyyy")}</td>
                   </tr>

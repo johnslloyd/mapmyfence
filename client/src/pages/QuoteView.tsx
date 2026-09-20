@@ -1,11 +1,15 @@
 import { useRoute, Link } from "wouter";
-import { usePublicQuote } from "@/hooks/use-projects";
+import { usePublicQuote, useAcceptQuote } from "@/hooks/use-projects";
 import { AuthLayout } from "@/components/AuthLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { PlanThumbnail } from "@/lib/planPreview";
-import { Phone, Mail } from "lucide-react";
+import { Phone, Mail, Check } from "lucide-react";
 import { format } from "date-fns";
+import { useState } from "react";
 import NotFound from "./not-found";
 
 // Business tier, Phase 1 (2026-09-10) — the one page in this entire app
@@ -17,13 +21,26 @@ import NotFound from "./not-found";
 //
 // Deliberately just the linear-foot/bottom-line numbers and business
 // contact info — no itemized materials list (that's the DIYer's own
-// view, not what a contractor hands a customer) and no Accept button
-// yet (explicitly deferred past this first slice, see CLAUDE.md's
-// Phase 1 write-up).
+// view, not what a contractor hands a customer). The Accept flow
+// (scheduling MVP slice 1, 2026-09-16) is deliberately the whole of
+// "scheduling" for now — accepting collects a phone number and tells
+// the business to call; there's no in-app date picker, proposal, or
+// calendar. See CLAUDE.md's "Scheduling MVP" section for why that's the
+// deliberate starting point, not a placeholder for something bigger
+// that got cut.
+//
+// The phone number is typed fresh by the customer right here, not
+// pre-filled from anything the business may have entered at send time
+// — that would require this page's own public, no-login API response
+// to include it, exposing it to anyone holding the link, not just the
+// actual customer. It travels one-way, in the accept request itself,
+// and is never read back out through this page or its API.
 
 export default function QuoteView() {
   const [, params] = useRoute("/quotes/:token");
   const { data: quote, isLoading, isError } = usePublicQuote(params?.token);
+  const acceptQuote = useAcceptQuote(params?.token);
+  const [phone, setPhone] = useState("");
 
   if (isLoading) {
     return (
@@ -93,6 +110,48 @@ export default function QuoteView() {
               </div>
             )}
           </div>
+          {/* Scheduling MVP slice 1 (2026-09-16) — the whole "scheduling"
+              feature, for now: accepting doesn't book a date, it just
+              collects a real number and tells the business to call.
+              `acceptedAt` comes back from the server on every load (see
+              usePublicQuote), not just client-side mutation state, so
+              reopening this link later still shows the accepted
+              confirmation. */}
+          {quote.acceptedAt ? (
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex items-start gap-3">
+              <Check className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <div className="font-medium">You accepted this quote</div>
+                <div className="text-muted-foreground">
+                  {quote.businessName} has been notified and will reach out to schedule the work.
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid gap-1.5 text-left">
+                <Label htmlFor="accept-phone">Your phone number</Label>
+                <Input
+                  id="accept-phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="(555) 555-5555"
+                />
+              </div>
+              <Button
+                onClick={() => acceptQuote.mutate({ customerPhone: phone.trim() })}
+                disabled={!phone.trim() || acceptQuote.isPending}
+                className="w-full"
+                size="lg"
+              >
+                {acceptQuote.isPending ? "Accepting..." : "Accept This Quote"}
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                So {quote.businessName} can call to schedule the work — it doesn't book a date on its own.
+              </p>
+            </div>
+          )}
           {/* Business tier, Phase 5 (2026-09-10) — the same abstract
               plan diagram Properties.tsx/PropertyOverview.tsx already
               use, reused here rather than rebuilt a third time. Reads

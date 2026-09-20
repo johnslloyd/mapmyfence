@@ -83,6 +83,7 @@ function SendQuoteDialog({ projectId, open, onOpenChange }: { projectId: number;
   const { data: myOrg } = useMyOrganization();
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   // Phase 3 — opt-in per quote, unchecked by default (most quotes are
   // a new build with nothing to remove first). Only rendered at all
   // when the business has actually set a teardownRatePerFoot — see
@@ -95,6 +96,7 @@ function SendQuoteDialog({ projectId, open, onOpenChange }: { projectId: number;
   const reset = () => {
     setCustomerName("");
     setCustomerEmail("");
+    setCustomerPhone("");
     setIncludeTeardown(false);
     setResult(null);
     setCopied(false);
@@ -107,6 +109,7 @@ function SendQuoteDialog({ projectId, open, onOpenChange }: { projectId: number;
       const data = await createQuote.mutateAsync({
         customerName: customerName.trim() || undefined,
         customerEmail: customerEmail.trim(),
+        customerPhone: customerPhone.trim() || undefined,
         includeTeardown,
       });
       setResult({ publicUrl: data.publicUrl, emailSent: data.emailSent });
@@ -167,6 +170,13 @@ function SendQuoteDialog({ projectId, open, onOpenChange }: { projectId: number;
               <div className="grid gap-1.5">
                 <Label htmlFor="quote-customer-email">Customer email</Label>
                 <Input id="quote-customer-email" type="email" required value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="jane@example.com" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="quote-customer-phone">Customer phone (optional)</Label>
+                <Input id="quote-customer-phone" type="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="(555) 555-5555" />
+                <p className="text-xs text-muted-foreground">
+                  Just for your own records on the Sent Quotes list — never shown to the customer. They'll confirm their own number if they accept.
+                </p>
               </div>
               {myOrg.teardownRatePerFoot != null && (
                 <div className="flex items-center gap-2 pt-1">

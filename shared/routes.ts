@@ -338,11 +338,11 @@ export const api = {
       },
     },
     // Business tier, Phase 2 — the "sent" half of the plan doc's
-    // "sent/viewed/accepted rollup" line item. Viewed/accepted columns
-    // don't exist (the accept button itself was cut from Phase 1 —
-    // see CLAUDE.md), so this is honestly just what was sent, by whom,
-    // to whom, for how much — not the full three-state rollup the plan
-    // describes. Revisit once the accept button actually exists.
+    // "sent/viewed/accepted rollup" line item. "Viewed" still doesn't
+    // exist; "accepted" does now (scheduling MVP slice 1, 2026-09-16 —
+    // see quotes.acceptedAt) — each row includes it, and the current
+    // project status, so the client can show an Accepted badge and a
+    // "Mark as Scheduled" action once a customer has said yes.
     listQuotes: {
       method: 'GET' as const,
       path: '/api/my-organization/quotes',
@@ -367,6 +367,15 @@ export const api = {
       input: z.object({
         customerName: z.string().optional(),
         customerEmail: z.string().email(),
+        // Scheduling MVP slice 1 (2026-09-16), revised same day — this
+        // is NOT what ends up used to call the customer anymore (see
+        // quotes.accept.input below): the customer types their own
+        // number fresh when they accept, which always overwrites
+        // whatever's entered here. This field is now just an optional
+        // convenience for the business's own records if they already
+        // have it (e.g. a future "text them the link" feature) — never
+        // read back out through the public quote page.
+        customerPhone: z.string().optional(),
         // Phase 3 — opt-in per quote, not assumed: most quotes are a
         // new build with nothing to remove first. Only meaningful (and
         // only actually charged) if the business has set a
@@ -387,6 +396,35 @@ export const api = {
       path: '/api/quotes/public/:token',
       responses: {
         200: z.any(),
+        404: errorSchemas.notFound,
+      },
+    },
+    // Scheduling MVP slice 1 (2026-09-16) — the second no-login route in
+    // this app (getPublic above is the first), same token-is-the-access-
+    // control shape. Idempotent: accepting an already-accepted quote just
+    // returns its existing acceptedAt rather than erroring — there's no
+    // real harm in a customer clicking twice (a double-click, a reloaded
+    // page), and treating it as an error would just be a confusing
+    // failure for no protective purpose.
+    accept: {
+      method: 'POST' as const,
+      path: '/api/quotes/public/:token/accept',
+      // Revised (2026-09-16, same day) — phone capture moved here from
+      // the business's own Send Quote form. The business can't reliably
+      // know the customer's number at send time, and pre-filling this
+      // from whatever the business DID enter would mean the public,
+      // no-login getPublic response has to return it — exposing it to
+      // anyone holding the link, not just the actual customer. So this
+      // is always typed fresh by the customer, required (an accepted
+      // quote with no way to call defeats the point of this feature),
+      // and travels one-way: it's never read back out through any
+      // public route afterward.
+      input: z.object({
+        customerPhone: z.string().min(1, "Phone number is required"),
+      }),
+      responses: {
+        200: z.any(), // { acceptedAt: string }
+        400: errorSchemas.validation,
         404: errorSchemas.notFound,
       },
     },

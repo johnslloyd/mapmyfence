@@ -842,6 +842,7 @@ export async function registerRoutes(
         createdByUserId: userId,
         customerName: input.customerName ?? null,
         customerEmail: input.customerEmail,
+        customerPhone: input.customerPhone ?? null,
         // Snapshotted from the business's CURRENT profile at send
         // time — see quotes' own schema comment for why this isn't a
         // live join instead.
@@ -861,9 +862,19 @@ export async function registerRoutes(
       // transition this app can actually know happened on its own — a
       // quote just got sent off this project — so it's set here, as a
       // side effect, rather than needing a manual status picker anyone
-      // has to remember to use. No-op if it's already "quoting" (a
-      // second quote sent off the same project).
-      await storage.updateProject(projectId, { status: "quoting" });
+      // has to remember to use. Originally a plain unconditional set
+      // (harmless when "quoting" was the only status a quote could ever
+      // trigger), but scheduling MVP slice 1 (2026-09-16) added
+      // "scheduled", a status further along than "quoting" that a human
+      // sets by hand — a real bug caught live while testing that pass:
+      // sending a SECOND quote off an already-scheduled project (e.g.
+      // a re-quote) silently reverted it back to "quoting", clobbering
+      // real progress the business had already marked. Guarded to only
+      // ever move a project OUT of "planning", never back out of
+      // "scheduled".
+      if (project.status === "planning") {
+        await storage.updateProject(projectId, { status: "quoting" });
+      }
 
       const origin = `${req.protocol}://${req.get("host")}`;
       const publicUrl = `${origin}/quotes/${rawToken}`;
@@ -970,6 +981,10 @@ export async function registerRoutes(
         totalLinearFeet: quote.totalLinearFeet,
         totalCost: quote.totalCost,
         createdAt: quote.createdAt,
+        // Scheduling MVP slice 1 (2026-09-16) — lets QuoteView.tsx show
+        // "you already accepted this" on a reload/re-visit, not just
+        // right after the click that set it.
+        acceptedAt: quote.acceptedAt,
         // `name`/`length` and `gates[].type` (2026-09-11) — added
         // alongside the switch to a real, read-only MapEditorComponent
         // view (QuotePlanView.tsx). Phase 5's original diagram-only
@@ -988,6 +1003,60 @@ export async function registerRoutes(
     } catch (err: any) {
       console.error('Failed to get public quote', err);
       res.status(500).json({ message: 'Failed to load quote' });
+    }
+  });
+
+  // Scheduling MVP slice 1 (2026-09-16) — the second no-login route in
+  // this app; see api.quotes.accept's own comment for why this is
+  // idempotent rather than erroring on a second click. The actual point
+  // of this route isn't the timestamp itself — it's the email fired
+  // below, which is the one thing that turns "accepted" into a business
+  // actually knowing to pick up the phone.
+  app.post(api.quotes.accept.path, async (req, res) => {
+    try {
+      const input = api.quotes.accept.input.parse(req.body);
+      const rawToken = req.params.token;
+      const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+      const quote = await storage.getQuoteByTokenHash(tokenHash);
+      if (!quote) {
+        return res.status(404).json({ message: "This quote link isn't valid." });
+      }
+
+      const alreadyAccepted = !!quote.acceptedAt;
+      const updated = await storage.markQuoteAccepted(quote.id, input.customerPhone);
+
+      // Only notify (and only log the event) on the transition itself —
+      // a reload/second click is a no-op, not a second "you got a new
+      // acceptance" email.
+      if (!alreadyAccepted) {
+        logEvent("quote_accepted", { projectId: quote.projectId });
+
+        const members = await storage.getOrganizationMembers(quote.organizationId);
+        // Phone here is `updated.customerPhone` (what the customer just
+        // typed), not `quote.customerPhone` (whatever the business may
+        // have entered at send time, now overwritten) — see
+        // markQuoteAccepted's own comment.
+        const contactLines = [
+          quote.customerName ? `Customer: ${quote.customerName}` : null,
+          `Email: ${quote.customerEmail}`,
+          `Phone: ${updated.customerPhone}`,
+        ].filter(Boolean).join("\n");
+        const subject = `${quote.customerName || "A customer"} accepted your quote`;
+        const text = `Good news — your quote for $${quote.totalCost.toFixed(2)} was just accepted.\n\n${contactLines}\n\nReach out to schedule the work, then mark it "Scheduled" on your Business page.`;
+        const html = `<p>Good news — your quote for <strong>$${quote.totalCost.toFixed(2)}</strong> was just accepted.</p><p>${contactLines.replace(/\n/g, "<br>")}</p><p>Reach out to schedule the work, then mark it "Scheduled" on your Business page.</p>`;
+
+        await Promise.all(
+          members.map((m) => sendEmail({ to: m.email, subject, text, html }))
+        );
+      }
+
+      res.json({ acceptedAt: updated.acceptedAt });
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message || "Invalid input" });
+      }
+      console.error('Failed to accept quote', err);
+      res.status(500).json({ message: 'Failed to accept quote' });
     }
   });
 

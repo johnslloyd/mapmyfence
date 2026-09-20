@@ -580,11 +580,18 @@ export type OrganizationQuote = {
   id: number;
   projectId: number;
   projectName: string;
+  // Scheduling MVP slice 1 (2026-09-16) — the project's CURRENT status,
+  // so the client can hide "Mark as Scheduled" once it's already been
+  // clicked (this reflects live project state, unlike every other field
+  // here, which is a snapshot frozen at send time).
+  projectStatus: string;
   customerName: string | null;
   customerEmail: string;
+  customerPhone: string | null;
   totalLinearFeet: number;
   totalCost: number;
   createdAt: string;
+  acceptedAt: string | null;
   createdByEmail: string | null;
 };
 
@@ -633,7 +640,7 @@ export function useCreateQuote(projectId: number | undefined) {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: { customerName?: string; customerEmail: string; includeTeardown?: boolean }) => {
+    mutationFn: async (data: { customerName?: string; customerEmail: string; customerPhone?: string; includeTeardown?: boolean }) => {
       if (!projectId) throw new Error("No project");
       const validated = api.quotes.create.input.parse(data);
       const url = buildUrl(api.quotes.create.path, { id: projectId });
@@ -866,6 +873,9 @@ export type PublicQuote = {
   totalLinearFeet: number;
   totalCost: number;
   createdAt: string;
+  // Scheduling MVP slice 1 (2026-09-16) — null until the customer clicks
+  // "Accept This Quote" on this same page.
+  acceptedAt: string | null;
   fenceLines: {
     id: number;
     name: string;
@@ -888,5 +898,40 @@ export function usePublicQuote(token: string | undefined) {
     },
     enabled: !!token,
     retry: false,
+  });
+}
+
+// Scheduling MVP slice 1 (2026-09-16) — the customer-facing accept
+// action. No `credentials: "include"` needed (this customer has no
+// PostPlotter session to send) — the token in the URL is the only access
+// control, same as usePublicQuote's own GET above.
+export function useAcceptQuote(token: string | undefined) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: { customerPhone: string }) => {
+      if (!token) throw new Error("No token");
+      const validated = api.quotes.accept.input.parse(data);
+      const url = buildUrl(api.quotes.accept.path, { token });
+      const res = await fetch(url, {
+        method: api.quotes.accept.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validated),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to accept quote");
+      }
+      return (await res.json()) as { acceptedAt: string };
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData<PublicQuote | null>([api.quotes.getPublic.path, token], (old) =>
+        old ? { ...old, acceptedAt: data.acceptedAt } : old
+      );
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't accept quote", description: err.message, variant: "destructive" });
+    },
   });
 }

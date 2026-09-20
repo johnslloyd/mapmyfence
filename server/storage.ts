@@ -112,11 +112,19 @@ export interface IStorage {
   updateOrganizationProfile(id: number, data: { name?: string; phone?: string | null; email?: string | null; logoData?: string | null; teardownRatePerFoot?: number | null }): Promise<Organization>;
   createQuote(data: InsertQuote & { tokenHash: string }): Promise<Quote>;
   getQuoteByTokenHash(tokenHash: string): Promise<Quote | undefined>;
+  // Scheduling MVP slice 1 (2026-09-16) — sets acceptedAt to now and
+  // overwrites customerPhone with what the customer just typed on the
+  // accept form. No-op (returns the quote unchanged) if it's already
+  // accepted, so the public accept route can call this unconditionally
+  // and stay idempotent.
+  markQuoteAccepted(id: number, customerPhone: string): Promise<Quote>;
   // Phase 2 — the "sent" rollup (see api.myOrganization.listQuotes's own
   // comment on why it's not the full sent/viewed/accepted rollup the
   // plan describes). Joins in the project's name and the sender's email
   // purely for display — a quote row itself only stores ids for those.
-  getOrganizationQuotes(organizationId: number): Promise<(Quote & { projectName: string; createdByEmail: string | null })[]>;
+  // Also joins the project's CURRENT status (2026-09-16) so the client
+  // can show a "Mark as Scheduled" action and hide it once already done.
+  getOrganizationQuotes(organizationId: number): Promise<(Quote & { projectName: string; projectStatus: string; createdByEmail: string | null })[]>;
   // Phase 3 — the business's own per-(material, height) sell rate. See
   // organizationRates' own shared/schema.ts comment for the full
   // reasoning. setOrganizationRates is a bulk upsert-or-delete: a
@@ -429,11 +437,25 @@ export class DatabaseStorage implements IStorage {
     return quote;
   }
 
-  async getOrganizationQuotes(organizationId: number): Promise<(Quote & { projectName: string; createdByEmail: string | null })[]> {
+  // customerPhone here is what the CUSTOMER just typed on the public
+  // accept form — always overwrites whatever the business may have
+  // entered at send time (see quotes.create's own comment on why the
+  // customer-confirmed number wins). Idempotent guard skips both the
+  // timestamp AND the phone overwrite on a repeat call, so a second,
+  // accidental accept can't clobber the real number with a blank retry.
+  async markQuoteAccepted(id: number, customerPhone: string): Promise<Quote> {
+    const [existing] = await this.db.select().from(quotes).where(eq(quotes.id, id)).limit(1);
+    if (existing?.acceptedAt) return existing;
+    const [quote] = await this.db.update(quotes).set({ acceptedAt: new Date(), customerPhone }).where(eq(quotes.id, id)).returning();
+    return quote;
+  }
+
+  async getOrganizationQuotes(organizationId: number): Promise<(Quote & { projectName: string; projectStatus: string; createdByEmail: string | null })[]> {
     const rows = await this.db
       .select({
         quote: quotes,
         projectName: projects.name,
+        projectStatus: projects.status,
         createdByEmail: users.email,
       })
       .from(quotes)
@@ -449,7 +471,7 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(users, eq(quotes.createdByUserId, users.id))
       .where(eq(quotes.organizationId, organizationId))
       .orderBy(desc(quotes.createdAt));
-    return rows.map((r) => ({ ...r.quote, projectName: r.projectName, createdByEmail: r.createdByEmail }));
+    return rows.map((r) => ({ ...r.quote, projectName: r.projectName, projectStatus: r.projectStatus, createdByEmail: r.createdByEmail }));
   }
 
   async getOrganizationRates(organizationId: number): Promise<OrganizationRate[]> {

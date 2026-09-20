@@ -93,7 +93,14 @@ export const projects = pgTable("projects", {
   // TS-only (see "Database migrations" in CLAUDE.md), so narrowing this
   // needed no ALTER TABLE — a stray old "in-progress"/"completed" row
   // simply can't exist since nothing ever wrote one.
-  status: text("status", { enum: ["planning", "quoting"] }).default("planning").notNull(),
+  //
+  // "scheduled" added (2026-09-16) — scheduling MVP slice 1. Same
+  // manual-only caveat as the dropped in-progress/completed values: the
+  // app has no way to observe that a business actually called the
+  // customer and agreed a date, so this is set by the business clicking
+  // "Mark as Scheduled" on their Sent Quotes list after a quote's
+  // acceptedAt is set (see quotes.acceptedAt below), not inferred.
+  status: text("status", { enum: ["planning", "quoting", "scheduled"] }).default("planning").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -195,8 +202,12 @@ export const events = pgTable("events", {
   // the admin's two possible responses to that request (userId = the
   // admin, targetUserId = the requester) — the second and third
   // admin_* ACTIONS after admin_deleted_user, same convention.
+  // "quote_accepted" (2026-09-16, scheduling MVP slice 1) fires from the
+  // public, no-login accept route — userId is left unset (there's no
+  // account on that side of the request), same as any other funnel event
+  // triggered by a guest.
   type: text("type", {
-    enum: ["property_created", "project_created", "fence_line_created", "estimate_viewed", "account_created", "account_upgraded", "admin_viewed_users", "admin_viewed_user", "admin_viewed_project", "admin_deleted_user", "pro_requested", "admin_approved_pro", "admin_dismissed_pro_request"],
+    enum: ["property_created", "project_created", "fence_line_created", "estimate_viewed", "account_created", "account_upgraded", "admin_viewed_users", "admin_viewed_user", "admin_viewed_project", "admin_deleted_user", "pro_requested", "admin_approved_pro", "admin_dismissed_pro_request", "quote_accepted"],
   }).notNull(),
   propertyId: integer("property_id"),
   projectId: integer("project_id"),
@@ -413,6 +424,12 @@ export const quotes = pgTable("quotes", {
   createdByUserId: text("created_by_user_id").notNull(),
   customerName: text("customer_name"),
   customerEmail: text("customer_email").notNull(),
+  // Scheduling MVP slice 1 (2026-09-16) — optional, unlike email: a
+  // quote can still be sent and accepted with no phone on file, it just
+  // means the business's post-acceptance notification email has nothing
+  // to dial. Added via the usual additive-nullable-column raw-SQL escape
+  // hatch (script/migrations/2026-09-16-quote-accept.ts).
+  customerPhone: text("customer_phone"),
   businessName: text("business_name").notNull(),
   businessPhone: text("business_phone"),
   businessEmail: text("business_email"),
@@ -440,6 +457,18 @@ export const quotes = pgTable("quotes", {
   totalCost: doublePrecision("total_cost").notNull(),
   tokenHash: text("token_hash").notNull().unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Scheduling MVP slice 1 (2026-09-16) — set the moment the customer
+  // clicks "Accept" on their no-login public quote page
+  // (POST /api/quotes/public/:token/accept). Null means "not yet
+  // accepted"; a single nullable timestamp doubles as both the
+  // yes/no flag and the "when" a real acceptedAt/status pair would
+  // otherwise need two columns for. Deliberately does NOT flip
+  // projects.status on its own the way sending a quote does — accepting
+  // only means "the customer said yes to the price," not "a date is
+  // set." The business still has to actually call the customer and
+  // mark the project "scheduled" themselves — see projects.status's own
+  // comment on why that step can't be automatic.
+  acceptedAt: timestamp("accepted_at"),
 });
 
 // === RELATIONS ===
