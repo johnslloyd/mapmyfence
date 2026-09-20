@@ -31,6 +31,15 @@ WORKDIR /app
 ARG VITE_MAPBOX_TOKEN
 ENV VITE_MAPBOX_TOKEN=${VITE_MAPBOX_TOKEN}
 
+# VITE_GA_MEASUREMENT_ID (client/src/lib/analytics.ts's Google
+# Analytics 4 ID, "G-XXXXXXXXXX") is a build-time value for the same
+# reason as the Mapbox token above. Not a secret — it's visible in any
+# page's source — but supplied the same way for consistency. Leaving it
+# unset means analytics simply never loads (that's also how local dev
+# stays out of the real data).
+ARG VITE_GA_MEASUREMENT_ID
+ENV VITE_GA_MEASUREMENT_ID=${VITE_GA_MEASUREMENT_ID}
+
 # Install with the lockfile before copying the rest of the source, so
 # this layer only re-runs when dependencies actually change.
 COPY package.json package-lock.json ./

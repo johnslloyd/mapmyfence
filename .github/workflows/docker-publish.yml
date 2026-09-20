@@ -44,3 +44,4 @@ jobs:
           # the existing free Esri map for every account.
           build-args: |
             VITE_MAPBOX_TOKEN=${{ secrets.VITE_MAPBOX_TOKEN }}
+            VITE_GA_MEASUREMENT_ID=${{ secrets.VITE_GA_MEASUREMENT_ID }}

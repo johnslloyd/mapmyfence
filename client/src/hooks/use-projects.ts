@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { trackEvent } from "@/lib/analytics";
 import { api, buildUrl } from "@shared/routes";
 import { insertPropertySchema } from "@shared/schema";
 import {
@@ -74,6 +75,7 @@ export function useCreateProperty() {
       return api.properties.create.responses[201].parse(await res.json()) as unknown as PropertyWithProjects;
     },
     onSuccess: () => {
+      trackEvent("property_created");
       queryClient.invalidateQueries({ queryKey: [api.properties.list.path] });
       // No success toast (2026-09-14, direct feedback) — creating a
       // property immediately navigates into that property's own new
@@ -325,6 +327,7 @@ export function useCreateFenceLine() {
       return api.fenceLines.create.responses[201].parse(await res.json());
     },
     onSuccess: (_, { projectId }) => {
+      trackEvent("fence_line_saved");
       queryClient.invalidateQueries({ queryKey: [api.projects.get.path, projectId] });
       // refetchType: 'all' (not the default 'active') — MaterialEstimates,
       // which owns this query, is UNMOUNTED whenever the right panel is
@@ -657,6 +660,7 @@ export function useCreateQuote(projectId: number | undefined) {
       return (await res.json()) as { quote: any; publicUrl: string; emailSent: boolean };
     },
     onSuccess: (data) => {
+      trackEvent("quote_sent");
       if (data.emailSent) {
         toast({ title: "Quote sent", description: `The quote was emailed to your customer.`, variant: "success" });
       } else {
@@ -926,6 +930,7 @@ export function useAcceptQuote(token: string | undefined) {
       return (await res.json()) as { acceptedAt: string };
     },
     onSuccess: (data) => {
+      trackEvent("quote_accepted");
       queryClient.setQueryData<PublicQuote | null>([api.quotes.getPublic.path, token], (old) =>
         old ? { ...old, acceptedAt: data.acceptedAt } : old
       );

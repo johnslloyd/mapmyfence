@@ -12,6 +12,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "@/hooks/use-toast";
+import { trackEvent } from "@/lib/analytics";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { AuthLayout } from "@/components/AuthLayout";
@@ -57,6 +58,7 @@ export default function Register() {
       if (res.ok) {
         const data = await res.json();
         login(data.user);
+        trackEvent("sign_up", { method: "email" });
         toast({ title: "Account created", description: "You are now signed in.", variant: "success" });
         if (returnTo) {
           setLocation(returnTo);

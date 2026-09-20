@@ -3041,6 +3041,146 @@ and a 1280px-wide viewport: the pill and badge no longer touch at
 either width. `npm run check` and `npm run build` both clean; test
 account/org/property deleted afterward.
 
+## Scheduling MVP — slice 1: accept a quote, then pick up the phone (2026-09-16)
+
+First piece of a real scheduling feature, worked out in conversation
+before any code changed. The actual product question was how to avoid
+building a shared-calendar-availability tool (real, ongoing maintenance
+burden — timezone-aware slots, calendar sync, conflict detection) for
+something that hasn't been validated as wanted yet. Landed on the
+smallest version that's still a real mechanism, not a placeholder:
+**accept a quote, then the business calls the customer** — no in-app
+date proposal, no calendar, no availability model. That bigger
+"business proposes dates, customer picks one, business confirms" flow
+was discussed and deliberately deferred — worth building once it's
+clear businesses actually want scheduling in-app rather than just
+texting the customer once they have a phone number in hand.
+
+**Two new nullable columns on the existing `quotes` table** (additive
+raw-SQL escape hatch, `script/migrations/2026-09-16-quote-accept.ts`):
+`customerPhone` (optional, unlike the existing required `customerEmail`
+— a quote can still be sent and accepted with nothing to dial) and
+`acceptedAt` (set once, by the customer; doubles as both the yes/no
+flag and the "when," so no separate boolean was needed). `projects.status`
+gained a third value, `"scheduled"` — `text`'s `enum` option is
+TS-only (see "Database migrations"), so this needed no ALTER TABLE.
+Same manual-only honesty caveat as the `in-progress`/`completed` values
+this app already dropped once (see "Project status: simplified" right
+below this section): the app has no way to observe that a business
+actually called the customer and agreed a date, so `scheduled` is set
+by a human clicking "Mark as Scheduled," never inferred.
+
+**The accept route is the second no-login endpoint in this app**
+(`POST /api/quotes/public/:token/accept`, alongside the existing
+`getPublic`) — same token-is-the-access-control shape, and deliberately
+idempotent: accepting an already-accepted quote just returns the
+existing `acceptedAt` rather than erroring, since there's no real harm
+in a double-click or a reloaded page. The actual point of the route
+isn't the timestamp — it's the email fired on the real transition
+(guarded so a repeat/idempotent call sends nothing twice), reusing the
+existing Resend `sendEmail` plumbing to notify every member of the
+business's org with the customer's name/email/phone and a nudge to
+mark it scheduled once they've called. New `quote_accepted` event type,
+logged with no `userId` (there's no account on the customer's side of
+this request) — same convention as any other guest-triggered event.
+
+**A real interaction bug caught live while testing this, not
+hypothetical**: `POST /api/projects/:id/quotes` has set a project's
+status to `"quoting"` unconditionally since the 2026-09-13 status
+simplification — harmless when `"quoting"` was the only thing sending
+a quote could ever trigger (a second quote just re-set the same value).
+Adding `"scheduled"` broke that assumption silently: sending a SECOND
+quote off an already-`scheduled` project (a real case — re-quoting
+after a change) reverted its status straight back to `"quoting"`,
+clobbering real progress the business had already marked by hand.
+Reproduced live (marked a project scheduled, sent another quote off the
+same project, watched its status flip back), then fixed by guarding the
+auto-set to only fire when the project's CURRENT status is
+`"planning"` — it can move a project out of planning, but never
+un-schedule one.
+
+**Client side**: `Editor.tsx`'s `SendQuoteDialog` gained a "Customer
+phone (optional)" field alongside the existing name/email inputs, with
+a one-line explanation of what it's actually for ("we'll email you this
+so you can call to schedule"). `QuoteView.tsx` (the public, no-login
+page) gained the literal "Accept This Quote" button — the whole
+feature, from a customer's perspective — which flips to a confirmation
+card ("You accepted this quote... will reach out to schedule the
+work") once `acceptedAt` is set; that field comes back from the server
+on every load, not just local mutation state, so reopening the link
+later still shows the accepted state correctly. `Business.tsx`'s Sent
+Quotes table gained a Status column (Awaiting response / Accepted +
+"Mark as Scheduled" / Scheduled) and the customer's phone as a `tel:`
+link next to their email — the CardDescription's stale "just 'sent' for
+now" language was updated since accepted-tracking is real now (viewed-
+tracking still isn't). `projectStatus.ts`'s label/color maps gained
+`scheduled` alongside the existing two values, same "display label,
+not the stored value" pattern as `MATERIAL_LABELS`.
+
+Verified live end-to-end via a real curl sequence plus the actual UI
+(not just typechecking): registered a throwaway business owner + admin,
+created a real org, drew a real fence line, set a real per-foot rate,
+and sent a quote with a customer phone attached — confirmed the phone
+snapshotted onto the quote correctly; opened the real public quote
+page in the browser and clicked "Accept This Quote," confirming the
+UI swapped to the accepted confirmation and the server logged exactly
+one notification email (a second `accept` call produced zero
+additional emails, confirming the idempotency guard); marked the
+project "Scheduled" from `Business.tsx`'s real UI and confirmed the
+badge updated; reproduced the quoting-downgrade bug above, fixed it,
+and confirmed a third quote sent off the same project left it at
+"Scheduled" rather than reverting it. `npm run check` and `npm run
+build` both clean; test accounts, org, and property deleted afterward.
+
+**Deliberately not part of this slice**: any in-app date proposal or
+picker, a shared calendar or availability model of any kind, and
+tracking whether the business actually followed through on the call
+(there's no "did you call them yet" state — only "accepted" and the
+manual "scheduled" the business sets themselves). All explicitly
+deferred pending real signal that businesses want scheduling to live
+inside the app at all, not on the phone.
+
+**Where the phone number actually comes from — corrected same day,
+before this ever reached a real user.** The version above put the
+phone field on the BUSINESS's Send Quote form and had the customer's
+accept action pre-fill from it. Direct pushback caught two real
+problems with that: the business isn't guaranteed to know the
+customer's number at send time (all the send form actually requires is
+an email, since that's the one channel guaranteed to exist), and
+pre-filling it on the accept page would mean the public, no-login
+`getPublic` response has to return the number — exposing it to
+anyone holding the link, not just the actual customer, which is a
+real PII leak this app doesn't take on anywhere else (a quote's price
+and business branding are meant to be link-shareable; a phone number
+isn't).
+
+Fixed by moving the real capture to the accept action itself:
+`QuoteView.tsx` now has its own phone input (always blank, never
+pre-filled from anything), required before "Accept This Quote"
+enables — same disabled-until-valid pattern `SendQuoteDialog` already
+uses for its own email field. `POST /api/quotes/public/:token/accept`
+takes `customerPhone` as required input and `storage.markQuoteAccepted`
+overwrites `quotes.customerPhone` with whatever the customer just
+typed — the customer-confirmed number always wins over whatever the
+business may have guessed. The business's own Send Quote form KEEPS
+its optional phone field, but it's no longer claimed to do anything
+automated (the old copy — "we'll email you this so you can call to
+schedule" — was simply wrong once this changed) — it's now honestly
+just a convenience for the business's own Sent Quotes list if they
+already happen to know the number (e.g. the customer called their
+office first), never shown to the customer and never read back out
+through the public route in either direction.
+
+Verified live: `POST .../accept` with an empty or missing
+`customerPhone` correctly 400s ("Phone number is required"); the
+public `GET .../public/:token` response carries no phone field at all,
+before OR after acceptance; a real accept through the actual UI (typed
+a number into the new input, clicked the now-enabled button) produced
+a notification email containing exactly the number just typed, not
+whatever the business may have entered at send time. `npm run check`
+and `npm run build` both clean; test accounts/org/property deleted
+afterward.
+
 ## Project status: simplified, and finally wired up for real (2026-09-13)
 
 Direct feedback prompted a real finding, not just a request: every
@@ -4232,8 +4372,47 @@ footer in `Layout.tsx`, since `Layout` is `h-screen flex flex-col` with
 vertical space from the full-height map editor on every single page,
 not just this one.
 
-**Cookie-consent banner: deliberately not built.** Investigated first —
-the only cookie this app sets is the strictly-necessary session cookie
+**Google Analytics 4 added (2026-09-20), and this policy updated to
+match.** Everything in the paragraph above about "no analytics/ad/
+tracking scripts" was true when written and is now superseded for
+analytics specifically: `client/src/lib/analytics.ts` loads GA4 only
+when `VITE_GA_MEASUREMENT_ID` is set at build time (a build ARG in the
+`Dockerfile` + GitHub Actions secret of the same name, wired exactly
+like `VITE_MAPBOX_TOKEN`; unset = analytics never loads, which is also
+how local dev stays out of the real data). `Privacy.tsx` now discloses
+GA (what it sees, its `_ga`/`_ga_*` cookies, advertising features
+off, an opt-out link) and its "last updated" date is now a static
+string — it was `new Date()`, i.e. always "today," which is wrong for
+a legal document.
+
+Deliberate privacy handling in the loader, all verified live against a
+fake ID with the GA script stubbed out (inspecting what would be
+sent): (1) **quote links carry a secret access token in the path and
+password-reset links carry one in the query string** — sending real
+URLs would hand working credentials to Google, so `sanitizePath`
+masks `/quotes/<token>` → `/quotes/[token]`, never sends query
+strings (wouter's location is path-only anyway), and generalizes
+numeric ids (`/editor/:id`); (2) `/admin` pages are never tracked;
+(3) `allow_google_signals`/`allow_ad_personalization_signals` are off
+(analytics only, no ads); (4) `page_location` is `gtag('set')` on every
+route change so even GA's auto-collected events (scroll, clicks) can't
+fall back to the raw URL. **One thing code can't do and must be done in
+the GA admin UI: turn OFF "Page changes based on browser history
+events" in the web stream's Enhanced measurement settings** — GA emits
+its own page_views for pushState navigations using the real URL
+(e.g. quote page → its /plan sub-page carries the token), bypassing
+the sanitizing above. Funnel events sent (no PII in any param):
+`sign_up`, `property_created`, `fence_line_saved`, `quote_sent`,
+`quote_accepted`. CSP (`server/index.ts` + `client/index.html` mirror)
+now allows googletagmanager/google-analytics in script/img/connect-src.
+
+**Not fixed, flagged**: the policy still doesn't mention business-tier
+data (customer names/emails/phone numbers on quotes), Resend for
+email, or Mapbox imagery for Pro — all real, all newer than the
+policy's original audit.
+
+**Cookie-consent banner: still deliberately not built (revisited
+2026-09-20 with GA added).** Originally: the only cookie this app sets is the strictly-necessary session cookie
 covered above, and strictly-necessary cookies don't require opt-in
 consent under GDPR/ePrivacy or CCPA. No analytics/ad/tracking scripts
 exist anywhere in the codebase to require one for. If that ever changes
@@ -5079,6 +5258,13 @@ points: `account_created`, `project_created`, `fence_line_created`,
   no key is set on purpose (keeps both flows fully testable without
   live credentials). `EMAIL_FROM` (optional) overrides the default
   `PostPlotter <onboarding@resend.dev>` sender.
+- `VITE_GA_MEASUREMENT_ID` — **not set yet** (2026-09-20). The Google
+  Analytics 4 Measurement ID (`G-XXXXXXXXXX`, from GA Admin → Data
+  streams). Build-time only, same as the Mapbox token: add it as a
+  GitHub Actions repo secret of this exact name and the image build
+  picks it up. Unset = no analytics script loads. Also turn off
+  "Page changes based on browser history events" in the stream's
+  Enhanced measurement (see Privacy Policy section).
 - `VITE_MAPBOX_TOKEN` — **not set anywhere yet.** A client-exposed env
   var (Vite's `VITE_` prefix convention — the first one this project has
   used; no `vite.config.ts` change needed for it to work) gating the

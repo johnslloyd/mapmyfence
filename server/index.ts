@@ -23,11 +23,11 @@ const httpServer = createServer(app);
 // and prod) and the index.html meta tag can't silently drift apart.
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' data: blob: https://server.arcgisonline.com https://unpkg.com https://cdn.midjourney.com https://api.mapbox.com",
+  "img-src 'self' data: blob: https://server.arcgisonline.com https://unpkg.com https://cdn.midjourney.com https://api.mapbox.com https://www.google-analytics.com https://www.googletagmanager.com",
   "font-src 'self' https://fonts.gstatic.com data:",
-  "connect-src 'self' https://nominatim.openstreetmap.org ws: wss:",
+  "connect-src 'self' https://nominatim.openstreetmap.org https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com ws: wss:",
   "frame-src 'self'",
   "worker-src 'self' blob:",
 ].join("; ");
