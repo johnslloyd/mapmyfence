@@ -108,8 +108,8 @@ export default function Privacy() {
             <h2 className="font-display font-bold text-lg text-foreground">Questions</h2>
             <p>
               Email us at{" "}
-              <a href="mailto:john.steven.lloyd.jr@gmail.com" className="underline text-primary">
-                john.steven.lloyd.jr@gmail.com
+              <a href="mailto:john@postplotter.com" className="underline text-primary">
+                john@postplotter.com
               </a>
               .
             </p>

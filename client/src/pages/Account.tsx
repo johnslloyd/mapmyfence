@@ -185,7 +185,7 @@ function BusinessCard() {
 // A real inbox, not a placeholder domain-based address — the user's
 // own, until a real monitored support inbox exists (see MVP launch
 // blockers in CLAUDE.md).
-const SUPPORT_EMAIL = "john.steven.lloyd.jr@gmail.com";
+const SUPPORT_EMAIL = "john@postplotter.com";
 
 function ChangePasswordCard() {
   const { toast } = useToast();

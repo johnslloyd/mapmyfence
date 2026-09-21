@@ -395,6 +395,14 @@ choice. Two call sites: `Account.tsx`'s `SUPPORT_EMAIL` constant
 not fixed here, just both values updated in step). Update the MVP
 launch-blockers note (memory) once a real dedicated inbox exists.
 
+**Support address moved to `john@postplotter.com` (2026-09-20)** — a
+real Hostinger mailbox on the app's own domain, replacing the personal
+Gmail above in both places (`Account.tsx`'s `SUPPORT_EMAIL`,
+`Privacy.tsx`). Independent of Resend, which only sends the app's
+transactional email (`EMAIL_FROM`, set in the VPS `.env`) — but both
+share the domain's DNS, so root SPF must stay a single `v=spf1` record
+covering every sender, and adding a `_dmarc` record is worthwhile.
+
 **Homepage H1 narrowed to what's actually built, same day**: "Plan your
 yard projects like a pro, one at a time." read as already covering the
 lawn-care vertical, which doesn't exist yet — direct feedback that this
