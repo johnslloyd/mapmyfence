@@ -972,7 +972,7 @@ export default function Editor() {
         {/* Map Area */}
         <div className="flex-1 relative h-full min-w-0 bg-secondary/20">
           <MapEditorComponent
-            initialCenter={undefined}
+            initialCenter={project.property.latitude != null && project.property.longitude != null ? [project.property.latitude, project.property.longitude] : undefined}
             initialAddress={project.property.address ?? undefined}
             onSave={handleSaveLine}
             isSaving={createLineMutation.isPending}

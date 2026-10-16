@@ -226,7 +226,7 @@ function PropertyCard({
               page. Gives even a property with nothing drawn yet actual
               visual context ("that's my yard"), not just a generic
               MapPin glyph. */}
-          <PropertySatelliteImage address={property.address} flush />
+          <PropertySatelliteImage address={property.address} latitude={property.latitude} longitude={property.longitude} flush />
 
           <div className="p-6 flex flex-col flex-1">
             <h3 className="text-xl font-bold font-display group-hover:text-primary transition-colors line-clamp-1">

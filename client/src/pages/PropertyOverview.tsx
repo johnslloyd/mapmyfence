@@ -217,7 +217,7 @@ function PropertyOverviewContent({ propertyId, isGuest }: { propertyId: number; 
           {property.address && <p className="text-muted-foreground text-[12.5px] mt-1">{property.address}</p>}
 
           <div className="mt-3">
-            <PropertySatelliteImage address={property.address} />
+            <PropertySatelliteImage address={property.address} latitude={property.latitude} longitude={property.longitude} />
           </div>
 
           <EditPropertyDialog property={property}>

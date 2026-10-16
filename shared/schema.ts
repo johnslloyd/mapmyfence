@@ -63,6 +63,15 @@ export const properties = pgTable("properties", {
   name: text("name").notNull(),
   address: text("address"),
   description: text("description"),
+  // The yard's confirmed map location (2026-10-16). Set when the user
+  // taps "Use my location" while adding a property (the browser's own
+  // Geolocation API — no vendor). When present, the editor opens here
+  // directly instead of geocoding `address`, which is the step real
+  // users kept failing at (Nominatim often lacks house-level data).
+  // Nullable: every property created before this, or by typing an
+  // address, has none and falls back to geocoding exactly as before.
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   userId: text("user_id").references(() => users.id),
 });

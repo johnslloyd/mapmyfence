@@ -16,7 +16,7 @@ export default function Privacy() {
         <div>
           <h1 className="font-display text-2xl font-bold">Privacy Policy</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Last updated September 20, 2026 — PostPlotter is currently in beta.
+            Last updated October 16, 2026 — PostPlotter is currently in beta.
           </p>
         </div>
 
@@ -32,6 +32,12 @@ export default function Privacy() {
                 <strong>Project data</strong>: whatever you enter to plan a fence — project name,
                 property address, notes, the fence lines you draw (as map coordinates), and your
                 selected material/height for each line.
+              </li>
+              <li>
+                <strong>Property location (optional)</strong>: if you tap "Use my location" when
+                adding a property, your browser shares your current location once, with your
+                permission, and we save that single point as the property's map location. We
+                don't track your location over time or in the background.
               </li>
               <li>
                 <strong>Basic usage events</strong>: a small, first-party log of things like
@@ -76,7 +82,8 @@ export default function Privacy() {
               websites — visiting those links is subject to their privacy policies, not ours.
               Map imagery and address search are provided by Esri and OpenStreetMap's Nominatim
               service; searching an address sends that search text to Nominatim to locate it on
-              the map. Google receives the analytics described above; see Google's own{" "}
+              the map, and "Use my location" sends that one point to Nominatim to look up its
+              street address. Google receives the analytics described above; see Google's own{" "}
               <a href="https://policies.google.com/technologies/partner-sites" className="underline text-primary" target="_blank" rel="noreferrer">
                 explanation of how it uses data
               </a>

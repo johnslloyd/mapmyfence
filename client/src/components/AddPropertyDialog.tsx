@@ -26,8 +26,29 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Sparkles } from "lucide-react";
+import { Plus, Sparkles, LocateFixed, Loader2, CheckCircle2, X } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
+
+// Builds a normal one-line US address ("123 Main St, Jackson, MS 39201")
+// from Nominatim's reverse-geocode `address` parts — its `display_name`
+// is a long county/country string nobody would type. Returns null when
+// there isn't even a street to name.
+const STATE_ABBR: Record<string, string> = { Alabama: "AL", Alaska: "AK", Arizona: "AZ", Arkansas: "AR", California: "CA", Colorado: "CO", Connecticut: "CT", Delaware: "DE", Florida: "FL", Georgia: "GA", Hawaii: "HI", Idaho: "ID", Illinois: "IL", Indiana: "IN", Iowa: "IA", Kansas: "KS", Kentucky: "KY", Louisiana: "LA", Maine: "ME", Maryland: "MD", Massachusetts: "MA", Michigan: "MI", Minnesota: "MN", Mississippi: "MS", Missouri: "MO", Montana: "MT", Nebraska: "NE", Nevada: "NV", "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY", "North Carolina": "NC", "North Dakota": "ND", Ohio: "OH", Oklahoma: "OK", Oregon: "OR", Pennsylvania: "PA", "Rhode Island": "RI", "South Carolina": "SC", "South Dakota": "SD", Tennessee: "TN", Texas: "TX", Utah: "UT", Vermont: "VT", Virginia: "VA", Washington: "WA", "West Virginia": "WV", Wisconsin: "WI", Wyoming: "WY", "District of Columbia": "DC" };
+function formatReverseAddress(a: Record<string, string> | undefined): string | null {
+  if (!a?.road) return null;
+  const street = [a.house_number, a.road].filter(Boolean).join(" ");
+  const city = a.city || a.town || a.village || a.hamlet || a.suburb;
+  const stateZip = [a.state ? STATE_ABBR[a.state] ?? a.state : null, a.postcode].filter(Boolean).join(" ");
+  return [street, city, stateZip].filter(Boolean).join(", ");
+}
+
+type LocationState =
+  | { status: "idle" }
+  | { status: "locating" }
+  | { status: "located"; lat: number; lng: number; accuracy: number }
+  | { status: "error"; message: string };
 
 // Renamed from CreateProjectDialog in the Property/Project restructure
 // (see CLAUDE.md). This creates a PROPERTY (just an address — no type,
@@ -60,6 +81,53 @@ export function AddPropertyDialog({
   // personally-approved accounts. See server/auth.ts's isEffectivelyPro.
   const isAtLimit = isAuthenticated && !user?.isPro && (properties?.length ?? 0) >= FREE_PROPERTY_LIMIT;
   const isProRequestPending = isAuthenticated && user?.plan !== "pro" && !!user?.planRequestedAt;
+
+  // "Use my location" (2026-10-16) — the browser's own Geolocation API,
+  // no vendor or key. Lets someone standing in their yard skip address
+  // search entirely, which is where real users kept getting stuck
+  // (Nominatim often lacks house-level data — see CLAUDE.md). The
+  // coordinates are saved on the property so the editor opens right
+  // there. Primary on mobile (phones have GPS, and are usually what
+  // someone has in hand in the yard); secondary on desktop, where the
+  // browser estimates from Wi-Fi and can be off by a block.
+  const isMobile = useIsMobile();
+  const canGeolocate = typeof navigator !== "undefined" && "geolocation" in navigator;
+  const [location, setLocationState] = useState<LocationState>({ status: "idle" });
+
+  const handleUseMyLocation = () => {
+    setLocationState({ status: "locating" });
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+        setLocationState({ status: "located", lat, lng, accuracy });
+        // Pre-fill the address so the property still has a readable name
+        // everywhere else in the app — but only if they haven't typed
+        // one already. Best-effort: the coordinates are what the editor
+        // actually uses, so a missing/imperfect address is fine.
+        if (form.getValues("address")?.trim()) return;
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+          const data = await res.json();
+          const formatted = formatReverseAddress(data?.address);
+          if (formatted && !form.getValues("address")?.trim()) {
+            form.setValue("address", formatted, { shouldDirty: true });
+          }
+        } catch {
+          // Ignore — they can type it, and the location is already saved.
+        }
+      },
+      (err) => {
+        setLocationState({
+          status: "error",
+          message:
+            err.code === err.PERMISSION_DENIED
+              ? "Location access is turned off for this site. Enter the address below instead."
+              : "We couldn't get your location. Enter the address below instead.",
+        });
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+    );
+  };
 
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
@@ -115,6 +183,8 @@ export function AddPropertyDialog({
         name: data.name.trim(),
         address: data.address?.trim() || null,
         description: data.description?.trim() || null,
+        latitude: location.status === "located" ? location.lat : null,
+        longitude: location.status === "located" ? location.lng : null,
       };
 
       const property = await mutateAsync(cleanedData);
@@ -130,6 +200,7 @@ export function AddPropertyDialog({
       setLocation(`/editor/${project.id}?guest=true`);
       setOpen(false);
       form.reset();
+      setLocationState({ status: "idle" });
     } catch (error: any) {
       console.error('create property error', error);
       // Don't show toast here since useCreateProperty already shows one
@@ -215,6 +286,50 @@ export function AddPropertyDialog({
                 </FormItem>
               )}
             />
+            {canGeolocate && (
+              location.status === "located" ? (
+                <div className="flex items-start gap-2 rounded-xl border border-success/40 bg-success/10 p-3 text-sm">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                  <div className="flex-1">
+                    <p className="font-medium">Using your current location</p>
+                    <p className="text-xs text-muted-foreground">
+                      {location.accuracy > 100
+                        ? `This is approximate (within about ${Math.round(location.accuracy * 3.28084).toLocaleString()} ft), so you may need to drag the map to your yard.`
+                        : "The map will open right on this spot."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setLocationState({ status: "idle" })}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label="Don't use my location"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant={isMobile ? "default" : "outline"}
+                    onClick={handleUseMyLocation}
+                    disabled={location.status === "locating"}
+                    className={cn("w-full gap-2 rounded-xl", isMobile && "h-12")}
+                  >
+                    {location.status === "locating" ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Finding your location...</>
+                    ) : (
+                      <><LocateFixed className="h-4 w-4" /> I'm at the property — use my location</>
+                    )}
+                  </Button>
+                  {location.status === "error" ? (
+                    <p className="text-xs text-destructive">{location.message}</p>
+                  ) : (
+                    <p className="text-center text-xs text-muted-foreground">or enter the address below</p>
+                  )}
+                </div>
+              )
+            )}
             <FormField
               control={form.control}
               name="address"

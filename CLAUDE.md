@@ -3888,6 +3888,47 @@ IPv6 `ENETUNREACH`): placed posts render as squares, the preview line,
 dots, and badge track the cursor, and dots drop out when zoomed out.
 Saving a line was not exercised because it needs the DB.
 
+## "Use my location" when adding a property (2026-10-16)
+
+User feedback: people kept failing to find their address (Nominatim often
+lacks house-level US data). Rather than only rescuing a failed search,
+this lets someone standing in their yard skip the search entirely.
+
+- **Schema**: `properties.latitude`/`longitude` (nullable double), added
+  via `script/migrations/2026-10-16-property-location.ts`, **already run
+  against the real DB**. Deploy order matters for columns like these:
+  Drizzle's `select()` names every schema column, so code that reads a
+  column must never ship before the column exists.
+- **`AddPropertyDialog.tsx`**: an "I'm at the property — use my location"
+  button just above the address field, using the browser's own
+  Geolocation API (no vendor, no key). It's the full-width primary style
+  on mobile (phones have GPS) and an outline button on desktop (Wi-Fi
+  estimates can be off by a block). On success it shows a confirmation,
+  with an "approximate, you may need to drag the map" note when accuracy
+  is worse than 100 m, and pre-fills the address via Nominatim's free
+  `/reverse` endpoint, formatted as a normal one-line US address, only
+  if the field is empty. A denied or failed request shows an inline
+  message pointing at the address field.
+- **Editor / AdminProjectMapView** pass the saved point as `initialCenter`;
+  `MapEditorComponent` then opens at close zoom there and skips the
+  address geocode entirely. `PropertySatelliteImage` uses the saved point
+  too. Properties without coordinates behave exactly as before.
+- **Privacy Policy** gained a line: one point, saved with permission,
+  never tracked over time, and the reverse lookup sent to Nominatim.
+- **Local dev DB access**: the local `.env` still uses the direct
+  connection (`db.<ref>.supabase.co`, IPv6-only, `ENETUNREACH` from this
+  network). The Session Pooler at `aws-1-us-east-2.pooler.supabase.com:5432`
+  (user `postgres.<ref>`, same password) works; that's how this
+  migration was run. Note `aws-0` returns "tenant not found."
+
+Verified: storage round-trip against the real DB through the pooler
+(coordinates save and read back, nulls without them, out-of-range values
+rejected, test rows deleted). In the browser, with the server response
+and geolocation stubbed: confirmation and real reverse-geocoded address
+pre-fill, coordinates posted with the property, the editor opened on the
+point with no address search, the mobile primary styling, and the
+permission-denied message.
+
 ## Mobile drawer: wrong slide direction, and a real Radix width bug (2026-09-14)
 
 Two more direct reports, same day, both about the mobile Sheet itself

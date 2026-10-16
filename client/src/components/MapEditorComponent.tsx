@@ -61,9 +61,10 @@ const MAPBOX_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/about/maps/">
 
 // Fallback for when there's no geocoded point yet — a brand-new project,
 // or one whose address failed to geocode (see the initialAddress effect
-// below). `initialCenter` is undefined in every real call site today
-// (Editor.tsx has no lat/lng to give it — geocoding happens client-side,
-// not at project-creation time), so without this the MapContainer's
+// below). `initialCenter` is only set for a property with a saved
+// location (properties.latitude/longitude, from "Use my location" —
+// 2026-10-16); every other call site still has no lat/lng to give
+// (geocoding happens client-side, not at project-creation time), so without this the MapContainer's
 // `center` prop was always `undefined`. That's not just "no imagery
 // visible" — Leaflet never receives a valid initial view, so the map
 // genuinely never finishes initializing: confirmed live that even a
@@ -953,8 +954,11 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
     // instead — real drawn points are strictly better than a geocoded
     // address point, and running both would just have this one's
     // setView race against (and sometimes win over) the bounds fit.
-    if (initialAddress && existingLines.length === 0) {
-      setAddress(initialAddress);
+    // A saved location (initialCenter) beats geocoding the address — it's
+    // exactly where the user confirmed their yard is, while the address
+    // geocode is the step real users kept failing at.
+    if (initialAddress) setAddress(initialAddress);
+    if (initialAddress && existingLines.length === 0 && !initialCenter) {
       handleSearch(initialAddress, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1198,7 +1202,7 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
 
   return (
     <div className="relative w-full h-full min-h-[500px]">
-      <MapContainer ref={mapRef} center={initialCenter ?? DEFAULT_CENTER} zoom={initialCenter ? 12 : DEFAULT_ZOOM} maxZoom={MAP_MAX_ZOOM} scrollWheelZoom={true} className="w-full h-full z-0">
+      <MapContainer ref={mapRef} center={initialCenter ?? DEFAULT_CENTER} zoom={initialCenter ? (useMapboxImagery ? MAPBOX_NATIVE_ZOOM : 20) - ADDRESS_SEARCH_ZOOM_OUT : DEFAULT_ZOOM} maxZoom={MAP_MAX_ZOOM} scrollWheelZoom={true} className="w-full h-full z-0">
         {useMapboxImagery ? (
           // Pro-only path — see MAPBOX_STYLE's comment above for why this
           // one style replaces both Esri layers below (imagery + labels)

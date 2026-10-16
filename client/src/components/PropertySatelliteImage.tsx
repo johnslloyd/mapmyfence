@@ -43,11 +43,20 @@ function buildSatelliteUrl(lat: number, lng: number) {
 // fence-line coordinates: a property can have zero fence lines drawn
 // yet still have a real address, and this image is meant to represent
 // the PROPERTY, not any one project's progress.
+function hasCoords(lat?: number | null, lng?: number | null) {
+  return lat != null && lng != null;
+}
+
 export function PropertySatelliteImage({
   address,
+  latitude,
+  longitude,
   flush = false,
 }: {
   address: string | null | undefined;
+  // A saved location ("Use my location", 2026-10-16) skips geocoding.
+  latitude?: number | null;
+  longitude?: number | null;
   // Dossier's rail shows this inset (its own rounded corners + border,
   // sitting inside the rail's own padding). Properties.tsx's cards want
   // it flush against the card's own top edge instead — the card's own
@@ -58,7 +67,7 @@ export function PropertySatelliteImage({
   flush?: boolean;
 }) {
   const [state, setState] = useState<{ status: "idle" | "loading" | "ready" | "error"; url?: string }>({
-    status: address ? "loading" : "idle",
+    status: address || hasCoords(latitude, longitude) ? "loading" : "idle",
   });
   const frameClass = flush ? "w-full aspect-[4/3] bg-panel" : "w-full aspect-[4/3] rounded-lg overflow-hidden border border-border bg-panel";
   const emptyFrameClass = flush
@@ -66,6 +75,10 @@ export function PropertySatelliteImage({
     : "w-full aspect-[4/3] rounded-lg border border-dashed border-border bg-panel flex flex-col items-center justify-center gap-1.5 text-center px-4";
 
   useEffect(() => {
+    if (hasCoords(latitude, longitude)) {
+      setState({ status: "ready", url: buildSatelliteUrl(latitude!, longitude!) });
+      return;
+    }
     if (!address) {
       setState({ status: "idle" });
       return;
@@ -93,7 +106,7 @@ export function PropertySatelliteImage({
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, latitude, longitude]);
 
   if (state.status === "ready" && state.url) {
     return (

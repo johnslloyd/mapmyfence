@@ -77,7 +77,7 @@ export default function AdminProjectMapView() {
       <div className="flex h-full relative overflow-hidden">
         <div className="flex-1 relative h-full min-w-0 bg-secondary/20">
           <MapEditorComponent
-            initialCenter={undefined}
+            initialCenter={project.property?.latitude != null && project.property?.longitude != null ? [project.property.latitude, project.property.longitude] : undefined}
             initialAddress={project.property?.address ?? undefined}
             onSave={() => {}}
             isSaving={false}

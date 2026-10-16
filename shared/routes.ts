@@ -466,7 +466,12 @@ export const api = {
       method: 'POST' as const,
       path: '/api/properties',
       // omit userId from the client payload; server sets it from the session
-      input: insertPropertySchema.omit({ userId: true }),
+      // Bounds-checked: these come straight from the browser's
+      // Geolocation API (see properties.latitude's schema comment).
+      input: insertPropertySchema.omit({ userId: true }).extend({
+        latitude: z.number().min(-90).max(90).nullable().optional(),
+        longitude: z.number().min(-180).max(180).nullable().optional(),
+      }),
       responses: {
         201: z.any(),
         400: errorSchemas.validation,
