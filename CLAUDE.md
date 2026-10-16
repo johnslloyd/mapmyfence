@@ -3857,6 +3857,37 @@ renders there (the merged block does not), matching the established
 per-platform split from the earlier merges. `npm run check` and
 `npm run build` both clean; test account/property deleted afterward.
 
+## Drawing feedback: post markers and a live preview line (2026-10-16)
+
+User feedback: a placed point showed a stock Leaflet map pin (reads as "a
+location," not "a fence post"), and nothing happened between clicks.
+
+- **`cornerPostIcon`** (`MapEditorComponent.tsx`) replaces the stock pin
+  (`defaultIcon`, now deleted) for every non-editing point: a 14px navy
+  square with a white border, centered on the click. Editing still uses
+  `dragHandleIcon`. Point numbers now sit on a small white chip; plain
+  navy text was close to invisible on dark imagery.
+- **`DrawingPreview`**: desktop only (no hover on touch). While drawing
+  or extending, a dashed white line with a dark casing follows the cursor
+  from the last post, with the same 8-ft intermediate post dots a saved
+  run gets (`getIntermediatePoints`) and a live "X ft · Y ft total"
+  badge. Dots are hidden once they'd be under 10px apart on screen. Every
+  layer is `interactive={false}` so it never eats the placing click.
+- **Found and fixed in passing**: the in-progress line was colored a bare
+  `var(--primary)` (invalid without `hsl()`, the same token bug class as
+  elsewhere in this file), so the line between placed posts had never
+  rendered while drawing, only the post dots. It's now white with a dark
+  casing (`FenceLine`'s new `casing` prop): white alone vanishes on
+  light roofs, navy alone on dark ground.
+- **Not built yet**: mobile center-crosshair drawing. And the status
+  pill's "click your first post again to finish" doesn't actually do
+  anything; clicking a placed post during drawing is a no-op.
+
+Verified live against a stubbed project (the local dev DB was unreachable,
+IPv6 `ENETUNREACH`): placed posts render as squares, the preview line,
+dots, and badge track the cursor, and dots drop out when zoomed out.
+Saving a line was not exercised because it needs the DB.
+
 ## Mobile drawer: wrong slide direction, and a real Radix width bug (2026-09-14)
 
 Two more direct reports, same day, both about the mobile Sheet itself

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, Fragment } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, GeoJSON, useMapEvents, useMap, Tooltip, CircleMarker } from "react-leaflet";
-import { LatLng, LatLngBounds, Icon, DivIcon } from "leaflet";
+import { LatLng, LatLngBounds, DivIcon } from "leaflet";
 import { Button } from "@/components/ui/button";
 import { Undo2, Save, Trash2, Ruler, Search, Loader2, MapPinned, AlertTriangle, X, Plus } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -10,15 +10,6 @@ import { useParcelLookup } from "@/hooks/use-projects";
 import { GATE_LABEL, GATE_WIDTH_FEET } from "@/lib/gates";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
-
-const iconUrl = "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png";
-const iconRetinaUrl = "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-2x.png";
-const shadowUrl = "https://unpkg.com/leaflet@1.9.3/dist/images/marker-shadow.png";
-
-const defaultIcon = new Icon({
-  iconUrl, iconRetinaUrl, shadowUrl,
-  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], tooltipAnchor: [16, -28], shadowSize: [41, 41]
-});
 
 // Esri's World_Imagery tile cache runs out of real detail at zoom 19 for
 // most areas (confirmed by fetching actual tiles: z19 returns real imagery,
@@ -146,7 +137,7 @@ function looksSpecificEnoughToTrust(input: string): boolean {
 // `hsl(var(--primary))`, this app's real ink-navy token — same reason
 // squareCornerIcon uses it, not an arbitrary color.
 //
-// Same iconSize/iconAnchor as defaultIcon (25x41, tip at [12,41])
+// Same iconSize/iconAnchor as the old stock Leaflet pin (25x41, tip at [12,41])
 // DELIBERATELY — deletePointIcon/squareCornerIcon's own offsets below,
 // and the shared point-number Tooltip's offset, are all tuned relative
 // to that exact tip position. The circle sits at the BOTTOM of that
@@ -230,6 +221,26 @@ const squareCornerIcon = new DivIcon({
   html: `<div style="background:hsl(var(--primary));border-radius:9999px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 15 15 20 20 15"/><path d="M4 4h7a4 4 0 0 1 4 4v12"/></svg></div>`,
   iconSize: [26, 26],
   iconAnchor: [42, 52],
+});
+
+// Corner/end post marker for a placed fence point (2026-10-16), direct
+// user feedback: the stock Leaflet map pin read as "a location," not "a
+// fence post." A small navy square — a post seen from above — matching
+// the homepage hero illustration's vertex dots and the intermediate
+// 8-ft post dots this file already draws along every run, just larger,
+// since a corner post is the one the user actually placed. Centered
+// anchor (unlike the old pin's bottom-tip anchor), so the point sits
+// exactly where the user clicked. `hsl(var(--primary))` with the
+// `hsl()` wrapper — a bare `var()` silently goes transparent (see
+// squareCornerIcon's comment). Only used for NON-editing renders; the
+// editing render keeps `dragHandleIcon`, whose 25x41 box the delete/
+// square-corner badge offsets are tuned against.
+const cornerPostIcon = new DivIcon({
+  className: "",
+  html: `<div style="width:14px;height:14px;background:hsl(var(--primary));border:2px solid white;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,0.5);"></div>`,
+  iconSize: [14, 14],
+  iconAnchor: [7, 7],
+  tooltipAnchor: [0, -7],
 });
 
 const postIcon = {
@@ -399,7 +410,7 @@ function GateMarker({ gate, points }: { gate: { type: string; segmentIndex: numb
   );
 }
 
-function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineClick, onEndpointClick, onDeletePoint, onSquareCorner, gates = [], placingGate, onSegmentClick, isExtending }: { points: any[], color: string, weight: number, isEditing?: boolean, onPointDragEnd?: (index: number, newLatLng: LatLng) => void, onLineClick?: () => void, onEndpointClick?: (index: number) => void, onDeletePoint?: (index: number) => void, onSquareCorner?: (index: number) => void, gates?: { type: string; segmentIndex: number; position: number }[], placingGate?: boolean, onSegmentClick?: (segmentIndex: number, latlng: LatLng) => void, isExtending?: boolean }) {
+function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineClick, onEndpointClick, onDeletePoint, onSquareCorner, gates = [], placingGate, onSegmentClick, isExtending, casing }: { points: any[], color: string, weight: number, casing?: boolean, isEditing?: boolean, onPointDragEnd?: (index: number, newLatLng: LatLng) => void, onLineClick?: () => void, onEndpointClick?: (index: number) => void, onDeletePoint?: (index: number) => void, onSquareCorner?: (index: number) => void, gates?: { type: string; segmentIndex: number; position: number }[], placingGate?: boolean, onSegmentClick?: (segmentIndex: number, latlng: LatLng) => void, isExtending?: boolean }) {
   // Which point's delete/square-corner badges are showing — a CLICK
   // selection, not a hover (2026-09-14, direct feedback). Hover was the
   // original design, but it fought the drag handle directly: nudging
@@ -474,6 +485,11 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
                 }
           }
         />
+        {/* Optional dark outline under a light line (the in-progress
+            white line while drawing) so it reads on any imagery. */}
+        {casing && (
+          <Polyline positions={[p1, p2]} pathOptions={{ color: "black", weight: weight + 3, opacity: 0.45 }} interactive={false} />
+        )}
         <Polyline
           positions={[p1, p2]}
           pathOptions={
@@ -506,7 +522,7 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
         <Fragment key={p.id || `marker-${idx}`}>
           <Marker
             position={[p.lat, p.lng]}
-            icon={isEditing ? (selectedIdx === idx ? dragHandleIconSelected : dragHandleIcon) : defaultIcon}
+            icon={isEditing ? (selectedIdx === idx ? dragHandleIconSelected : dragHandleIcon) : cornerPostIcon}
             draggable={isEditing}
             eventHandlers={{
               dragend: (e) => {
@@ -534,8 +550,10 @@ function FenceLine({ points, color, weight, isEditing, onPointDragEnd, onLineCli
               },
             }}
           >
-            <Tooltip permanent direction="top" offset={[0, -20]} className="bg-transparent border-none shadow-none font-bold text-primary">
-              {idx + 1}
+            <Tooltip permanent direction="top" offset={isEditing ? [0, -20] : [0, -4]} className="bg-transparent border-none shadow-none p-0">
+              {/* White chip behind the number (2026-10-16) — plain navy
+                  text was close to invisible over dark satellite imagery. */}
+              <span className="inline-block min-w-[18px] rounded bg-white px-1 text-center text-[11px] font-bold leading-4 text-primary shadow-sm">{idx + 1}</span>
             </Tooltip>
           </Marker>
           {/* Delete-this-point affordance — only while editing, only on
@@ -636,6 +654,59 @@ function FitBoundsOnLoad({ existingLines, isMobile, maxZoom }: { existingLines: 
     });
   }, [existingLines, isMobile, map, maxZoom]);
   return null;
+}
+
+// Live "rubber band" preview while placing points on desktop
+// (2026-10-16, direct user feedback: after the first click there was no
+// feedback at all until the next one landed). A dashed line follows the
+// cursor from the last placed post, with the same 8-ft intermediate
+// post dots a saved run gets (via getIntermediatePoints, so the preview
+// shows exactly the posts the real line will) and a live length badge
+// in the same accent pill style as a saved run's length label.
+//
+// Desktop only — touch has no hover, so there's no cursor to follow
+// (the caller gates on !isMobile). Every layer here is
+// `interactive={false}` so the preview never swallows the very click
+// it's previewing. Post dots are skipped once they'd be closer than
+// MIN_POST_PX on screen — at low zoom they'd just smear into the line.
+const MIN_POST_PX = 10;
+const previewLabelIcon = (text: string) =>
+  new DivIcon({
+    className: "",
+    html: `<span style="display:inline-block;white-space:nowrap;" class="rounded px-2 py-0.5 font-mono text-xs font-semibold bg-accent/95 text-primary border border-primary shadow-sm">${text}</span>`,
+    iconSize: undefined as any,
+    iconAnchor: [-14, 10],
+  });
+
+function DrawingPreview({ from, priorFeet }: { from: { lat: number; lng: number }; priorFeet: number }) {
+  const [cursor, setCursor] = useState<LatLng | null>(null);
+  const map = useMapEvents({
+    mousemove: (e) => setCursor(e.latlng),
+    mouseout: () => setCursor(null),
+  });
+  if (!cursor) return null;
+
+  const start = new LatLng(from.lat, from.lng);
+  const segFeet = start.distanceTo(cursor) * FEET_PER_METER;
+  const pixelLength = map.latLngToContainerPoint(start).distanceTo(map.latLngToContainerPoint(cursor));
+  const postPx = segFeet > 0 ? (pixelLength * POST_SPACING_FEET) / segFeet : 0;
+  const posts = postPx >= MIN_POST_PX ? getIntermediatePoints(start, cursor) : [];
+  const label = priorFeet > 0
+    ? `${segFeet.toFixed(1)} ft · ${(priorFeet + segFeet).toFixed(0)} ft total`
+    : `${segFeet.toFixed(1)} ft`;
+
+  return (
+    <>
+      {/* Dark casing under the white dash — white alone vanishes over
+          light roofs/concrete, navy alone over dark imagery. */}
+      <Polyline positions={[start, cursor]} pathOptions={{ color: "black", weight: 6, opacity: 0.45 }} interactive={false} />
+      <Polyline positions={[start, cursor]} pathOptions={{ color: "white", weight: 3, dashArray: "6 6" }} interactive={false} />
+      {posts.map((post, i) => (
+        <CircleMarker key={i} center={post} radius={3} color="white" weight={1} fillColor="black" fillOpacity={0.7} interactive={false} />
+      ))}
+      <Marker position={cursor} icon={previewLabelIcon(label)} interactive={false} keyboard={false} />
+    </>
+  );
 }
 
 function MapEvents({ onMapClick }: { onMapClick: (e: any) => void }) {
@@ -1230,10 +1301,28 @@ export function MapEditorComponent({ initialCenter, initialAddress, onSave, isSa
            />
         )}
         
+        {!isMobile && isDrawing && points.length > 0 && (
+          <DrawingPreview from={points[points.length - 1]} priorFeet={totalDistance} />
+        )}
+        {!isMobile && isExtending && editingLine?.coordinates?.length > 0 && (
+          <DrawingPreview
+            from={extendingFrom === 'start' ? editingLine.coordinates[0] : editingLine.coordinates[editingLine.coordinates.length - 1]}
+            priorFeet={0}
+          />
+        )}
+
+        {/* White, not navy (2026-10-16): this used to be a bare
+            `var(--primary)`, which is invalid without the `hsl()` wrapper
+            (raw HSL components — see squareCornerIcon), so the in-progress
+            line between placed posts silently never rendered at all. Even
+            fixed, navy disappears on dark satellite imagery; white reads
+            on any imagery, and keeps the in-progress line distinct from
+            saved (blue/red) and editing (orange) lines. */}
         {points.length > 0 && (
            <FenceLine
              points={points}
-             color="var(--primary)"
+             color="white"
+             casing
              weight={4}
            />
         )}
