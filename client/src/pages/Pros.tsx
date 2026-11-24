@@ -71,15 +71,15 @@ export default function Pros() {
             the hero. A light blue tint of the navy (--primary-soft), not the orange accent, which read as an
             error here. Compact on phones so the first button stays on the
             first screen. */}
-        <div className="mb-5 md:mb-8 lg:mb-12 rounded-lg border border-primary/15 bg-primary-soft px-4 py-3 md:px-5 md:py-4 md:flex md:items-center md:gap-6">
-          <div className="font-mono text-xs text-primary tracking-wide mb-1 md:mb-0 shrink-0">THE BETA OFFER</div>
-          <p className="text-sm md:text-base leading-snug text-foreground md:flex-1">
+        <div className="mb-5 md:mb-8 lg:mb-12 rounded-lg border border-primary/15 bg-primary-soft px-4 py-3 md:px-5 md:py-4">
+          <div className="font-mono text-xs text-primary tracking-wide mb-1">THE BETA OFFER</div>
+          <p className="text-sm md:text-base leading-snug text-foreground">
             Beta testers get Pro free while we refine the product. I'll set up your business profile for you.
             In return, try it on one real job and tell me what you think.
           </p>
           <Link
             href={ctaHref}
-            className="mt-2 md:mt-0 inline-block shrink-0 text-sm md:text-base font-semibold text-primary underline underline-offset-4 decoration-primary/40 hover:decoration-primary"
+            className="mt-2 inline-block text-sm md:text-base font-semibold text-primary underline underline-offset-4 decoration-primary/40 hover:decoration-primary"
           >
             Try it free →
           </Link>

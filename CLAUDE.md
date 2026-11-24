@@ -4518,7 +4518,9 @@ Email john@postplotter.com". Changes from the spec, all John's
 - The offer moved from an orange box below the steps to the top, so it's
   the first thing read. It's a rounded banner that fills the same column
   as the hero (on desktop its edges line up with the headline and the
-  video), not an edge-to-edge band. It's light blue, not the orange
+  video), not an edge-to-edge band. Inside it, the "THE BETA OFFER"
+  label, the copy and the link always stack top to bottom, at every
+  screen size: never a side-by-side row. It's light blue, not the orange
   `--accent`, which read as an error there: a new `--primary-soft` token
   (`218 62% 93%`, `bg-primary-soft`), a high-lightness tint of the navy.
   `bg-primary/5` was tried first and reads gray over the blue-gray paper.
