@@ -4507,15 +4507,21 @@ on a web page; v2 (2026-11-24, Notion item "/pros landing page v2:
 restructure as a sales page") restructures it so the payoff, the video,
 the button and the offer all come before any scrolling on a phone.
 
-**Layout (v2).** Order: `FOR FENCE PROS · BETA` eyebrow, the hook
+**Layout (v2).** Order: a full-width `bg-accent` "THE BETA OFFER" band
+right under the header, the `FOR FENCE PROS · BETA` eyebrow, the hook
 ("Measure from the satellite photo. Send the quote the same day."), the
 video, "Try it free" + "No credit card. Nothing to install.", a
 three-cell steps strip (the homepage "How it works" grid, titles only,
-`grid-cols-3` even on mobile), the `bg-accent` "THE BETA OFFER" box, and
-a closing section with the same button and "Questions? Just reply to my
-email." (plain text, not a link). The only links are the logo and the
-two buttons; both go to `/register?from=pros` logged out and `/` logged
-in. **AuthLayout was dropped**: its gray `bg-secondary/30` and centered
+`grid-cols-3` even on mobile), and a closing section with the same
+button and "Questions? Email john@postplotter.com". Two changes from the
+spec, both John's (2026-11-24): the offer moved from a box below the
+steps to that top band, so it's the first thing read (it's compact,
+`text-sm`, on phones, which keeps the first button on the first screen:
+the note ends at ~663px of 812); and the closing line names the address
+instead of "Just reply to my email", because not every visitor arrives
+from John's email. The address is a `mailto:` link so a phone can tap
+it, which makes four links: the logo, the two buttons (both go to
+`/register?from=pros` logged out and `/` logged in) and the mailto. **AuthLayout was dropped**: its gray `bg-secondary/30` and centered
 login-card layout are what made v1 read as an auth page. v2 renders the
 shared `PageHeader` with the same logo link AuthLayout uses (keeping
 "every page has a header and a way home") on plain `bg-background`, then
@@ -4529,8 +4535,8 @@ hook, video, button so mobile is untouched; grid placement
 (`lg:col-start`/`row-start`, video `row-span-2`) does the rearranging.
 The hook uses `text-balance` so it breaks at the sentence instead of
 orphaning "day." in the narrower column. The steps strip spans the full
-width; the offer box is capped at `max-w-3xl` for line length. At 375×812 the
-first button and its note end at ~561px, well inside the first screen;
+width. At 375×812 the
+first button and its note end at ~663px, inside the first screen;
 if the hook ever grows past four lines at 375px, shrink it to
 `text-[28px]` rather than let the button drop below the fold. The
 `<video>` starts with no controls and no autoplay; a 72px

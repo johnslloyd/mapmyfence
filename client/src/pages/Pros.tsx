@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { trackEvent } from "@/lib/analytics";
 
 // /pros: the sales page linked from cold outreach emails (v2). One action,
-// shown twice: sign up. The only links are the logo and the two buttons.
+// shown twice: sign up. Links: the logo, the two buttons and a mailto.
 // Built on PageHeader + bg-background rather than AuthLayout, whose gray
 // centered login-card layout made v1 read as an auth page. See CLAUDE.md
 // "/pros demo landing page". Never state the video's length, how long free
@@ -59,6 +59,19 @@ export default function Pros() {
           <span className="font-display font-bold text-xl">PostPlotter</span>
         </Link>
       </PageHeader>
+
+      {/* The beta offer, as a full-width band right under the header (John,
+          2026-11-24): the offer is the reason to act, so it's seen first.
+          Compact on phones so the first button still fits the first screen. */}
+      <div className="bg-accent border-b border-accent-foreground/20">
+        <div className="max-w-6xl mx-auto px-4 md:px-8 py-3 md:py-4 md:flex md:items-baseline md:gap-6">
+          <div className="font-mono text-xs text-accent-foreground tracking-wide mb-1 md:mb-0 shrink-0">THE BETA OFFER</div>
+          <p className="text-sm md:text-base leading-snug text-foreground">
+            Beta testers get Pro free while we refine the product. I'll set up your business profile for you.
+            In return, try it on one real job and tell me what you think.
+          </p>
+        </div>
+      </div>
 
       {/* One narrow column on phones and tablets; from lg up the page widens
           to the app's "wide" max-w-6xl and the hero goes two-column (John,
@@ -114,20 +127,17 @@ export default function Pros() {
           ))}
         </div>
 
-        {/* Offer box */}
-        {/* Kept to a readable line length on wide screens. */}
-        <div className="mt-8 lg:mt-10 lg:max-w-3xl lg:mx-auto bg-accent rounded-lg p-5 lg:p-6 border border-accent-foreground/20">
-          <div className="font-mono text-xs text-accent-foreground tracking-wide mb-3">THE BETA OFFER</div>
-          <div className="space-y-3 text-base leading-relaxed text-foreground">
-            <p>Beta testers get Pro free while we refine the product. I'll set up your business profile for you.</p>
-            <p>In return, try it on one real job and tell me what you think.</p>
-          </div>
-        </div>
-
         {/* Closing */}
         <section className="mt-10 pt-10 lg:mt-16 lg:pt-12 border-t border-border text-center">
           <TryItFree href={ctaHref} />
-          <p className="mt-3 text-sm text-muted-foreground">Questions? Just reply to my email.</p>
+          {/* Not every visitor arrives from John's email, so name the address
+              instead of "reply to my email". A mailto link so a phone can tap it. */}
+          <p className="mt-3 text-sm text-muted-foreground">
+            Questions? Email{" "}
+            <a href="mailto:john@postplotter.com" className="text-primary underline underline-offset-2">
+              john@postplotter.com
+            </a>
+          </p>
         </section>
       </main>
     </div>
