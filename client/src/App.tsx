@@ -23,6 +23,7 @@ import Admin from "./pages/Admin";
 import AdminUserDetail from "./pages/AdminUserDetail";
 import AdminProjectMapView from "./pages/AdminProjectMapView";
 import Privacy from "./pages/Privacy";
+import Pros from "./pages/Pros";
 import QuoteView from "./pages/QuoteView";
 import QuotePlanView from "./pages/QuotePlanView";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -49,6 +50,8 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/privacy" component={Privacy} />
+      {/* Cold-outreach demo landing page — public, no auth. See Pros.tsx. */}
+      <Route path="/pros" component={Pros} />
       {/* Business tier, Phase 1 — the one route meant to be opened with
           NO account at all (a customer following a quote email's link).
           A plain Route, not ProtectedRoute: there's no auth check to

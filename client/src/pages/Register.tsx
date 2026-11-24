@@ -32,6 +32,10 @@ export default function Register() {
   // remounts there and its pending-fence-line-save effect can run.
   const propertyId = searchParams.get("propertyId");
   const returnTo = searchParams.get("returnTo");
+  // from: set only by the /pros landing page's button. Carried here so the
+  // sign_up event can say where the sign-up came from; analytics.ts never
+  // sends query strings to Google. Only the exact value "pros" counts.
+  const fromPros = searchParams.get("from") === "pros";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +62,11 @@ export default function Register() {
       if (res.ok) {
         const data = await res.json();
         login(data.user);
-        trackEvent("sign_up", { method: "email" });
+        if (fromPros) {
+          trackEvent("sign_up", { method: "email", source: "pros" });
+        } else {
+          trackEvent("sign_up", { method: "email" });
+        }
         toast({ title: "Account created", description: "You are now signed in.", variant: "success" });
         if (returnTo) {
           setLocation(returnTo);
