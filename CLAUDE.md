@@ -4507,14 +4507,40 @@ on a web page; v2 (2026-11-24, Notion item "/pros landing page v2:
 restructure as a sales page") restructures it so the payoff, the video,
 the button and the offer all come before any scrolling on a phone.
 
-**Layout (v2).** Order: a "THE BETA OFFER" banner (with its own "Try it
-free →" link), the `FOR FENCE PROS · BETA` eyebrow, the hook ("Measure
-from the satellite photo. Send the quote the same day."), the video,
-"Try it free" + "No credit card. Nothing to install.", a three-cell steps
-strip (the homepage "How it works" grid, titles only, `grid-cols-3` even
-on mobile), and a closing section with the same button and "Questions?
-Email john@postplotter.com". Changes from the spec, all John's
-(2026-11-24, from reviewing the local preview):
+**Layout (v2).** Order: a "THE BETA OFFER" banner (with its own "Create
+your free account →" link), the `FOR FENCE PROS · BETA` eyebrow, the
+hook ("Measure from the satellite photo. Send the quote the same day."),
+the video, the two ways in (below), "No credit card. Nothing to
+install.", a three-cell steps strip (the homepage "How it works" grid,
+titles only, `grid-cols-3` even on mobile) with a line under it setting
+expectations ("Draw a fence and get the footage and materials right
+away. Sending customer quotes turns on once your business profile is set
+up."), and a closing section with the two ways in again and "Questions?
+Email john@postplotter.com".
+
+**Two ways in (John, 2026-11-24).** v1 and early v2 had one "Try it free"
+button straight to `/register`, a bigger ask than the label promised.
+Now:
+- **Main button: "Start a fence — no account needed"** opens the same
+  `AddPropertyDialog` the homepage uses. A guest lands in the editor,
+  draws, and hits the existing "sign up to save" prompt when saving, so
+  this path still ends in a sign-up, after they've seen it work. Signed
+  in, the label is "Start a fence project" and the property goes on their
+  account. Fires `pros_start_fence` (no params) on click.
+- **Second option: "Or create your free account, needed for the free Pro
+  offer."**, a text link to `/register?from=pros`. The banner's link goes
+  here too, since it sits beside the offer. Signed in, both become "Go to
+  your properties" → `/`.
+- **Expectation line, deliberately:** a guest sees the homeowner editor
+  (Lowe's/Home Depot materials and estimate), not the video's "Customer
+  Quote" with the pro's own $/ft and Send Quote, which needs an account,
+  a business profile and rates John sets up by hand. The line under the
+  steps says so rather than letting the page overpromise.
+- At 375×812 the main button, the note and the account line all fit the
+  first screen (the account line ends at ~777px).
+
+Earlier changes from the spec, also John's (2026-11-24, from reviewing
+the local preview):
 - The offer moved from an orange box below the steps to the top, so it's
   the first thing read. It's a rounded banner that fills the same column
   as the hero (on desktop its edges line up with the headline and the
@@ -4529,9 +4555,9 @@ Email john@postplotter.com". Changes from the spec, all John's
 - The closing line names the address instead of "Just reply to my
   email", because not every visitor arrives from John's email. It's a
   `mailto:` link so a phone can tap it.
-- Links are now the logo, the banner's "Try it free →", the two buttons
-  (all three go to `/register?from=pros` logged out and `/` logged in)
-  and the mailto. **AuthLayout was dropped**: its gray `bg-secondary/30` and centered
+- Links are now the logo, the banner's account link, the two "create your
+  free account" links and the mailto; the two main buttons open the Add a
+  Property dialog. **AuthLayout was dropped**: its gray `bg-secondary/30` and centered
 login-card layout are what made v1 read as an auth page. v2 renders the
 shared `PageHeader` with the same logo link AuthLayout uses (keeping
 "every page has a header and a way home") on plain `bg-background`, then
@@ -4598,7 +4624,20 @@ sign-up, and `Register.tsx` adds `source: "pros"` to the existing
 `sign_up` event only when `from` is exactly `"pros"`; everything else
 still sends `{ method: "email" }`. The first play also sends
 `demo_video_play` (no params, once per page load). Nothing about the
-source is stored server-side. All of this records nothing until
+source is stored server-side.
+
+**The try-first path needed a second carrier (2026-11-24).** A guest who
+starts a fence from /pros signs up from the editor's "sign up to save"
+prompt (`/register?propertyId=…&returnTo=…`), which has no `?from=pros`,
+so `sign_up` would have shown no source for the most engaged visitors.
+`client/src/lib/signupSource.ts` fixes it: /pros sets a
+`sessionStorage` marker on mount, `Register.tsx` treats `?from=pros` OR
+that marker as the pros source, and clears the marker once `sign_up` is
+sent. It's per tab and dies with it, every access is try/catch'd (storage
+can throw), and it's only ever read as that one event param. Caveat: a
+visitor who opens /pros and later signs up some other way in the same
+tab also counts as pros; for "did this sign-up see the outreach page",
+that's the intended reading. All of this records nothing until
 `VITE_GA_MEASUREMENT_ID` is set in production.
 
 **The video lives in `client/public/video/`** and is served by the site
