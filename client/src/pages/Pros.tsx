@@ -60,14 +60,22 @@ export default function Pros() {
         </Link>
       </PageHeader>
 
-      <main className="max-w-2xl mx-auto px-4 md:px-8 py-6 md:py-12">
+      {/* One narrow column on phones and tablets; from lg up the page widens
+          to the app's "wide" max-w-6xl and the hero goes two-column (John,
+          2026-11-24): headline and button on the left, video on the right.
+          DOM order stays eyebrow/hook, video, button so mobile is unchanged;
+          grid placement does the rearranging on lg. */}
+      <main className="max-w-2xl lg:max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-12 lg:py-16">
+        <div className="lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-x-12 lg:items-center">
         {/* First screen at 375x812: eyebrow, hook, video, button, note. */}
-        <div className="font-mono text-xs text-accent-foreground mb-3 tracking-wide">FOR FENCE PROS · BETA</div>
-        <h1 className="font-display font-semibold text-3xl md:text-5xl leading-tight tracking-tight text-primary">
-          Measure from the satellite photo. Send the quote the same day.
-        </h1>
+        <div className="lg:col-start-1 lg:row-start-1 lg:self-end">
+          <div className="font-mono text-xs text-accent-foreground mb-3 tracking-wide">FOR FENCE PROS · BETA</div>
+          <h1 className="font-display font-semibold text-3xl md:text-5xl leading-tight tracking-tight text-balance text-primary">
+            Measure from the satellite photo. Send the quote the same day.
+          </h1>
+        </div>
 
-        <div className="relative mt-4 border border-border rounded-lg overflow-hidden bg-card">
+        <div className="relative mt-4 lg:mt-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 border border-border rounded-lg overflow-hidden bg-card">
           <video
             ref={videoRef}
             className="block w-full aspect-[16/10] h-auto"
@@ -90,11 +98,14 @@ export default function Pros() {
           )}
         </div>
 
-        <TryItFree href={ctaHref} className="mt-4" />
-        <p className="mt-3 text-sm text-muted-foreground">No credit card. Nothing to install.</p>
+        <div className="lg:col-start-1 lg:row-start-2 lg:self-start lg:mt-8">
+          <TryItFree href={ctaHref} className="mt-4 lg:mt-0" />
+          <p className="mt-3 text-sm text-muted-foreground">No credit card. Nothing to install.</p>
+        </div>
+        </div>
 
         {/* Steps strip: the homepage "How it works" grid, titles only. */}
-        <div className="mt-10 grid grid-cols-3 gap-px bg-border border border-border">
+        <div className="mt-10 lg:mt-16 grid grid-cols-3 gap-px bg-border border border-border">
           {STEPS.map((title, i) => (
             <div key={title} className="bg-background p-3 md:p-5 flex flex-col gap-2">
               <div className="font-mono text-xs text-accent-foreground">STEP_0{i + 1}</div>
@@ -104,7 +115,8 @@ export default function Pros() {
         </div>
 
         {/* Offer box */}
-        <div className="mt-8 bg-accent rounded-lg p-5 border border-accent-foreground/20">
+        {/* Kept to a readable line length on wide screens. */}
+        <div className="mt-8 lg:mt-10 lg:max-w-3xl lg:mx-auto bg-accent rounded-lg p-5 lg:p-6 border border-accent-foreground/20">
           <div className="font-mono text-xs text-accent-foreground tracking-wide mb-3">THE BETA OFFER</div>
           <div className="space-y-3 text-base leading-relaxed text-foreground">
             <p>Beta testers get Pro free while we refine the product. I'll set up your business profile for you.</p>
@@ -113,7 +125,7 @@ export default function Pros() {
         </div>
 
         {/* Closing */}
-        <section className="mt-10 pt-10 border-t border-border text-center">
+        <section className="mt-10 pt-10 lg:mt-16 lg:pt-12 border-t border-border text-center">
           <TryItFree href={ctaHref} />
           <p className="mt-3 text-sm text-muted-foreground">Questions? Just reply to my email.</p>
         </section>

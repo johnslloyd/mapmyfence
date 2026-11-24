@@ -4519,7 +4519,17 @@ in. **AuthLayout was dropped**: its gray `bg-secondary/30` and centered
 login-card layout are what made v1 read as an auth page. v2 renders the
 shared `PageHeader` with the same logo link AuthLayout uses (keeping
 "every page has a header and a way home") on plain `bg-background`, then
-a `max-w-2xl mx-auto px-4 md:px-8 py-6 md:py-12` column. At 375×812 the
+a `max-w-2xl mx-auto px-4 md:px-8 py-6 md:py-12` column on phones and
+tablets. **From `lg` (1024px) up the page widens to the app's "wide"
+`max-w-6xl` and the hero goes two-column** (John, 2026-11-24, after
+reviewing the single centered column on a big screen; this overrides
+the spec's design decision 7): eyebrow, hook, button and note on the
+left (5fr), the video on the right (7fr). The DOM order stays
+hook, video, button so mobile is untouched; grid placement
+(`lg:col-start`/`row-start`, video `row-span-2`) does the rearranging.
+The hook uses `text-balance` so it breaks at the sentence instead of
+orphaning "day." in the narrower column. The steps strip spans the full
+width; the offer box is capped at `max-w-3xl` for line length. At 375×812 the
 first button and its note end at ~561px, well inside the first screen;
 if the hook ever grows past four lines at 375px, shrink it to
 `text-[28px]` rather than let the button drop below the fold. The
