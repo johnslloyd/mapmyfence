@@ -4507,21 +4507,29 @@ on a web page; v2 (2026-11-24, Notion item "/pros landing page v2:
 restructure as a sales page") restructures it so the payoff, the video,
 the button and the offer all come before any scrolling on a phone.
 
-**Layout (v2).** Order: a full-width `bg-accent` "THE BETA OFFER" band
-right under the header, the `FOR FENCE PROS · BETA` eyebrow, the hook
-("Measure from the satellite photo. Send the quote the same day."), the
-video, "Try it free" + "No credit card. Nothing to install.", a
-three-cell steps strip (the homepage "How it works" grid, titles only,
-`grid-cols-3` even on mobile), and a closing section with the same
-button and "Questions? Email john@postplotter.com". Two changes from the
-spec, both John's (2026-11-24): the offer moved from a box below the
-steps to that top band, so it's the first thing read (it's compact,
-`text-sm`, on phones, which keeps the first button on the first screen:
-the note ends at ~663px of 812); and the closing line names the address
-instead of "Just reply to my email", because not every visitor arrives
-from John's email. The address is a `mailto:` link so a phone can tap
-it, which makes four links: the logo, the two buttons (both go to
-`/register?from=pros` logged out and `/` logged in) and the mailto. **AuthLayout was dropped**: its gray `bg-secondary/30` and centered
+**Layout (v2).** Order: a "THE BETA OFFER" banner (with its own "Try it
+free →" link), the `FOR FENCE PROS · BETA` eyebrow, the hook ("Measure
+from the satellite photo. Send the quote the same day."), the video,
+"Try it free" + "No credit card. Nothing to install.", a three-cell steps
+strip (the homepage "How it works" grid, titles only, `grid-cols-3` even
+on mobile), and a closing section with the same button and "Questions?
+Email john@postplotter.com". Changes from the spec, all John's
+(2026-11-24, from reviewing the local preview):
+- The offer moved from an orange box below the steps to the top, so it's
+  the first thing read. It's a rounded banner that fills the same column
+  as the hero (on desktop its edges line up with the headline and the
+  video), not an edge-to-edge band. It's light blue, not the orange
+  `--accent`, which read as an error there: a new `--primary-soft` token
+  (`218 62% 93%`, `bg-primary-soft`), a high-lightness tint of the navy.
+  `bg-primary/5` was tried first and reads gray over the blue-gray paper.
+  On phones it's compact (`text-sm`), which keeps the first button on the
+  first screen: the note ends at ~725px of 812.
+- The closing line names the address instead of "Just reply to my
+  email", because not every visitor arrives from John's email. It's a
+  `mailto:` link so a phone can tap it.
+- Links are now the logo, the banner's "Try it free →", the two buttons
+  (all three go to `/register?from=pros` logged out and `/` logged in)
+  and the mailto. **AuthLayout was dropped**: its gray `bg-secondary/30` and centered
 login-card layout are what made v1 read as an auth page. v2 renders the
 shared `PageHeader` with the same logo link AuthLayout uses (keeping
 "every page has a header and a way home") on plain `bg-background`, then
@@ -4536,7 +4544,7 @@ hook, video, button so mobile is untouched; grid placement
 The hook uses `text-balance` so it breaks at the sentence instead of
 orphaning "day." in the narrower column. The steps strip spans the full
 width. At 375×812 the
-first button and its note end at ~663px, inside the first screen;
+first button and its note end at ~725px, inside the first screen;
 if the hook ever grows past four lines at 375px, shrink it to
 `text-[28px]` rather than let the button drop below the fold. The
 `<video>` starts with no controls and no autoplay; a 72px

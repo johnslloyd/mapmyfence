@@ -40,6 +40,7 @@ export default {
           DEFAULT: "hsl(var(--primary) / <alpha-value>)",
           foreground: "hsl(var(--primary-foreground) / <alpha-value>)",
           border: "hsl(var(--primary-border) / <alpha-value>)",
+          soft: "hsl(var(--primary-soft) / <alpha-value>)",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary) / <alpha-value>)",

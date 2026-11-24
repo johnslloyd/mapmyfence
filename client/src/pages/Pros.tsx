@@ -7,7 +7,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { trackEvent } from "@/lib/analytics";
 
 // /pros: the sales page linked from cold outreach emails (v2). One action,
-// shown twice: sign up. Links: the logo, the two buttons and a mailto.
+// shown three times: sign up. Links: the logo, the banner link, the two
+// buttons and a mailto.
 // Built on PageHeader + bg-background rather than AuthLayout, whose gray
 // centered login-card layout made v1 read as an auth page. See CLAUDE.md
 // "/pros demo landing page". Never state the video's length, how long free
@@ -60,25 +61,30 @@ export default function Pros() {
         </Link>
       </PageHeader>
 
-      {/* The beta offer, as a full-width band right under the header (John,
-          2026-11-24): the offer is the reason to act, so it's seen first.
-          Compact on phones so the first button still fits the first screen. */}
-      <div className="bg-accent border-b border-accent-foreground/20">
-        <div className="max-w-6xl mx-auto px-4 md:px-8 py-3 md:py-4 md:flex md:items-baseline md:gap-6">
-          <div className="font-mono text-xs text-accent-foreground tracking-wide mb-1 md:mb-0 shrink-0">THE BETA OFFER</div>
-          <p className="text-sm md:text-base leading-snug text-foreground">
-            Beta testers get Pro free while we refine the product. I'll set up your business profile for you.
-            In return, try it on one real job and tell me what you think.
-          </p>
-        </div>
-      </div>
-
       {/* One narrow column on phones and tablets; from lg up the page widens
           to the app's "wide" max-w-6xl and the hero goes two-column (John,
           2026-11-24): headline and button on the left, video on the right.
           DOM order stays eyebrow/hook, video, button so mobile is unchanged;
           grid placement does the rearranging on lg. */}
-      <main className="max-w-2xl lg:max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-12 lg:py-16">
+      <main className="max-w-2xl lg:max-w-6xl mx-auto px-4 md:px-8 py-4 md:py-10 lg:py-12">
+        {/* The beta offer first (John, 2026-11-24), filling the same column as
+            the hero. A light blue tint of the navy (--primary-soft), not the orange accent, which read as an
+            error here. Compact on phones so the first button stays on the
+            first screen. */}
+        <div className="mb-5 md:mb-8 lg:mb-12 rounded-lg border border-primary/15 bg-primary-soft px-4 py-3 md:px-5 md:py-4 md:flex md:items-center md:gap-6">
+          <div className="font-mono text-xs text-primary tracking-wide mb-1 md:mb-0 shrink-0">THE BETA OFFER</div>
+          <p className="text-sm md:text-base leading-snug text-foreground md:flex-1">
+            Beta testers get Pro free while we refine the product. I'll set up your business profile for you.
+            In return, try it on one real job and tell me what you think.
+          </p>
+          <Link
+            href={ctaHref}
+            className="mt-2 md:mt-0 inline-block shrink-0 text-sm md:text-base font-semibold text-primary underline underline-offset-4 decoration-primary/40 hover:decoration-primary"
+          >
+            Try it free →
+          </Link>
+        </div>
+
         <div className="lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-x-12 lg:items-center">
         {/* First screen at 375x812: eyebrow, hook, video, button, note. */}
         <div className="lg:col-start-1 lg:row-start-1 lg:self-end">
