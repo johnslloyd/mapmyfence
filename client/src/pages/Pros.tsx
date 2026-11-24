@@ -72,7 +72,7 @@ export default function Pros() {
             error here. Compact on phones so the first button stays on the
             first screen. */}
         <div className="mb-5 md:mb-8 lg:mb-12 rounded-lg border border-primary/15 bg-primary-soft px-4 py-3 md:px-5 md:py-4">
-          <div className="font-mono text-xs text-primary tracking-wide mb-1">THE BETA OFFER</div>
+          <div className="font-mono text-xs font-semibold text-primary tracking-wide mb-2">THE BETA OFFER</div>
           <p className="text-sm md:text-base leading-snug text-foreground">
             Beta testers get Pro free while we refine the product. I'll set up your business profile for you.
             In return, try it on one real job and tell me what you think.
