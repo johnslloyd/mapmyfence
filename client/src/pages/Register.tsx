@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "@/hooks/use-toast";
 import { trackEvent } from "@/lib/analytics";
+import { cameFromPros, clearSignupSource } from "@/lib/signupSource";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { AuthLayout } from "@/components/AuthLayout";
@@ -32,10 +33,13 @@ export default function Register() {
   // remounts there and its pending-fence-line-save effect can run.
   const propertyId = searchParams.get("propertyId");
   const returnTo = searchParams.get("returnTo");
-  // from: set only by the /pros landing page's button. Carried here so the
-  // sign_up event can say where the sign-up came from; analytics.ts never
-  // sends query strings to Google. Only the exact value "pros" counts.
-  const fromPros = searchParams.get("from") === "pros";
+  // Did this sign-up come through the /pros landing page? Either directly
+  // (its "create your free account" links carry ?from=pros; only the exact
+  // value counts) or via the try-first path, where /pros left a session
+  // marker before the visitor went through the guest editor (see
+  // signupSource.ts). analytics.ts never sends query strings to Google, so
+  // the source travels as a sign_up event param instead.
+  const fromPros = searchParams.get("from") === "pros" || cameFromPros();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +68,7 @@ export default function Register() {
         login(data.user);
         if (fromPros) {
           trackEvent("sign_up", { method: "email", source: "pros" });
+          clearSignupSource();
         } else {
           trackEvent("sign_up", { method: "email" });
         }

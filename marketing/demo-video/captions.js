@@ -1,0 +1,193 @@
+// Burned-in captions for the /pros demo video.
+//
+//   node captions.js         vo/transcript.json -> captions.ass (committed)
+//   node captions.js --burn  captions.ass -> ../../client/public/video/postplotter-demo.mp4
+//
+// captions.ass is the source of truth for caption text and timing: edit it by
+// hand to fix a word, then run --burn. It's valid ASS styled to the /pros v2
+// spec (Public Sans 600, cream on a navy 85% bar, bottom center, 46px at
+// 1280x800), so a libass-enabled ffmpeg could burn it directly. Homebrew's
+// ffmpeg ships without libass, so --burn renders each caption with Playwright
+// in the real web font and overlays the images with ffmpeg instead.
+//
+// --burn builds from the full-quality inputs, not the compressed web file:
+// output/seg/*.mp4 (CRF 18 segments from record-synced.js) + vo/elevenlabs.mp3.
+// Requires: npm install here (playwright), ffmpeg on PATH.
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const { execFileSync } = require("child_process");
+
+const DIR = __dirname;
+const ASS = path.join(DIR, "captions.ass");
+const OUT = path.join(DIR, "..", "..", "client", "public", "video", "postplotter-demo.mp4");
+const MAX_LINE = 32;
+
+// ---- transcript -> phrases -------------------------------------------------
+
+// Whisper spells the brand as it hears it.
+const fixWord = (w) => w.replace(/^post-plotter/i, "PostPlotter");
+
+function readWords() {
+  const t = JSON.parse(fs.readFileSync(path.join(DIR, "vo", "transcript.json"), "utf8")).transcription;
+  return t
+    .map((s) => ({ text: fixWord(s.text.trim()), start: s.offsets.from / 1000, end: s.offsets.to / 1000 }))
+    .filter((w) => w.text);
+}
+
+// How natural a break between word i-1 and word i is: good after a comma or
+// before a word that starts a new clause; bad right after a word that leans
+// on the next one ("your / materials", "right / on").
+const breakBonus = (words, i) =>
+  (/,$/.test(words[i - 1].text) ? 8 : 0) +
+  (/^(and|with|to|they|of|on|in|right)$/i.test(words[i].text) ? 7 : 0) -
+  (/^(a|the|your|their|in|of|to|on|right|with|and|tap)$/i.test(words[i - 1].text) ? 6 : 0);
+const join = (ws) => ws.map((w) => w.text).join(" ");
+
+// Split into at most two lines, balanced, each <= MAX_LINE, preferring
+// natural breaks. Returns null when it can't fit in two lines.
+function wrap(words) {
+  const text = join(words);
+  if (text.length <= MAX_LINE) return [text];
+  let best = null;
+  for (let i = 1; i < words.length; i++) {
+    const a = join(words.slice(0, i)), b = join(words.slice(i));
+    if (a.length > MAX_LINE || b.length > MAX_LINE) continue;
+    const score = Math.max(a.length, b.length) - breakBonus(words, i);
+    if (!best || score < best.score) best = { lines: [a, b], score };
+  }
+  return best ? best.lines : null;
+}
+
+// Split a clause into as few captions as fit, cutting at the most balanced
+// natural break rather than wherever the second line happens to fill up.
+function split(words) {
+  if (wrap(words)) return [words];
+  let best = null;
+  for (let i = 1; i < words.length; i++) {
+    const score = Math.abs(join(words.slice(0, i)).length - join(words.slice(i)).length) - 3 * breakBonus(words, i);
+    if (!best || score < best.score) best = { i, score };
+  }
+  return [...split(words.slice(0, best.i)), ...split(words.slice(best.i))];
+}
+
+function phrases(words) {
+  // Clauses end at a sentence end, a pause, or a comma once there's enough
+  // text to stand on its own.
+  const clauses = [];
+  let cur = [];
+  words.forEach((w, i) => {
+    cur.push(w);
+    const next = words[i + 1];
+    const sentenceEnd = /[.?!]$/.test(w.text);
+    const clauseEnd = /,$/.test(w.text) && join(cur).length >= 18;
+    const pause = next ? next.start - w.end > 0.3 : true;
+    if (sentenceEnd || clauseEnd || pause) { clauses.push(cur); cur = []; }
+  });
+  const out = clauses.flatMap(split).map((ws) => ({ lines: wrap(ws), start: ws[0].start, end: ws[ws.length - 1].end }));
+  // Hold each phrase until the next starts (no flicker between phrases),
+  // but clear it during a real silence.
+  out.forEach((p, i) => {
+    const next = out[i + 1];
+    p.end = next ? (next.start - p.end < 0.7 ? next.start : p.end + 0.4) : p.end + 0.8;
+  });
+  return out;
+}
+
+// ---- ASS -------------------------------------------------------------------
+
+const ts = (s) => {
+  const cs = Math.round(s * 100);
+  const h = Math.floor(cs / 360000), m = Math.floor(cs / 6000) % 60, sec = Math.floor(cs / 100) % 60, c = cs % 100;
+  return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}.${String(c).padStart(2, "0")}`;
+};
+
+// Colors are &HAABBGGRR. Cream #F5F8FA (--background); navy #16294B
+// (--primary) at alpha 0x26 = 85% opaque.
+const STYLE = {
+  font: "Public Sans SemiBold", size: 46, cream: "&H00FAF8F5", navy: "&H264B2916", pad: 12, marginV: 48,
+};
+
+function writeAss(list) {
+  const header = `[Script Info]
+; Generated by marketing/demo-video/captions.js from vo/transcript.json.
+; Hand edits are fine; then run: node captions.js --burn
+ScriptType: v4.00+
+PlayResX: 1280
+PlayResY: 800
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,${STYLE.font},${STYLE.size},${STYLE.cream},${STYLE.cream},${STYLE.navy},${STYLE.navy},0,0,0,0,100,100,0,0,3,${STYLE.pad},0,2,40,40,${STYLE.marginV},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+  const events = list.map((p) => `Dialogue: 0,${ts(p.start)},${ts(p.end)},Default,,0,0,0,,${p.lines.join("\\N")}`);
+  fs.writeFileSync(ASS, header + events.join("\n") + "\n");
+}
+
+function readAss() {
+  const sec = (t) => { const [h, m, s] = t.split(":"); return +h * 3600 + +m * 60 + +s; };
+  return fs.readFileSync(ASS, "utf8").split("\n").filter((l) => l.startsWith("Dialogue:")).map((l) => {
+    const parts = l.slice("Dialogue:".length).split(",");
+    return { start: sec(parts[1].trim()), end: sec(parts[2].trim()), lines: parts.slice(9).join(",").split("\\N") };
+  });
+}
+
+// ---- burn ------------------------------------------------------------------
+
+async function burn() {
+  const { chromium } = require("playwright");
+  const events = readAss();
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pp-captions-"));
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  for (const [i, e] of events.entries()) {
+    await page.setContent(`<!doctype html><html><head>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@600&display=block" rel="stylesheet">
+<style>
+  html,body{margin:0;width:1280px;height:800px;background:transparent}
+  .wrap{position:absolute;left:0;right:0;bottom:${STYLE.marginV}px;text-align:center}
+  .line{display:inline;font:600 ${STYLE.size}px/1.42 "Public Sans",sans-serif;color:#F5F8FA;
+    background:rgba(22,41,75,.85);padding:2px ${STYLE.pad + 4}px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+</style></head><body><div class="wrap"><span class="line">${e.lines.map(esc).join("<br>")}</span></div></body></html>`);
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({ path: path.join(tmp, `cap${i}.png`), omitBackground: true });
+  }
+  await browser.close();
+
+  const seg = path.join(DIR, "output", "seg");
+  const list = path.join(tmp, "list.txt");
+  fs.writeFileSync(list, ["hook", "biz", "cust", "sent", "close"].map((n) => `file '${path.join(seg, n + ".mp4")}'`).join("\n"));
+
+  const inputs = ["-f", "concat", "-safe", "0", "-i", list, "-i", path.join(DIR, "vo", "elevenlabs.mp3")];
+  events.forEach((_, i) => inputs.push("-i", path.join(tmp, `cap${i}.png`)));
+  let chain = "[0:v]";
+  const filters = events.map((e, i) => {
+    const outLabel = i === events.length - 1 ? "[v]" : `[v${i}]`;
+    const f = `${chain}[${i + 2}:v]overlay=0:0:enable='between(t,${e.start.toFixed(2)},${e.end.toFixed(2)})'${outLabel}`;
+    chain = outLabel;
+    return f;
+  });
+
+  execFileSync("ffmpeg", ["-y", "-v", "error", ...inputs, "-filter_complex", filters.join(";"),
+    "-map", "[v]", "-map", "1:a",
+    "-c:v", "libx264", "-preset", "slow", "-crf", "23", "-profile:v", "high", "-pix_fmt", "yuv420p",
+    "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", OUT], { stdio: "inherit" });
+  fs.rmSync(tmp, { recursive: true, force: true });
+  console.log(`wrote ${path.relative(process.cwd(), OUT)} (${(fs.statSync(OUT).size / 1e6).toFixed(2)} MB)`);
+}
+
+if (process.argv.includes("--burn")) {
+  burn().catch((e) => { console.error(e); process.exit(1); });
+} else {
+  const list = phrases(readWords());
+  writeAss(list);
+  list.forEach((p) => console.log(`${ts(p.start)}  ${p.lines.join(" / ")}`));
+  console.log(`wrote captions.ass (${list.length} captions)`);
+}

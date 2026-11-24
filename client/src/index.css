@@ -51,6 +51,11 @@
   --primary: 218 55% 19%;      /* Ink navy */
   --primary-foreground: 204 29% 97%;
   --primary-border: 218 55% 19%;
+  /* A light tint of the navy (same hue, high lightness), for calm
+     informational callouts — /pros's beta-offer banner first (2026-11-24).
+     Navy at low opacity over the blue-gray paper reads gray, not blue, so
+     this is its own token rather than bg-primary/5. */
+  --primary-soft: 218 62% 93%;
 
   --secondary: 207 26% 93%;
   --secondary-foreground: 221 41% 12%;

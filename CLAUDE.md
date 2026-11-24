@@ -4499,19 +4499,119 @@ exist anywhere in the codebase to require one for. If that ever changes
 (a real analytics tool gets added later), revisit this — a consent
 banner would become genuinely necessary at that point, not before.
 
-## /pros demo landing page (2026-11-23)
+## /pros demo landing page (2026-11-23, rebuilt as a sales page 2026-11-24)
 
 `client/src/pages/Pros.tsx` at `/pros`: the page linked from cold
-outreach emails to fence contractors. Order: eyebrow, headline, the
-demo video, three lines in John's voice, one "Try it free" button. Spec
-and approved copy are on the Notion backlog item "Demo video landing
-page for cold outreach". It's wrapped in `AuthLayout` (logo-only header,
-so the logo is the only other link), narrow `max-w-2xl` column,
-`self-start` to override AuthLayout's vertical centering. Logged out, the
-button goes to `/register?from=pros`; logged in, to `/`. The copy never
-states the video's length (the recording runs ~38s, not the "30 seconds"
-first talked about). The native player's own controls still show the
-running time, which is the browser's, not page copy.
+outreach emails to fence contractors. v1 (2026-11-23) was the cold email
+on a web page; v2 (2026-11-24, Notion item "/pros landing page v2:
+restructure as a sales page") restructures it so the payoff, the video,
+the button and the offer all come before any scrolling on a phone.
+
+**Layout (v2).** Order: a "THE BETA OFFER" banner (with its own "Create
+your free account →" link), the `FOR FENCE PROS · BETA` eyebrow, the
+hook ("Measure from the satellite photo. Send the quote the same day."),
+the video, the two ways in (below), "No credit card. Nothing to
+install.", a three-cell steps strip (the homepage "How it works" grid,
+titles only, `grid-cols-3` even on mobile) with a line under it setting
+expectations ("Draw a fence and get the footage and materials right
+away. Sending customer quotes turns on once your business profile is set
+up."), and a closing section with the two ways in again and "Questions?
+Email john@postplotter.com".
+
+**Two ways in (John, 2026-11-24).** v1 and early v2 had one "Try it free"
+button straight to `/register`, a bigger ask than the label promised.
+Now:
+- **Main button: "Start a fence — no account needed"** opens the same
+  `AddPropertyDialog` the homepage uses. A guest lands in the editor,
+  draws, and hits the existing "sign up to save" prompt when saving, so
+  this path still ends in a sign-up, after they've seen it work. Signed
+  in, the label is "Start a fence project" and the property goes on their
+  account. Fires `pros_start_fence` (no params) on click.
+- **Second option: "Or create your free account, needed for the free Pro
+  offer."**, a text link to `/register?from=pros`. The banner's link goes
+  here too, since it sits beside the offer. Signed in, both become "Go to
+  your properties" → `/`.
+- **Expectation line, deliberately:** a guest sees the homeowner editor
+  (Lowe's/Home Depot materials and estimate), not the video's "Customer
+  Quote" with the pro's own $/ft and Send Quote, which needs an account,
+  a business profile and rates John sets up by hand. The line under the
+  steps says so rather than letting the page overpromise.
+- At 375×812 the main button, the note and the account line all fit the
+  first screen (the account line ends at ~777px).
+
+Earlier changes from the spec, also John's (2026-11-24, from reviewing
+the local preview):
+- The offer moved from an orange box below the steps to the top, so it's
+  the first thing read. It's a rounded banner that fills the same column
+  as the hero (on desktop its edges line up with the headline and the
+  video), not an edge-to-edge band. Inside it, the "THE BETA OFFER"
+  label, the copy and the link always stack top to bottom, at every
+  screen size: never a side-by-side row. It's light blue, not the orange
+  `--accent`, which read as an error there: a new `--primary-soft` token
+  (`218 62% 93%`, `bg-primary-soft`), a high-lightness tint of the navy.
+  `bg-primary/5` was tried first and reads gray over the blue-gray paper.
+  On phones it's compact (`text-sm`), which keeps the first button on the
+  first screen: the note ends at ~725px of 812.
+- The closing line names the address instead of "Just reply to my
+  email", because not every visitor arrives from John's email. It's a
+  `mailto:` link so a phone can tap it.
+- Links are now the logo, the banner's account link, the two "create your
+  free account" links and the mailto; the two main buttons open the Add a
+  Property dialog. **AuthLayout was dropped**: its gray `bg-secondary/30` and centered
+login-card layout are what made v1 read as an auth page. v2 renders the
+shared `PageHeader` with the same logo link AuthLayout uses (keeping
+"every page has a header and a way home") on plain `bg-background`, then
+a `max-w-2xl mx-auto px-4 md:px-8 py-6 md:py-12` column on phones and
+tablets. **From `lg` (1024px) up the page widens to the app's "wide"
+`max-w-6xl` and the hero goes two-column** (John, 2026-11-24, after
+reviewing the single centered column on a big screen; this overrides
+the spec's design decision 7): eyebrow, hook, button and note on the
+left (5fr), the video on the right (7fr). The DOM order stays
+hook, video, button so mobile is untouched; grid placement
+(`lg:col-start`/`row-start`, video `row-span-2`) does the rearranging.
+The hook uses `text-balance` so it breaks at the sentence instead of
+orphaning "day." in the narrower column. The steps strip spans the full
+width. At 375×812 the
+first button and its note end at ~725px, inside the first screen;
+if the hook ever grows past four lines at 375px, shrink it to
+`text-[28px]` rather than let the button drop below the fold. The
+`<video>` starts with no controls and no autoplay; a 72px
+`bg-accent text-primary border border-primary` play button over the
+poster calls `video.play()`, hides itself and turns native controls on.
+The copy never states the video's length, how long free Pro lasts or
+what it costs later. (The native controls, once on, show the running
+time; that's the browser's, not page copy.)
+
+**Poster card.** `client/public/video/postplotter-demo-poster.jpg` is a
+designed 1280×800 card, not a video frame (no frame reads at 343px wide):
+navy `#16294B`, `286 FT · CUSTOMER QUOTE` in JetBrains Mono, `$8,161.46`
+in Archivo 800 (160px; ~42px tall at 343px), `→ QUOTE SENT` in the
+accent tint. The numbers are real, from the demo recording. The price
+sits low enough to stay clear of the play button at phone size (~9px
+gap at 343px wide; check this if the card changes). Source is
+`marketing/demo-video/poster.html`; regenerate with
+`cd marketing/demo-video && node poster.js`.
+
+**Burned-in captions.** Sound-off phone viewers rarely turn on a caption
+track (and iOS often ignores `default` on one), so the captions are
+burned into the video. `marketing/demo-video/captions.js` groups
+whisper's word timings (`vo/transcript.json`, gitignored) into phrases
+of at most two ~32-character lines, breaking at sentence ends, pauses
+and commas, and preferring balanced lines that don't end on a word like
+"your" or "the". It writes `marketing/demo-video/captions.ass`
+(committed, the source of truth: Public Sans SemiBold 46px, cream on a
+navy 85% bar, bottom center; fix a word by hand-editing it) and fixes
+whisper's "post-plotter" to "PostPlotter". `node captions.js --burn`
+then rebuilds `client/public/video/postplotter-demo.mp4` from the
+full-quality inputs: `output/seg/*.mp4` (CRF 18 segments from
+`record-synced.js`) plus `vo/elevenlabs.mp3`, not the compressed web
+file. Homebrew's ffmpeg has no libass (no `subtitles`/`drawtext`
+filter), so `--burn` renders each caption with Playwright in the real
+web font and overlays the PNGs with ffmpeg; a libass-enabled ffmpeg
+could burn the `.ass` directly. To regenerate: `node captions.js` (only
+if the narration changed), then `node captions.js --burn`. The native
+player controls cover the captions while paused or just after a tap,
+and auto-hide during playback.
 
 **Why the source travels as `?from=pros` instead of a GA query param.**
 The original ask was `?src=email` on email links. That can't work:
@@ -4524,26 +4624,42 @@ sign-up, and `Register.tsx` adds `source: "pros"` to the existing
 `sign_up` event only when `from` is exactly `"pros"`; everything else
 still sends `{ method: "email" }`. The first play also sends
 `demo_video_play` (no params, once per page load). Nothing about the
-source is stored server-side. All of this records nothing until
+source is stored server-side.
+
+**The try-first path needed a second carrier (2026-11-24).** A guest who
+starts a fence from /pros signs up from the editor's "sign up to save"
+prompt (`/register?propertyId=…&returnTo=…`), which has no `?from=pros`,
+so `sign_up` would have shown no source for the most engaged visitors.
+`client/src/lib/signupSource.ts` fixes it: /pros sets a
+`sessionStorage` marker on mount, `Register.tsx` treats `?from=pros` OR
+that marker as the pros source, and clears the marker once `sign_up` is
+sent. It's per tab and dies with it, every access is try/catch'd (storage
+can throw), and it's only ever read as that one event param. Caveat: a
+visitor who opens /pros and later signs up some other way in the same
+tab also counts as pros; for "did this sign-up see the outreach page",
+that's the intended reading. All of this records nothing until
 `VITE_GA_MEASUREMENT_ID` is set in production.
 
 **The video lives in `client/public/video/`** and is served by the site
 itself (CSP `default-src 'self'` already covers it; YouTube/Vimeo would
 have needed `frame-src` opened and added their own links).
-`postplotter-demo.mp4` is a re-encode of John's source recording (H.264
-high, CRF 23, AAC 128k, `+faststart`, 1280×800, ~3.3 MB);
-`postplotter-demo-poster.jpg` is the frame at 17s (a drawn line plus the
-customer price). The uncompressed source is deliberately not committed.
-To replace the video, re-encode the same way and keep it under 10 MB.
+`postplotter-demo.mp4` is H.264 high, CRF 23, AAC 128k, `+faststart`,
+1280×800, ~3.4 MB with captions (v2; built by `captions.js --burn`, see
+above); the poster is the designed card above. The uncompressed
+recording is deliberately not committed. To replace the video, encode
+the same way and keep it under 10 MB.
 
-Verified with `VITE_GA_MEASUREMENT_ID` set to a fake ID and `window.gtag`
-stubbed: one `demo_video_play` across two plays; `sign_up` carried
-`source: "pros"` from `/register?from=pros` and not from `/register` or
-`?from=email` (with `/api/register` stubbed, so no accounts were made).
-375px: zero overflow. Not verified on real iOS Safari: the iOS Simulator
-needs a full Xcode install, which this machine doesn't have. `playsInline`,
-no autoplay and a faststart H.264/AAC file are what iOS needs for inline
-play.
+Verified (v1 and again for v2) with `VITE_GA_MEASUREMENT_ID` set to a
+fake ID and `window.gtag` stubbed: one `demo_video_play` per page load;
+`sign_up` carried `source: "pros"` from `/register?from=pros` and not
+from `/register` or `?from=email` (with `/api/register` stubbed, so no
+accounts were made). 375px: zero overflow. v2 was also checked in
+Playwright's WebKit engine with its iPhone 13 profile (inline play, not
+fullscreen); that build logs four "Button failed to load …-placard"
+errors from WebKit's own media controls, which a bare `<video controls>`
+page with no app code reproduces, so they aren't this page's. Real iOS
+Safari on a device is still the one unverified case (no Xcode here for
+the Simulator).
 
 ## Page width/padding consistency pass (2026-08-30)
 
