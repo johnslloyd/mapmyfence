@@ -1,17 +1,37 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Link } from "wouter";
+import { Crosshair, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AuthLayout } from "@/components/AuthLayout";
+import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/hooks/use-auth";
 import { trackEvent } from "@/lib/analytics";
 
-// /pros — the demo landing page linked from cold outreach emails. A stranger
-// watches the video, then one button to sign up. AuthLayout's logo-only
-// header is the only other link on purpose (see CLAUDE.md "/pros demo
-// landing page"). Never state the video's length in the copy.
+// /pros: the sales page linked from cold outreach emails (v2). One action,
+// shown twice: sign up. The only links are the logo and the two buttons.
+// Built on PageHeader + bg-background rather than AuthLayout, whose gray
+// centered login-card layout made v1 read as an auth page. See CLAUDE.md
+// "/pros demo landing page". Never state the video's length, how long free
+// Pro lasts or what it costs later.
+
+const STEPS = ["Draw the line", "Get footage + materials", "Send the quote"];
+
+function TryItFree({ href, className = "" }: { href: string; className?: string }) {
+  return (
+    <Button asChild className={`h-[52px] px-7 text-base font-semibold w-full sm:w-auto ${className}`}>
+      <Link href={href}>Try it free</Link>
+    </Button>
+  );
+}
+
 export default function Pros() {
   const { user } = useAuth();
+  const videoRef = useRef<HTMLVideoElement>(null);
   const playTracked = useRef(false);
+  const [started, setStarted] = useState(false);
+
+  // The `from=pros` param carries the source to Register.tsx's sign_up
+  // event. analytics.ts never sends query strings to Google.
+  const ctaHref = user ? "/" : "/register?from=pros";
 
   const handlePlay = () => {
     if (playTracked.current) return;
@@ -19,54 +39,85 @@ export default function Pros() {
     trackEvent("demo_video_play");
   };
 
-  // The `from=pros` param carries the source to Register.tsx's sign_up
-  // event. analytics.ts never sends query strings to Google (reset links
-  // carry a token there), so a GA query param wouldn't work.
-  const ctaHref = user ? "/" : "/register?from=pros";
+  // The overlay is the only way to start: no controls and no autoplay until
+  // the first play, then native controls take over.
+  const startVideo = () => {
+    setStarted(true);
+    videoRef.current?.play().catch(() => {
+      // If the browser refuses play(), the native controls (now on) still let
+      // the visitor start it themselves.
+    });
+  };
 
   return (
-    <AuthLayout>
-      {/* AuthLayout's <main> centers vertically; self-start pins this page
-          to the top so a tall desktop window doesn't float it mid-screen. */}
-      <div className="self-start w-full max-w-2xl mx-auto py-4 md:py-8">
-        <div className="font-mono text-xs text-accent-foreground mb-4 tracking-wide">
-          FOR FENCE PROS · BETA
-        </div>
-        <h1 className="font-display font-semibold text-3xl md:text-4xl leading-tight tracking-tight mb-6 text-primary">
-          Draw the fence. Get the numbers. Send the quote.
+    <div className="min-h-dvh bg-background">
+      <PageHeader>
+        <Link href="/" className="flex items-center gap-2">
+          <div className="bg-primary text-primary-foreground p-2 rounded-lg">
+            <Crosshair className="w-6 h-6" />
+          </div>
+          <span className="font-display font-bold text-xl">PostPlotter</span>
+        </Link>
+      </PageHeader>
+
+      <main className="max-w-2xl mx-auto px-4 md:px-8 py-6 md:py-12">
+        {/* First screen at 375x812: eyebrow, hook, video, button, note. */}
+        <div className="font-mono text-xs text-accent-foreground mb-3 tracking-wide">FOR FENCE PROS · BETA</div>
+        <h1 className="font-display font-semibold text-3xl md:text-5xl leading-tight tracking-tight text-primary">
+          Measure from the satellite photo. Send the quote the same day.
         </h1>
 
-        <div className="border border-border rounded-lg overflow-hidden bg-card mb-8">
+        <div className="relative mt-4 border border-border rounded-lg overflow-hidden bg-card">
           <video
-            className="block w-full h-auto"
-            controls
+            ref={videoRef}
+            className="block w-full aspect-[16/10] h-auto"
             playsInline
             preload="metadata"
+            controls={started}
             poster="/video/postplotter-demo-poster.jpg"
             src="/video/postplotter-demo.mp4"
             onPlay={handlePlay}
           />
+          {!started && (
+            <button
+              type="button"
+              onClick={startVideo}
+              aria-label="Play the demo video"
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[72px] w-[72px] rounded-full bg-accent text-primary border border-primary flex items-center justify-center shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <Play className="w-8 h-8 ml-1 fill-current" />
+            </button>
+          )}
         </div>
 
-        <div className="space-y-4 text-base leading-relaxed text-muted-foreground mb-8">
-          <p>
-            I'm John. I built PostPlotter for fence pros: draw the fence line on a satellite photo, get the
-            footage and material list, and send your customer a quote.
-          </p>
-          <p>
-            It's brand new, and I'm looking for a handful of fence pros to try it on real jobs and tell me
-            what's wrong with it.
-          </p>
-          <p>
-            Sign up free, and I'll set up your business profile and upgrade you to a Pro account at no cost
-            while we refine the product.
-          </p>
+        <TryItFree href={ctaHref} className="mt-4" />
+        <p className="mt-3 text-sm text-muted-foreground">No credit card. Nothing to install.</p>
+
+        {/* Steps strip: the homepage "How it works" grid, titles only. */}
+        <div className="mt-10 grid grid-cols-3 gap-px bg-border border border-border">
+          {STEPS.map((title, i) => (
+            <div key={title} className="bg-background p-3 md:p-5 flex flex-col gap-2">
+              <div className="font-mono text-xs text-accent-foreground">STEP_0{i + 1}</div>
+              <div className="font-display font-semibold text-sm md:text-lg leading-tight text-foreground">{title}</div>
+            </div>
+          ))}
         </div>
 
-        <Button asChild className="h-[52px] px-7 text-base font-semibold w-full sm:w-auto">
-          <Link href={ctaHref}>Try it free</Link>
-        </Button>
-      </div>
-    </AuthLayout>
+        {/* Offer box */}
+        <div className="mt-8 bg-accent rounded-lg p-5 border border-accent-foreground/20">
+          <div className="font-mono text-xs text-accent-foreground tracking-wide mb-3">THE BETA OFFER</div>
+          <div className="space-y-3 text-base leading-relaxed text-foreground">
+            <p>Beta testers get Pro free while we refine the product. I'll set up your business profile for you.</p>
+            <p>In return, try it on one real job and tell me what you think.</p>
+          </div>
+        </div>
+
+        {/* Closing */}
+        <section className="mt-10 pt-10 border-t border-border text-center">
+          <TryItFree href={ctaHref} />
+          <p className="mt-3 text-sm text-muted-foreground">Questions? Just reply to my email.</p>
+        </section>
+      </main>
+    </div>
   );
 }
