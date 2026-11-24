@@ -4499,6 +4499,52 @@ exist anywhere in the codebase to require one for. If that ever changes
 (a real analytics tool gets added later), revisit this — a consent
 banner would become genuinely necessary at that point, not before.
 
+## /pros demo landing page (2026-11-23)
+
+`client/src/pages/Pros.tsx` at `/pros`: the page linked from cold
+outreach emails to fence contractors. Order: eyebrow, headline, the
+demo video, three lines in John's voice, one "Try it free" button. Spec
+and approved copy are on the Notion backlog item "Demo video landing
+page for cold outreach". It's wrapped in `AuthLayout` (logo-only header,
+so the logo is the only other link), narrow `max-w-2xl` column,
+`self-start` to override AuthLayout's vertical centering. Logged out, the
+button goes to `/register?from=pros`; logged in, to `/`. The copy never
+states the video's length (the recording runs ~38s, not the "30 seconds"
+first talked about). The native player's own controls still show the
+running time, which is the browser's, not page copy.
+
+**Why the source travels as `?from=pros` instead of a GA query param.**
+The original ask was `?src=email` on email links. That can't work:
+`analytics.ts` never sends query strings to Google (password-reset links
+carry a secret token there; see Privacy Policy above), and loosening
+`sanitizePath` for one param is a privacy-sensitive change that would
+deserve its own review. Instead the `/pros` path itself is the source
+(only cold emails link to it), the button carries `?from=pros` to
+sign-up, and `Register.tsx` adds `source: "pros"` to the existing
+`sign_up` event only when `from` is exactly `"pros"`; everything else
+still sends `{ method: "email" }`. The first play also sends
+`demo_video_play` (no params, once per page load). Nothing about the
+source is stored server-side. All of this records nothing until
+`VITE_GA_MEASUREMENT_ID` is set in production.
+
+**The video lives in `client/public/video/`** and is served by the site
+itself (CSP `default-src 'self'` already covers it; YouTube/Vimeo would
+have needed `frame-src` opened and added their own links).
+`postplotter-demo.mp4` is a re-encode of John's source recording (H.264
+high, CRF 23, AAC 128k, `+faststart`, 1280×800, ~3.3 MB);
+`postplotter-demo-poster.jpg` is the frame at 17s (a drawn line plus the
+customer price). The uncompressed source is deliberately not committed.
+To replace the video, re-encode the same way and keep it under 10 MB.
+
+Verified with `VITE_GA_MEASUREMENT_ID` set to a fake ID and `window.gtag`
+stubbed: one `demo_video_play` across two plays; `sign_up` carried
+`source: "pros"` from `/register?from=pros` and not from `/register` or
+`?from=email` (with `/api/register` stubbed, so no accounts were made).
+375px: zero overflow. Not verified on real iOS Safari: the iOS Simulator
+needs a full Xcode install, which this machine doesn't have. `playsInline`,
+no autoplay and a faststart H.264/AAC file are what iOS needs for inline
+play.
+
 ## Page width/padding consistency pass (2026-08-30)
 
 Prompted by direct feedback that every page's total width/padding felt
